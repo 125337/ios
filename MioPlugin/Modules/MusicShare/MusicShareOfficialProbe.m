@@ -5,61 +5,43 @@
 #import <mach-o/dyld.h>
 #import "../../Core/LogManager.h"
 
-// 定位 HBWechatHelper 加载基址（dylib vmaddr 基址为 0，基址即 slide）
-static uintptr_t hb_slide(void) {
-    for (uint32_t i = _dyld_image_count(); i > 0; i--) {
-        const char *name = _dyld_get_image_name(i - 1);
-        if (name && strstr(name, "HBWechatHelper")) {
-            return (uintptr_t)_dyld_get_image_header(i - 1);
-        }
-    }
-    return 0;
+// ===== v3：只碰微信宿主，不碰黄白（189.log 证实 hook 黄白自身方法会触发闪退） =====
+// 目标：官方点歌 CGI 配方 —— uri / funcId / 请求类与字节 / CGI 管理类 / 响应字段
+// 原理：黄白最终走宿主通用 CGI 通道（makeWithFuncId → sendRequest:completion:），
+//       从宿主侧旁听即可拿到全部明文参数。
+
+static Class g_wrapperClass = nil;   // makeWithFuncId 的接收类（CGI 请求包装类）
+static int g_makeCount = 0;
+static NSMutableSet *g_hooked = nil;
+// 同一 patch 挂多个类时 orig 必须按 类+方法+类型 区分，否则会调到第一个类的原实现
+static NSMutableDictionary<NSString *, NSValue *> *g_origs = nil;
+
+static IMP origImp(id self, NSString *label) {
+    NSString *k = [NSString stringWithFormat:@"%@|%@%@", label, NSStringFromClass(self),
+                   object_isClass(self) ? @"+" : @"-"];
+    return (IMP)g_origs[k].pointerValue;
 }
 
-// 黄白 dylib 的关键字符串全是密文存储、init 阶段原地解密。
-// 静态区 0x164b200~0x164b800：CFString 结构(isa bind=0, flags=0x7c8, data ptr, len)
-// 与加密 blob 混排。运行时直接读内存即得明文（uri / 请求类名 / CGI 管理类名）。
-static void dumpObfStrings(uintptr_t base, NSString *tag) {
-    if (!base) {
-        WPLog(@"Music", @"[OFP][%@] 无 HB 基址，跳过", tag);
-        return;
-    }
-    // CFString 扫描：stride 8 对齐，[va+8]==0x7c8 即 CFString 结构入口
-    for (uintptr_t va = base + 0x164b200; va + 0x20 <= base + 0x164b800; va += 8) {
-        if (*(uint64_t *)(va + 8) != 0x7c8) continue;
-        uint64_t ptr = *(uint64_t *)(va + 0x10);
-        uint64_t len = *(uint64_t *)(va + 0x18);
-        if (!ptr || len == 0 || len > 400) continue;
-        NSString *s = [[NSString alloc] initWithBytes:(const void *)(base + ptr)
-                                               length:(NSUInteger)len
-                                             encoding:NSUTF8StringEncoding];
-        WPLog(@"Music", @"[OFP][%@] CFString@%lx len=%llu: %@", tag, (unsigned long)(va - base),
-              (unsigned long long)len, s);
-    }
-    // 加密 blob 区按 16 字节行打 hex + latin1（类名走 objc_getClass(串)，解密后应可读）
-    for (uintptr_t off = 0x164b3c0; off < 0x164b520; off += 0x20) {
-        const uint8_t *p = (const uint8_t *)(base + off);
-        NSMutableString *hex = [NSMutableString stringWithCapacity:32];
-        NSMutableString *asc = [NSMutableString stringWithCapacity:16];
-        for (int i = 0; i < 32; i++) {
-            [hex appendFormat:@"%02x", p[i]];
-            [asc appendFormat:@"%c", (p[i] >= 0x20 && p[i] < 0x7f) ? p[i] : '.'];
-        }
-        WPLog(@"Music", @"[OFP][%@] blob@%lx: %@ | %@", tag, (unsigned long)off, hex, asc);
-    }
+static NSString *hexOf(NSData *d, NSUInteger limit) {
+    if (![d isKindOfClass:[NSData class]]) return @"(非NSData)";
+    NSUInteger n = MIN(d.length, limit);
+    const uint8_t *p = d.bytes;
+    NSMutableString *s = [NSMutableString stringWithCapacity:n * 2];
+    for (NSUInteger i = 0; i < n; i++) [s appendFormat:@"%02x", p[i]];
+    if (d.length > n) [s appendString:@"..."];
+    return s;
 }
 
 static void dumpClassMethods(const char *tag, Class cls) {
     unsigned int count = 0;
     Method *list = class_copyMethodList(cls, &count);
-    WPLog(@"Music", @"[OFP][%@] %@ 方法 %u 个:", tag, NSStringFromClass(cls), count);
+    WPLog(@"Music", @"[OFP3][%@] %@ 方法 %u 个:", tag, NSStringFromClass(cls), count);
     for (unsigned int i = 0; i < count; i++) {
-        WPLog(@"Music", @"[OFP][%@]   %s", tag, sel_getName(method_getName(list[i])));
+        WPLog(@"Music", @"[OFP3][%@]   %s", tag, sel_getName(method_getName(list[i])));
     }
     free(list);
 }
 
-// dump 对象全部 ivar 值（MusicLiveSearchMusicRespInfo 的实际响应数据）
 static void dumpObjectIvars(id obj, const char *tag) {
     if (!obj) return;
     unsigned int n = 0;
@@ -67,90 +49,126 @@ static void dumpObjectIvars(id obj, const char *tag) {
     for (unsigned int i = 0; i < n; i++) {
         @try {
             id v = object_getIvar(obj, iv[i]);
-            WPLog(@"Music", @"[OFP][%@] ivar %s = %@", tag, ivar_getName(iv[i]), v);
+            WPLog(@"Music", @"[OFP3][%@] ivar %s = %@", tag, ivar_getName(iv[i]),
+                  [v isKindOfClass:[NSData class]] ? hexOf(v, 96) : v);
         } @catch (NSException *e) {
-            WPLog(@"Music", @"[OFP][%@] ivar %s (非对象)", tag, ivar_getName(iv[i]));
         }
     }
     free(iv);
 }
 
-static id (*orig_searchOfficial)(id, SEL, id, id);
-
-static void patched_searchOfficial(id self, SEL _cmd, id keyword, id completion) {
-    uintptr_t base = hb_slide();
-    WPLog(@"Music", @"[OFP] ===== hb_searchOfficialMusic:completion: 被调用 =====");
-    WPLog(@"Music", @"[OFP] self=%@ keyword=%@ completion=%@", self, keyword, completion);
-
-    // 请求前 dump：若类名 blob 是惰性解密，此刻应已明文
-    dumpObfStrings(base, @"PRE");
-
-    // 包一层 completion 抓响应
-    id userBlock = completion;
-    void (^wrapper)(id) = ^void(id resp) {
-        WPLog(@"Music", @"[OFP] completion 响应对象: %@ desc=%@", [resp class], resp);
-        dumpClassMethods("RESP", [resp class]);
-        dumpObjectIvars(resp, "RESP");
-        if (userBlock) ((void (^)(id))userBlock)(resp);
-    };
-    orig_searchOfficial(self, _cmd, keyword, wrapper);
-
-    // 请求后 dump 兜底
-    dumpObfStrings(base, @"POST");
+// ---- typedDataWithBytes:（类方法）→ 请求类名 + 请求字节 ----
+static id patched_typedData(id self, SEL _cmd, id bytes) {
+    NSString *cn = NSStringFromClass(self);
+    if ([cn containsString:@"Music"]) {
+        WPLog(@"Music", @"[OFP3] ★ typedDataWithBytes 类=%@ bytes=%@", cn, hexOf(bytes, 128));
+    }
+    return ((id (*)(id, SEL, id))origImp(self, @"typed"))(self, _cmd, bytes);
 }
 
-// 收集宿主 MusicLiveSearch 相关类清单（上次被扫描异常中断，逐类 @try 修复）
-static void collectLiveClasses(void) {
+// ---- parseFromData:error:（类方法）→ 响应字段 ----
+static id patched_parse(id self, SEL _cmd, id data, id err) {
+    id r = ((id (*)(id, SEL, id, id))origImp(self, @"parse"))(self, _cmd, data, err);
+    WPLog(@"Music", @"[OFP3] ★ parse 类=%@ data=%@", NSStringFromClass(self), hexOf(data, 128));
+    dumpObjectIvars(r, "PARSE");
+    return r;
+}
+
+// ---- makeWithFuncId:uri:data:longPolling:longPollingTimeout: → funcId / uri / data ----
+static id patched_make(id self, SEL _cmd, long funcId, id uri, id data, BOOL lp, long lpto) {
+    NSString *uriStr = [uri isKindOfClass:[NSString class]] ? uri : @"(非串)";
+    if (g_makeCount < 200) {
+        g_makeCount++;
+        WPLog(@"Music", @"[OFP3] make #%d 类=%@ funcId=%#lx uri=%@", g_makeCount,
+              NSStringFromClass(self), (unsigned long)funcId, uriStr);
+    }
+    if (([uriStr localizedCaseInsensitiveContainsString:@"music"]) || funcId == 0x1012) {
+        WPLog(@"Music", @"[OFP3] ★★★ 命中 类=%@ funcId=%#lx uri=%@ data=%@ lp=%d lpto=%ld",
+              NSStringFromClass(self), (unsigned long)funcId, uriStr, hexOf(data, 128), lp, (long)lpto);
+        if (object_isClass(self)) g_wrapperClass = self;
+    }
+    return ((id (*)(id, SEL, long, id, id, BOOL, long))origImp(self, @"make"))(
+        self, _cmd, funcId, uri, data, lp, lpto);
+}
+
+// ---- sendRequest:completion: → CGI 管理类名 ----
+static id patched_send(id self, SEL _cmd, id req, id completion) {
+    if (g_wrapperClass && req && [req isKindOfClass:g_wrapperClass]) {
+        WPLog(@"Music", @"[OFP3] ★★★ sendRequest 管理类=%@ req=%@",
+              NSStringFromClass([self class]), NSStringFromClass([req class]));
+        dumpObjectIvars(req, "REQ");
+    }
+    return ((id (*)(id, SEL, id, id))origImp(self, @"send"))(self, _cmd, req, completion);
+}
+
+// 全类遍历，逐类 @try（防 188.log 那种单类异常毁全程）
+static void scanAllClasses(void (^body)(Class, NSString *)) {
     unsigned int count = 0;
     Class *classes = objc_copyClassList(&count);
-    NSMutableArray *live = [NSMutableArray array];
+    WPLog(@"Music", @"[OFP3] 注册类总数: %u", count);
     for (unsigned int i = 0; i < count; i++) {
         @try {
-            const char *name = class_getName(classes[i]);
-            if (strstr(name, "MusicLiveSearch") || strstr(name, "LiveSearch")) {
-                [live addObject:@(name)];
-            }
+            body(classes[i], @(class_getName(classes[i])));
         } @catch (NSException *e) {
         }
     }
     free(classes);
-    WPLog(@"Music", @"[OFP] MusicLiveSearch 相关类 %lu 个: %@", (unsigned long)live.count, live);
-    for (NSString *name in live) {
-        Class cls = objc_getClass(name.UTF8String);
-        if (cls) dumpClassMethods("LIVE", cls);
-    }
+}
+
+// hook 入口：label 用于 orig 字典分键，已挂过的不重复挂
+static void hookMethod(Class cls, SEL sel, IMP patch, NSString *label, BOOL isClassMethod,
+                       const char *tag) {
+    NSString *key = [NSString stringWithFormat:@"%@|%@%@", label, NSStringFromClass(cls),
+                     isClassMethod ? @"+" : @"-"];
+    if ([g_hooked containsObject:key]) return;
+    Method m = isClassMethod ? class_getClassMethod(cls, sel) : class_getInstanceMethod(cls, sel);
+    if (!m) return;
+    g_origs[key] = [NSValue valueWithPointer:method_getImplementation(m)];
+    MSHookMessageEx(isClassMethod ? object_getClass(cls) : cls, sel, patch, NULL);
+    [g_hooked addObject:key];
+    WPLog(@"Music", @"[OFP3] hook %@%@ on %@ (%@)", isClassMethod ? @"+" : @"-",
+          sel_getName(sel), NSStringFromClass(cls), label);
 }
 
 @implementation MusicShareOfficialProbe
 + (void)install {
-    WPLog(@"Music", @"[OFP] 官方搜索探针 v2 安装（延迟 5s）");
+    WPLog(@"Music", @"[OFP3] 官方搜索探针 v3 安装（只碰宿主，延迟 5s）");
+    g_hooked = [NSMutableSet set];
+    g_origs = [NSMutableDictionary dictionary];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        // 1) 启动即 dump 明文区（init 解密应已完成）
-        dumpObfStrings(hb_slide(), @"INIT");
+        SEL makeSel = sel_registerName("makeWithFuncId:uri:data:longPolling:longPollingTimeout:");
+        SEL sendSel = sel_registerName("sendRequest:completion:");
+        SEL typedSel = sel_registerName("typedDataWithBytes:");
+        SEL parseSel = sel_registerName("parseFromData:error:");
 
-        // 2) hook HBHelperUtil 类方法（188.log 实证：偏移 0x24bf9c，挂 metaclass）
-        Class hb = objc_getClass("HBHelperUtil");
-        SEL target = sel_registerName("hb_searchOfficialMusic:completion:");
-        if (hb) {
-            Method cm = class_getClassMethod(hb, target);
-            if (cm) {
-                orig_searchOfficial = (id (*)(id, SEL, id, id))method_getImplementation(cm);
-                MSHookMessageEx(object_getClass(hb), target, (IMP)patched_searchOfficial,
-                                (IMP *)&orig_searchOfficial);
-                WPLog(@"Music", @"[OFP] ✓ 已 hook HBHelperUtil 类方法");
-            } else {
-                WPLog(@"Music", @"[OFP] ✗ HBHelperUtil 无该类方法");
+        // 1) 关键宿主类的方法清单（getter 命名直接指导后续取响应字段）
+        for (NSString *n in @[@"MusicLiveSearchReq", @"MusicLiveSearchMusicRespInfo",
+                              @"MusicLiveSearchRespInfo", @"MusicLiveSearchRespInfoDetail",
+                              @"MusicLiveSearchSmartBoxReq", @"MusicLiveSearchSmartBoxResp",
+                              @"WCFinderLiveSearchMusicCGI"]) {
+            @try {
+                Class c = objc_getClass(n.UTF8String);
+                if (c) dumpClassMethods("LIVE", c);
+            } @catch (NSException *e) {
             }
-        } else {
-            WPLog(@"Music", @"[OFP] ✗ HBHelperUtil 未注册（黄白未装？）");
         }
 
-        // 3) 宿主 MusicLiveSearch 类清单
-        @try {
-            collectLiveClasses();
-        } @catch (NSException *e) {
-            WPLog(@"Music", @"[OFP] 清单收集异常: %@", e);
-        }
+        // 2) 全类扫描挂 hook
+        scanAllClasses(^(Class c, NSString *ns) {
+            // typedDataWithBytes: / parseFromData:error: 只挂 Music 相关类
+            if ([ns containsString:@"Music"]) {
+                hookMethod(c, typedSel, (IMP)patched_typedData, @"typed", YES, "typed");
+                if ([ns containsString:@"MusicLiveSearch"]) {
+                    hookMethod(c, parseSel, (IMP)patched_parse, @"parse", YES, "parse");
+                }
+            }
+            // makeWithFuncId / sendRequest 全量挂
+            hookMethod(c, makeSel, (IMP)patched_make, @"make", YES, "make");
+            hookMethod(c, makeSel, (IMP)patched_make, @"make", NO, "make");
+            hookMethod(c, sendSel, (IMP)patched_send, @"send", NO, "send");
+        });
+
+        WPLog(@"Music", @"[OFP3] 安装完成，hook 总数 %lu", (unsigned long)g_hooked.count);
     });
 }
 @end
