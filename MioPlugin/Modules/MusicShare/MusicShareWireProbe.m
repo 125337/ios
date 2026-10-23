@@ -126,6 +126,29 @@ static void repl_wp_SendMsgAsync(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_wp_SendMsgAsync)(self, _cmd);
 }
 
+// 旁路发送 + 发送器回调（AddLocalMsg 之后真正出网的嫌疑跳）
+static IMP orig_wp_SendBypass = NULL;
+static IMP orig_wp_SentBySender = NULL;
+static IMP orig_wp_VoiceErr = NULL;
+
+static void repl_wp_SendBypass(id self, SEL _cmd, id wrap) {
+    WPLog(@"WireProbe", @"[SEQ] sendBypassMsg: type=%@ to=%@ localID=%@ content前60=%@",
+          wpField(wrap, @"m_uiMessageType"), wpField(wrap, @"m_nsToUsr"),
+          wpField(wrap, @"m_uiMesLocalID"),
+          [wpField(wrap, @"m_nsContent") substringToIndex:MIN((NSUInteger)60, [(NSString *)wpField(wrap, @"m_nsContent") length])]);
+    ((void (*)(id, SEL, id))orig_wp_SendBypass)(self, _cmd, wrap);
+}
+
+static void repl_wp_SentBySender(id self, SEL _cmd, id wrap) {
+    WPLog(@"WireProbe", @"[VERDICT] OnMessageSentBySender type=%@ to=%@", wpField(wrap, @"m_uiMessageType"), wpField(wrap, @"m_nsToUsr"));
+    ((void (*)(id, SEL, id))orig_wp_SentBySender)(self, _cmd, wrap);
+}
+
+static void repl_wp_VoiceErr(id self, SEL _cmd, id a, id wrap, long long errNo) {
+    WPLog(@"WireProbe", @"[VERDICT] AsyncOnSendVoiceError err=%lld wrapType=%@", errNo, wpField(wrap, @"m_uiMessageType"));
+    ((void (*)(id, SEL, id, id, long long))orig_wp_VoiceErr)(self, _cmd, a, wrap, errNo);
+}
+
 // 发送裁决回调：卡消息卡住时，这里会给出管线的判决和错误码
 static IMP orig_wp_SendOK = NULL;
 static IMP orig_wp_SendFail = NULL;
@@ -205,6 +228,16 @@ static void repl_wp_DBAddMsgFixed(id self, SEL _cmd, id a1, id a2, BOOL fixTime)
     SEL errSenderSel = NSSelectorFromString(@"OnErrorBySender:ErrNo:");
     if ([cls instancesRespondToSelector:errSenderSel])
         MSHookMessageEx(cls, errSenderSel, (IMP)repl_wp_ErrBySender, (IMP *)&orig_wp_ErrBySender);
+    // 旁路发送 + 发送器回调
+    SEL bypassSel = NSSelectorFromString(@"sendBypassMsg:");
+    if ([cls instancesRespondToSelector:bypassSel])
+        MSHookMessageEx(cls, bypassSel, (IMP)repl_wp_SendBypass, (IMP *)&orig_wp_SendBypass);
+    SEL bySenderSel = NSSelectorFromString(@"OnMessageSentBySender:");
+    if ([cls instancesRespondToSelector:bySenderSel])
+        MSHookMessageEx(cls, bySenderSel, (IMP)repl_wp_SentBySender, (IMP *)&orig_wp_SentBySender);
+    SEL voiceErrSel = NSSelectorFromString(@"AsyncOnSendVoiceError:MsgWrap:ErroNO:");
+    if ([cls instancesRespondToSelector:voiceErrSel])
+        MSHookMessageEx(cls, voiceErrSel, (IMP)repl_wp_VoiceErr, (IMP *)&orig_wp_VoiceErr);
     // 数据库层预插入钩子（黄白: 先 CMessageDB 插入拿行号，再 AddLocalMsg 入队）
     Class dbCls = objc_getClass("CMessageDB");
     if (dbCls) {
