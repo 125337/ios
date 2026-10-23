@@ -49,6 +49,30 @@ static void wpDump(id session, id wrap, NSString *via) {
         free(list);
         WPLog(@"WireProbe", @"  [all ivars]%@", all);
 
+        // extendInfo 深挖：appmsg 结构化字段（title/des/url/innerType...）在 CExtendInfoOfAPP 上，
+        // 宿主 AddAppMsg 用它重建 XML——黄白卡与我们的差异就藏在这一层
+        id ext = wpField(wrap, @"m_extendInfoWithMsgType");
+        if (ext) {
+            WPLog(@"WireProbe", @"  [extendInfo] %@ 类=%@", ext, NSStringFromClass(object_getClass(ext)));
+            unsigned int ecount = 0;
+            Ivar *elist = class_copyIvarList(object_getClass(ext), &ecount);
+            NSMutableString *eall = [NSMutableString string];
+            for (unsigned int i = 0; i < ecount; i++) {
+                NSString *name = @(ivar_getName(elist[i]));
+                if (!name) continue;
+                id v = nil;
+                @try { v = [ext valueForKey:name]; } @catch (NSException *e) {}
+                if (v == nil) continue;
+                NSString *desc = [v description];
+                if (desc.length > 120) desc = [[desc substringToIndex:120] stringByAppendingString:@"…"];
+                [eall appendFormat:@"\n    %@ = %@", name, desc];
+            }
+            free(elist);
+            WPLog(@"WireProbe", @"  [extendInfo ivars]%@", eall);
+        } else {
+            WPLog(@"WireProbe", @"  [extendInfo] (nil)");
+        }
+
         // content 全文（分块，原生 XML 模板是本次抓包核心）
         id contentObj = wpField(wrap, @"m_nsContent");
         NSString *content = [contentObj isKindOfClass:[NSString class]] ? contentObj : nil;
@@ -87,6 +111,15 @@ static void repl_wp_AddLocalMsg(id self, SEL _cmd, id session, id wrap) {
     ((void (*)(id, SEL, id, id))orig_wp_AddLocalMsg)(self, _cmd, session, wrap);
     // 返回后补查：AddLocalMsg 是否给 localID 赋值（没赋=它只认预插入的行，我们缺的就是这步）
     WPLog(@"WireProbe", @"[SEQ] AddLocalMsg 返回后 localID=%@ svrID=%@", wpField(wrap, @"m_uiMesLocalID"), wpField(wrap, @"m_n64MesSvrID"));
+}
+
+// ===== AddAppMsg 探针：黄白 MSHook 的宿主真身（黄白发卡与我们的发送都走这里）=====
+static IMP orig_wp_AddAppMsg = NULL;
+static void repl_wp_AddAppMsg(id self, SEL _cmd, id session, id wrap, id data, unsigned int scene) {
+    wpDump(session, wrap, @"AddAppMsg");
+    WPLog(@"WireProbe", @"[AAM] data=%@ scene=%u dataLen=%@", data ? @"(非nil)" : @"nil", scene,
+          [data respondsToSelector:@selector(length)] ? [data length] : 0);
+    ((void (*)(id, SEL, id, id, id, unsigned int))orig_wp_AddAppMsg)(self, _cmd, session, wrap, data, scene);
 }
 
 // ===== 后续链路探针：AddLocalMsg 只是入库，真正触发网络发送的后续调用才是黄白能发出去的关键 =====
@@ -205,6 +238,14 @@ static void repl_wp_DBAddMsgFixed(id self, SEL _cmd, id a1, id a2, BOOL fixTime)
                     (IMP)repl_wp_AddMsg, (IMP *)&orig_wp_AddMsg);
     MSHookMessageEx(cls, NSSelectorFromString(@"AddLocalMsg:MsgWrap:"),
                     (IMP)repl_wp_AddLocalMsg, (IMP *)&orig_wp_AddLocalMsg);
+    // AddAppMsg（黄白 MSHook 的宿主真身，黄白/我们发卡同路）：抓 Data/Scene + wrap 结构化字段
+    SEL addAppMsgSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
+    if ([cls instancesRespondToSelector:addAppMsgSel]) {
+        MSHookMessageEx(cls, addAppMsgSel, (IMP)repl_wp_AddAppMsg, (IMP *)&orig_wp_AddAppMsg);
+        WPLog(@"WireProbe", @"[+] AddAppMsg:MsgWrap:Data:Scene: hooked ★");
+    } else {
+        WPLog(@"WireProbe", @"[-] AddAppMsg:MsgWrap:Data:Scene: 宿主不存在");
+    }
     // 后续链路（黄白 AddLocalMsg 之后还有哪些调用，决定我们能不能复刻整条序列）
     SEL resendMsgSel = NSSelectorFromString(@"ResendMsg:MsgWrap:");
     if ([cls instancesRespondToSelector:resendMsgSel])
