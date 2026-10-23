@@ -3,6 +3,9 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 
+// SDK 头未声明，手动补（ObjC 运行时标准 API）
+OBJC_EXPORT char *method_copyTypeEncoding(Method _Nonnull m);
+
 // ===== v4：零 hook（v2 崩在 hook 黄白、v3 崩在 hook 继承方法扇出，纯扫描实证安全） =====
 // 纯读元数据：
 //   1) MusicLiveSearch 相关 32 类的方法 + ivar 清单（请求字段/响应 getter/CGI 入口签名）
