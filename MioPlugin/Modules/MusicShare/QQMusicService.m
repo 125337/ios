@@ -10,7 +10,9 @@
 //       （黄白同款）在"官替已改"宿主上一调用即段错误，wx.music.tc.qq.com 签名直链不可得，勿回头。
 
 static void qqGet(NSURL *url, void (^done)(NSData *)) {
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url timeoutInterval:10];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url
+                                                       cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                   timeoutInterval:10];
     [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
     [req setValue:@"https://y.qq.com/" forHTTPHeaderField:@"Referer"];
     [[NSURLSession.sharedSession dataTaskWithRequest:req
