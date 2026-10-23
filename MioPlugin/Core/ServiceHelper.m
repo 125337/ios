@@ -140,9 +140,13 @@ void WXSendTextMessage(NSString *text, NSString *sessionName) {
     });
 }
 
-// 向指定会话发送 appmsg 卡片（type=49）：viaLocal=YES 走 AddLocalMsg:MsgWrap:（黄白/原生听一听实证的
-// 发送入口），NO 走 AddMsg:MsgWrap:（收包入口，实测对面收到原始 XML 文本，仅作对照实验用）。
-BOOL WXSendAppMessageVia(NSString *appMsgXml, NSString *sessionName, BOOL viaLocal) {
+// 向指定会话发送 appmsg 卡片（type=49）。
+// 发送入口定论（黄白 dylib 静态反编译，2026-10-23，_aam_sites_out.txt）：
+//   黄白 6 处发送调用点全部为 [CMessageMgr AddAppMsg:chatUser MsgWrap:wrap Data:nil Scene:2]
+//   —— Data 恒 nil、Scene 恒 2；AddAppMsg 是宿主自带老 API（黄白 dylib 内无 IMP，非注入）。
+//   AddMsg:MsgWrap: 只插库不发送（对面收原始 XML 文本）；
+//   AddLocalMsg:MsgWrap: 只插库不认领（本地显示"卡发送中"）——两条路都已实证排除。
+BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
     if (!appMsgXml.length || !sessionName.length) return NO;
     @try {
         id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
@@ -166,22 +170,18 @@ BOOL WXSendAppMessageVia(NSString *appMsgXml, NSString *sessionName, BOOL viaLoc
         [msg setValue:@(1) forKey:@"m_uiImgStatus"];
         [msg setValue:@((unsigned int)[[NSDate date] timeIntervalSince1970]) forKey:@"m_uiCreateTime"];
 
-        SEL sendSel = NSSelectorFromString(viaLocal ? @"AddLocalMsg:MsgWrap:" : @"AddMsg:MsgWrap:");
+        SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
         if (![msgMgr respondsToSelector:sendSel]) {
-            WPLog(@"MioPlugin", @"[SEND] %@ 方法不可用", viaLocal ? @"AddLocalMsg:MsgWrap:" : @"AddMsg:MsgWrap:");
+            WPLog(@"MioPlugin", @"[SEND] AddAppMsg:MsgWrap:Data:Scene: 方法不可用");
             return NO;
         }
-        ((void (*)(id, SEL, id, id))objc_msgSend)(msgMgr, sendSel, sessionName, msg);
-        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送(%@ status=1) -> %@", viaLocal ? @"AddLocalMsg" : @"AddMsg", sessionName);
+        ((void (*)(id, SEL, id, id, id, unsigned int))objc_msgSend)(msgMgr, sendSel, sessionName, msg, nil, 2);
+        WPLog(@"MioPlugin", @"[SEND] appmsg 卡片已发送(AddAppMsg Scene=2) -> %@", sessionName);
         return YES;
     } @catch (NSException *e) {
         WPLog(@"MioPlugin", @"[SEND] appmsg 发送异常: %@", e);
         return NO;
     }
-}
-
-BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName) {
-    return WXSendAppMessageVia(appMsgXml, sessionName, YES);
 }
 
 NSString *WXDisplayNameForWxid(NSString *wxid) {

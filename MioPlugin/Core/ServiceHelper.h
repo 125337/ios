@@ -1,4 +1,4 @@
-﻿#import <Foundation/Foundation.h>
+#import <Foundation/Foundation.h>
 
 // 微信服务/联系人辅助函数（实现见 ServiceHelper.m，避免 static inline 在每个
 // import 的编译单元生成副本造成二进制膨胀）
@@ -27,8 +27,8 @@ void WXSendTextMessage(NSString *text, NSString *sessionName);
 
 /// 向指定会话发送一条 appmsg 卡片消息（type=49，content 为完整 XML；主线程执行，立即发送）
 /// 供音乐卡片等富消息复用；发送成功返回 YES
+/// 发送入口 = [CMessageMgr AddAppMsg:chatUser MsgWrap:wrap Data:nil Scene:2]（黄白 dylib 反编译实证）
 BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName);
-BOOL WXSendAppMessageVia(NSString *appMsgXml, NSString *sessionName, BOOL viaLocal);
 
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);
