@@ -45,6 +45,7 @@
 #import "../Modules/MsgMerge/MsgMergeConfig.h"
 #import "../Modules/MusicShare/MusicShareConfig.h"
 #import "../Modules/MusicShare/MusicShareCommandHook.h"
+#import "../Modules/MusicShare/MusicShareOfficialProbe.h"
 #import "../Modules/SettingEntry/WPOtherVC.h"
 
 // ────── 所有 Hook 类的 import ──────
@@ -329,7 +330,7 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"musicshare"
                                                     title:@"音乐分享"
                                                configClass:[MusicShareConfig class]
-                                               hookClasses:@[[MusicShareCommandHook class]]
+                                               hookClasses:@[[MusicShareCommandHook class], [MusicShareOfficialProbe class]]
                                            controllerClass:[WPOtherVC class]
                                                   subtitle:@"点歌发送音乐卡片"
                                              sectionTitle:@"通用"],
