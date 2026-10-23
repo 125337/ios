@@ -4,7 +4,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 // 网易云音源三件套（2026-10-23 PC 实证：搜索/320k mp3 直链/LRC 歌词/封面全通，
-// 免签免登录，关键 Cookie: os=pc。作为默认音源；QQ 音源见 QQMusicService）
+// 免签免登录，关键 Cookie: os=pc）
 @interface NeteaseMusicService : NSObject
 
 // 搜索（主线程调用；completion 主线程回调，songs 为空 = 无结果/网络失败）
