@@ -148,7 +148,7 @@ static void repl_wp_SendMsgAsync(id self, SEL _cmd) {
         NSMutableString *out = [NSMutableString string];
         for (unsigned int i = 0; i < n; i++) {
             NSString *name = NSStringFromSelector(method_getName(list[i]));
-            if (pat.firstMatchInString:name options:0 range:NSMakeRange(0, name.length)]) {
+            if ([pat firstMatchInString:name options:0 range:NSMakeRange(0, name.length)]) {
                 [out appendFormat:@"%@ ", name];
             }
         }
