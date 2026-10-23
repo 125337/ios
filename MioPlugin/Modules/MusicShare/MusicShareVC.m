@@ -3,8 +3,11 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 
-// 音乐分享配置页：音源选择（原生 ActionSheet）+ 指令点歌开关区。
-// 搜歌/发卡逻辑在 MusicShareService，指令监听在 MusicShareCommandHook。
+// 音乐分享配置页：启用开关 + 音源选择（input 行右值预览 + 拦截 wpRunInputFlow 弹 ActionSheet）
+// + 指令点歌开关区。搜歌/发卡逻辑在 MusicShareService，指令监听在 MusicShareCommandHook。
+
+static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的伪 key（只做行标识，不落配置）
+
 @implementation MusicShareVC
 
 - (void)viewDidLoad {
@@ -13,17 +16,31 @@
     [self wpReloadUI];
 }
 
+- (NSString *)sourceName {
+    return ([MusicShareConfig shared].musicSource == 1) ? @"QQ 音乐" : @"网易云";
+}
+
 - (void)wpBuildRows {
     CGFloat w = self.view.bounds.size.width;
     MusicShareConfig *cfg = [MusicShareConfig shared];
 
-    // ===== 音乐源 =====
+    // ===== 启用 / 音源 =====
     UIView *srcGroup = [self addTableGroupAtY:0 width:w];
-    CGFloat cy = [self addNavRowInGroup:srcGroup
-                                  title:@"音乐源"
-                               subtitle:nil
-                                    tag:0 action:@selector(onSourceTap:)
-                                     cy:0 width:w];
+    CGFloat cy = [self addSwitchRowInGroup:srcGroup
+                                     title:@"启用音乐分享"
+                                      desc:@"关闭后指令点歌与发送全部停用"
+                                       key:@"musicShareEnabled"
+                                       isOn:cfg.musicShareEnabled cy:0 width:w];
+    // 音源行：input 型展示（右值=当前源名），点击在 wpRunInputFlow 拦截弹 ActionSheet
+    cy = [self addInputRowInGroup:srcGroup
+                            title:@"音乐源"
+                              key:kSourcePickerKey
+                            value:[self sourceName]
+                             hint:[self sourceName]
+                       valueType:InputValueTypeText
+                       alertTitle:nil
+                     alertMessage:nil
+                               cy:cy width:w];
     cy = [self addSectionFooter:@"网易云使用自建接口\nQQ 音乐使用微信官方搜索与发送接口（暂未接入）"
                               y:cy width:w];
     [self finishGroup:srcGroup atY:0 height:cy];
@@ -68,9 +85,17 @@
     [self finishGroup:cmdGroup atY:0 height:cy2];
 }
 
-#pragma mark - 音源选择（原生 ActionSheet）
+#pragma mark - 输入行拦截：音源行弹 ActionSheet，其余走默认输入弹窗
 
-- (void)onSourceTap:(UIButton *)sender {
+- (void)wpRunInputFlow:(NSDictionary *)row {
+    if ([row[@"key"] isEqualToString:kSourcePickerKey]) {
+        [self presentSourcePicker];
+        return;
+    }
+    [super wpRunInputFlow:row];
+}
+
+- (void)presentSourcePicker {
     MusicShareConfig *cfg = [MusicShareConfig shared];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"请选择音乐源"
                                       message:@"网易云使用自建接口\nQQ 音乐使用微信官方搜索与发送接口"
