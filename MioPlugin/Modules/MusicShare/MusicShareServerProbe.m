@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 #import "../../Core/LogManager.h"
 
 // 一次性探针：枚举全部类，找持有 GetMusicXmlFromMusic* / GetQQMusicGent 属性的类，
@@ -9,10 +10,9 @@
 static void dumpPropValues(Class cls, NSArray<NSString *> *props) {
     for (NSString *pn in props) {
         SEL sel = NSSelectorFromString(pn);
-        void (*msgClass)(id, SEL) = (void (*)(id, SEL))objc_msgSend;
         @try {
             if ([cls respondsToSelector:sel]) {
-                id v = msgClass(cls, sel);
+                id v = ((id (*)(id, SEL))objc_msgSend)(cls, sel);
                 WPLog(@"Music", @"[SVR] +[%@ %@] = %@", NSStringFromClass(cls), pn, v);
             }
         } @catch (NSException *e) {}
@@ -52,9 +52,9 @@ static void hookSettersForClass(Class cls, NSArray<NSString *> *props) {
         SEL sel = NSSelectorFromString([NSString stringWithFormat:@"set%@:", pn]);
         Method m = class_getInstanceMethod(cls, sel);
         if (!m) continue;
-        NSString *key = [NSString stringWithFormat:@"SVRSET_%@_%@", NSStringFromClass(cls), pn];
+        void *key = (void *)[NSString stringWithFormat:@"SVRSET_%@_%@", NSStringFromClass(cls), pn].UTF8String;
         IMP orig = method_getImplementation(m);
-        objc_setAssociatedObject(cls, key, (__bridge id)(void *)orig, OBJC_ASSOCIATION_RETAIN);
+        objc_setAssociatedObject((__bridge id)cls, key, [NSValue valueWithPointer:orig], OBJC_ASSOCIATION_RETAIN);
         void (^logBlock)(id, id) = ^(id self, id val) {
             WPLog(@"Music", @"[SVR-SET] [%@ set%@:] = %@\n%@", NSStringFromClass([self class]), pn, val, [NSThread callStackSymbols]);
         };
