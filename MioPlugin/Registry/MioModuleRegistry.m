@@ -328,7 +328,7 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"musicshare"
                                                     title:@"音乐分享"
                                                configClass:[MusicShareConfig class]
-                                               hookClasses:@[]
+                                               hookClasses:@[[MusicShareWireProbe class]]
                                            controllerClass:[WPOtherVC class]
                                                   subtitle:@"点歌发送音乐卡片"
                                              sectionTitle:@"通用"],
