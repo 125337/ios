@@ -152,9 +152,9 @@ static NSMutableArray<MusicSong *> *parseSongList(id list) {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSString *enc = [keyword stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
 
-        // A) 老搜索 GET（免签）——诊断：失败时打 HTTP code + 响应头 200 字符
+        // A) 老搜索 GET（免签）——公参 ct/cv/cn/os/ver 必带，缺了返回 HTTP 500 空 body（184/185 实证）
         NSString *url = [NSString stringWithFormat:
-            @"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=%@&format=json&n=20", enc];
+            @"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?ct=24&cv=0&cn=0&os=app&ver=0&w=%@&format=json&n=20", enc];
         NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
         [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
         [req setValue:@"https://c.y.qq.com/" forHTTPHeaderField:@"Referer"];
@@ -169,15 +169,15 @@ static NSMutableArray<MusicSong *> *parseSongList(id list) {
             return;
         }
 
-        // B) musicu.fcg SearchCgiService（web 公参 + 登录态）——老接口空/挂时兜底
+        // B) musicu.fcg SearchCgiService——method 必须是 DoSearchForQQMusicDesktop（网页端实证方法名，
+        //    写成 search 会报 code=500003，185 实证）
         NSString *uin = uinFromCookie(kQQMusicCookie);
         NSString *gtk = gtkOf(qmKeystFromCookie(kQQMusicCookie));
         NSDictionary *payload = @{@"comm": qqComm(uin, gtk),
                                   @"req_1": @{@"module": @"music.search.SearchCgiService",
-                                              @"method": @"search",
+                                              @"method": @"DoSearchForQQMusicDesktop",
                                               @"param": @{@"query": keyword, @"search_type": @0,
-                                                          @"num_per_page": @20, @"page_num": @0,
-                                                          @"nqc_flag": @0}}};
+                                                          @"num_per_page": @20, @"page_num": @1}}};
         root = qqPost(payload, kQQMusicCookie, @"搜索B");
         songs = parseSongList(root[@"req_1"][@"data"][@"body"][@"song"][@"list"]);
         if (songs.count == 0) {
