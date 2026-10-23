@@ -19,11 +19,10 @@
     return @[
         [ConfigDescriptor itemWithKey:@"musicShareEnabled" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"musicSource" type:ConfigValueTypeInteger default:@0],
-        [ConfigDescriptor itemWithKey:@"commandEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"commandKeyword" type:ConfigValueTypeString default:@"点歌"],
         [ConfigDescriptor itemWithKey:@"replyInGroup" type:ConfigValueTypeBool default:@(YES)],
         [ConfigDescriptor itemWithKey:@"replyInPrivate" type:ConfigValueTypeBool default:@(YES)],
-        [ConfigDescriptor itemWithKey:@"replyToSelf" type:ConfigValueTypeBool default:@(NO)],
+        [ConfigDescriptor itemWithKey:@"songGroupWhitelist" type:ConfigValueTypeArray default:@[]],
         [ConfigDescriptor itemWithKey:@"failNotice" type:ConfigValueTypeBool default:@(YES)],
     ];
 }

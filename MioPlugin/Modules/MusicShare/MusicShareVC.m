@@ -2,6 +2,7 @@
 #import "MusicShareConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
+#import "../../Settings/Controllers/MioContactPicker.h"
 
 // 音乐分享配置页：启用开关 + 音源选择（input 行右值预览 + 拦截 wpRunInputFlow 弹 ActionSheet）
 // + 指令点歌开关区。搜歌/发卡逻辑在 MusicShareService，指令监听在 MusicShareCommandHook。
@@ -45,13 +46,24 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                               y:cy width:w];
     [self finishGroup:srcGroup atY:0 height:cy];
 
-    // ===== 指令点歌 =====
+    // ===== 点歌设置 =====
     UIView *cmdGroup = [self addTableGroupAtY:0 width:w];
-    CGFloat cy2 = [self addSwitchRowInGroup:cmdGroup
-                                      title:@"指令点歌"
-                                       desc:@"收到「点歌 歌名」自动发音乐卡片到该会话"
-                                        key:@"commandEnabled"
-                                        isOn:cfg.commandEnabled cy:0 width:w];
+    // 群聊点歌手风琴：开启后展开群聊白名单（空=所有群生效）
+    CGFloat cy2 = [self addMasterSwitchRowInGroup:cmdGroup
+                                            title:@"启用群聊点歌功能"
+                                              key:@"replyInGroup"
+                                             isOn:cfg.replyInGroup
+                                       subBuilder:^(UIView *expand, CGFloat *ecy) {
+        NSString *hint = cfg.songGroupWhitelist.count > 0
+            ? [NSString stringWithFormat:@"已选择 %lu 个群", (unsigned long)cfg.songGroupWhitelist.count]
+            : @"点击选择群聊";
+        *ecy = [self addButtonRowInGroup:expand title:@"点歌群聊白名单" hint:hint key:@"selectSongGroups" cy:*ecy width:w];
+    } cy:0 width:w];
+    cy2 = [self addSwitchRowInGroup:cmdGroup
+                              title:@"启用私聊点歌功能"
+                               desc:nil
+                                key:@"replyInPrivate"
+                                isOn:cfg.replyInPrivate cy:cy2 width:w];
     cy2 = [self addInputRowInGroup:cmdGroup
                              title:@"触发词"
                                key:@"commandKeyword"
@@ -62,27 +74,34 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                       alertMessage:@"在该会话发送「触发词 歌名」即可点歌"
                                 cy:cy2 width:w];
     cy2 = [self addSwitchRowInGroup:cmdGroup
-                              title:@"群聊响应"
-                               desc:nil
-                                key:@"replyInGroup"
-                                isOn:cfg.replyInGroup cy:cy2 width:w];
-    cy2 = [self addSwitchRowInGroup:cmdGroup
-                              title:@"私聊响应"
-                               desc:nil
-                                key:@"replyInPrivate"
-                                isOn:cfg.replyInPrivate cy:cy2 width:w];
-    cy2 = [self addSwitchRowInGroup:cmdGroup
-                              title:@"响应自己的消息"
-                               desc:@"开启后自己发的指令也会点歌"
-                                key:@"replyToSelf"
-                                isOn:cfg.replyToSelf cy:cy2 width:w];
-    cy2 = [self addSwitchRowInGroup:cmdGroup
                               title:@"搜不到时回复提示"
                                desc:nil
                                 key:@"failNotice"
                                 isOn:cfg.failNotice cy:cy2 width:w];
-    cy2 = [self addSectionFooter:@"每次取搜索第一个结果发送；同一会话 3 秒冷却" y:cy2 width:w];
+    cy2 = [self addSectionFooter:@"每次取搜索第一个结果发送；同一会话 3 秒冷却\n白名单为空时所有群聊均可点歌" y:cy2 width:w];
     [self finishGroup:cmdGroup atY:0 height:cy2];
+}
+
+#pragma mark - 群聊选择器（点歌群聊白名单）
+
+- (void)buttonClicked:(NSString *)key {
+    if ([key isEqualToString:@"selectSongGroups"]) {
+        MusicShareConfig *cfg = [MusicShareConfig shared];
+        [MioContactPicker presentPickerWithMode:MioContactPickerModeGroups
+                                          title:@"选择可点歌的群聊"
+                                    preselected:cfg.songGroupWhitelist
+                                       delegate:self
+                                           from:self];
+        return;
+    }
+    [super buttonClicked:key];
+}
+
+- (void)pickerDidFinish:(NSArray<NSString *> *)groupIds {
+    MusicShareConfig *cfg = [MusicShareConfig shared];
+    cfg.songGroupWhitelist = groupIds;
+    [ConfigManager saveAll];
+    [self wpReloadUI];
 }
 
 #pragma mark - 输入行拦截：音源行弹 ActionSheet，其余走默认输入弹窗

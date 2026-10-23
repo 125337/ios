@@ -17,14 +17,14 @@ static NSMutableDictionary<NSString *, NSDate *> *_lastFireTime = nil; // 会话
 
 static void processTextMessage(id wrap) {
     MusicShareConfig *cfg = [MusicShareConfig shared];
-    if (!cfg.musicShareEnabled || !cfg.commandEnabled) return;
+    if (!cfg.musicShareEnabled) return;
 
     @try {
         unsigned int msgType = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
         if (msgType != 1) return;  // 只认文本
 
         // 方向判定：m_bIsSender 不可信（182 日志实证：私聊自己发的消息恒为 0），
-        // 用 fromUsr 是否等于自己 wxid 判定
+        // 用 fromUsr 是否等于自己 wxid 判定；自己的指令默认同样响应
         NSString *fromUsr = [wrap valueForKey:@"m_nsFromUsr"];
         NSString *toUsr = [wrap valueForKey:@"m_nsToUsr"];
         if (fromUsr.length == 0 && toUsr.length == 0) return;
@@ -37,9 +37,10 @@ static void processTextMessage(id wrap) {
         BOOL isGroup = fromIsGroup || toIsGroup;
         NSString *session = fromIsGroup ? fromUsr : (toIsGroup ? toUsr : (iSent ? toUsr : fromUsr));
         if (session.length == 0) return;
-        if (iSent && !cfg.replyToSelf) return;  // 自己发出的指令默认不响应，防手动测试双发
         if (isGroup && !cfg.replyInGroup) return;
         if (!isGroup && !cfg.replyInPrivate) return;
+        // 点歌群聊白名单：非空时仅白名单内的群生效
+        if (isGroup && cfg.songGroupWhitelist.count > 0 && ![cfg.songGroupWhitelist containsObject:session]) return;
 
         // localID 去重
         unsigned int localID = [[wrap valueForKey:@"m_uiMesLocalID"] unsignedIntValue];
