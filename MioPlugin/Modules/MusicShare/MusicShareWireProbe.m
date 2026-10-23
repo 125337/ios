@@ -70,6 +70,20 @@ static void repl_wp_AddMsg(id self, SEL _cmd, id session, id wrap) {
 
 static void repl_wp_AddLocalMsg(id self, SEL _cmd, id session, id wrap) {
     wpDump(session, wrap, @"AddLocalMsg");
+    // 调用栈回溯：区分黄白/原生 UI/我们 的调用上下文
+    @try {
+        NSArray *bt = [NSThread callStackSymbols];
+        NSMutableString *s = [NSMutableString string];
+        NSUInteger n = MIN((NSUInteger)10, bt.count);
+        for (NSUInteger i = 1; i < n; i++) {   // 跳过第 0 帧（本函数）
+            NSString *line = bt[i];
+            NSRange r = [line rangeOfString:@"0x" options:NSBackwardsSearch];
+            NSString *tail = r.location != NSNotFound && line.length - r.location < 40
+                ? [line substringFromIndex:r.location] : line;
+            [s appendFormat:@"\n    #%lu %@", (unsigned long)i, tail];
+        }
+        WPLog(@"WireProbe", @"[BT] AddLocalMsg 调用栈:%@", s);
+    } @catch (NSException *e) {}
     ((void (*)(id, SEL, id, id))orig_wp_AddLocalMsg)(self, _cmd, session, wrap);
     // 返回后补查：AddLocalMsg 是否给 localID 赋值（没赋=它只认预插入的行，我们缺的就是这步）
     WPLog(@"WireProbe", @"[SEQ] AddLocalMsg 返回后 localID=%@ svrID=%@", wpField(wrap, @"m_uiMesLocalID"), wpField(wrap, @"m_n64MesSvrID"));
@@ -112,6 +126,29 @@ static void repl_wp_SendMsgAsync(id self, SEL _cmd) {
     ((void (*)(id, SEL))orig_wp_SendMsgAsync)(self, _cmd);
 }
 
+// 发送裁决回调：卡消息卡住时，这里会给出管线的判决和错误码
+static IMP orig_wp_SendOK = NULL;
+static IMP orig_wp_SendFail = NULL;
+static IMP orig_wp_ErrBySender = NULL;
+
+static void repl_wp_SendOK(id self, SEL _cmd, id wrap) {
+    WPLog(@"WireProbe", @"[VERDICT] OnSendMessageSuccess type=%@ to=%@ title=%@",
+          wpField(wrap, @"m_uiMessageType"), wpField(wrap, @"m_nsToUsr"), wpField(wrap, @"m_nsTitle"));
+    ((void (*)(id, SEL, id))orig_wp_SendOK)(self, _cmd, wrap);
+}
+
+static void repl_wp_SendFail(id self, SEL _cmd, id wrap) {
+    WPLog(@"WireProbe", @"[VERDICT] OnSendMessageFail type=%@ to=%@ title=%@ retCode=%@",
+          wpField(wrap, @"m_uiMessageType"), wpField(wrap, @"m_nsToUsr"),
+          wpField(wrap, @"m_nsTitle"), wpField(wrap, @"sendFailRetCode"));
+    ((void (*)(id, SEL, id))orig_wp_SendFail)(self, _cmd, wrap);
+}
+
+static void repl_wp_ErrBySender(id self, SEL _cmd, id arg1, long long errno_) {
+    WPLog(@"WireProbe", @"[VERDICT] OnErrorBySender err=%lld arg1=%@", errno_, arg1);
+    ((void (*)(id, SEL, id, long long))orig_wp_ErrBySender)(self, _cmd, arg1, errno_);
+}
+
 @implementation MusicShareWireProbe
 
 + (void)install {
@@ -134,6 +171,16 @@ static void repl_wp_SendMsgAsync(id self, SEL _cmd) {
     SEL sendAsyncSel = NSSelectorFromString(@"SendMsgAsync");
     if ([cls instancesRespondToSelector:sendAsyncSel])
         MSHookMessageEx(cls, sendAsyncSel, (IMP)repl_wp_SendMsgAsync, (IMP *)&orig_wp_SendMsgAsync);
+    // 发送裁决回调
+    SEL sendOkSel = NSSelectorFromString(@"OnSendMessageSuccess:");
+    if ([cls instancesRespondToSelector:sendOkSel])
+        MSHookMessageEx(cls, sendOkSel, (IMP)repl_wp_SendOK, (IMP *)&orig_wp_SendOK);
+    SEL sendFailSel = NSSelectorFromString(@"OnSendMessageFail:");
+    if ([cls instancesRespondToSelector:sendFailSel])
+        MSHookMessageEx(cls, sendFailSel, (IMP)repl_wp_SendFail, (IMP *)&orig_wp_SendFail);
+    SEL errSenderSel = NSSelectorFromString(@"OnErrorBySender:ErrNo:");
+    if ([cls instancesRespondToSelector:errSenderSel])
+        MSHookMessageEx(cls, errSenderSel, (IMP)repl_wp_ErrBySender, (IMP *)&orig_wp_ErrBySender);
     WPLog(@"WireProbe", @"[+] wire 探针已挂载（AddMsg/AddLocalMsg + Resend族/4参变体/SendMsgAsync 序列追踪）");
 
     // 方法菜单：把发送/localID 相关的候选接口全部列出来（找黄白预分配 localID 用的接口）
