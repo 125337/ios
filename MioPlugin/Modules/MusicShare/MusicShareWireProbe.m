@@ -73,6 +73,43 @@ static void repl_wp_AddLocalMsg(id self, SEL _cmd, id session, id wrap) {
     ((void (*)(id, SEL, id, id))orig_wp_AddLocalMsg)(self, _cmd, session, wrap);
 }
 
+// ===== 后续链路探针：AddLocalMsg 只是入库，真正触发网络发送的后续调用才是黄白能发出去的关键 =====
+static IMP orig_wp_ResendMsg = NULL;
+static IMP orig_wp_ResendVoiceMsg = NULL;
+static IMP orig_wp_AddLocalMsg4 = NULL;
+static IMP orig_wp_SendMsgAsync = NULL;
+
+static void wpSeq(NSString *via, id arg1, id wrap) {
+    @try {
+        if (!wrap) { WPLog(@"WireProbe", @"[SEQ] %@ arg1=%@ wrap=nil", via, arg1); return; }
+        id typeObj = wpField(wrap, @"m_uiMessageType");
+        long long t = [typeObj respondsToSelector:@selector(longLongValue)] ? [typeObj longLongValue] : -1;
+        id to = wpField(wrap, @"m_nsToUsr");
+        WPLog(@"WireProbe", @"[SEQ] %@ type=%lld to=%@ title=%@ localID=%@", via, t, to,
+              wpField(wrap, @"m_nsTitle"), wpField(wrap, @"m_uiMesLocalID"));
+    } @catch (NSException *e) {}
+}
+
+static void repl_wp_ResendMsg(id self, SEL _cmd, id session, id wrap) {
+    wpSeq(@"ResendMsg", session, wrap);
+    ((void (*)(id, SEL, id, id))orig_wp_ResendMsg)(self, _cmd, session, wrap);
+}
+
+static void repl_wp_ResendVoiceMsg(id self, SEL _cmd, id session, id wrap) {
+    wpSeq(@"ResendVoiceMsg", session, wrap);
+    ((void (*)(id, SEL, id, id))orig_wp_ResendVoiceMsg)(self, _cmd, session, wrap);
+}
+
+static void repl_wp_AddLocalMsg4(id self, SEL _cmd, id session, id wrap, BOOL fixTime, BOOL notify) {
+    wpSeq(@"AddLocalMsg4arg", session, wrap);
+    ((void (*)(id, SEL, id, id, BOOL, BOOL))orig_wp_AddLocalMsg4)(self, _cmd, session, wrap, fixTime, notify);
+}
+
+static void repl_wp_SendMsgAsync(id self, SEL _cmd) {
+    WPLog(@"WireProbe", @"[SEQ] SendMsgAsync");
+    ((void (*)(id, SEL))orig_wp_SendMsgAsync)(self, _cmd);
+}
+
 @implementation MusicShareWireProbe
 
 + (void)install {
@@ -82,7 +119,20 @@ static void repl_wp_AddLocalMsg(id self, SEL _cmd, id session, id wrap) {
                     (IMP)repl_wp_AddMsg, (IMP *)&orig_wp_AddMsg);
     MSHookMessageEx(cls, NSSelectorFromString(@"AddLocalMsg:MsgWrap:"),
                     (IMP)repl_wp_AddLocalMsg, (IMP *)&orig_wp_AddLocalMsg);
-    WPLog(@"WireProbe", @"[+] wire 探针已挂载（AddMsg + AddLocalMsg, type=34/49）");
+    // 后续链路（黄白 AddLocalMsg 之后还有哪些调用，决定我们能不能复刻整条序列）
+    SEL resendMsgSel = NSSelectorFromString(@"ResendMsg:MsgWrap:");
+    if ([cls instancesRespondToSelector:resendMsgSel])
+        MSHookMessageEx(cls, resendMsgSel, (IMP)repl_wp_ResendMsg, (IMP *)&orig_wp_ResendMsg);
+    SEL resendVoiceSel = NSSelectorFromString(@"ResendVoiceMsg:");
+    if ([cls instancesRespondToSelector:resendVoiceSel])
+        MSHookMessageEx(cls, resendVoiceSel, (IMP)repl_wp_ResendVoiceMsg, (IMP *)&orig_wp_ResendVoiceMsg);
+    SEL addLocal4Sel = NSSelectorFromString(@"AddLocalMsg:MsgWrap:fixTime:NewMsgArriveNotify:");
+    if ([cls instancesRespondToSelector:addLocal4Sel])
+        MSHookMessageEx(cls, addLocal4Sel, (IMP)repl_wp_AddLocalMsg4, (IMP *)&orig_wp_AddLocalMsg4);
+    SEL sendAsyncSel = NSSelectorFromString(@"SendMsgAsync");
+    if ([cls instancesRespondToSelector:sendAsyncSel])
+        MSHookMessageEx(cls, sendAsyncSel, (IMP)repl_wp_SendMsgAsync, (IMP *)&orig_wp_SendMsgAsync);
+    WPLog(@"WireProbe", @"[+] wire 探针已挂载（AddMsg/AddLocalMsg + Resend族/4参变体/SendMsgAsync 序列追踪）");
 }
 
 @end
