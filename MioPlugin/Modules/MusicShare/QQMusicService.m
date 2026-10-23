@@ -157,7 +157,6 @@ static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
 
         // 3) 播放直链：UrlGetVkey + web 公参 + Cookie（PC 实证：免费歌 M500 result=0 真下载成功）
         // 文件名优先 M500<media_mid>.mp3，M500 被拒（无版权 mp3）退 C400 m4a；无 media_mid 退 mid+mid 拼法
-        NSString *playURL = nil;
         NSString *lastResult = @"";
         NSArray *filenames = mediaMid.length
             ? @[[NSString stringWithFormat:@"M500%@.mp3", mediaMid], [NSString stringWithFormat:@"C400%@.m4a", mediaMid]]
@@ -174,8 +173,8 @@ static NSDictionary *qqPost(NSDictionary *payload, NSString *cookie) {
             NSDictionary *inner = root[@"req_1"];
             NSDictionary *d = inner[@"data"];
             if (![d isKindOfClass:[NSDictionary class]]) continue;
-            NSDictionary *mi = [d[@"midurlinfo"] isKindOfClass:[NSArray class]] && d[@"midurlinfo"].count
-                ? d[@"midurlinfo"][0] : @{};
+            NSArray *infoList = [d[@"midurlinfo"] isKindOfClass:[NSArray class]] ? d[@"midurlinfo"] : @[];
+            NSDictionary *mi = infoList.count ? infoList[0] : @{};
             lastResult = [NSString stringWithFormat:@"%@", mi[@"result"] ?: inner[@"code"] ?: @"?"];
             NSString *purl = strOf(mi[@"purl"]) ?: @"";
             if (purl.length) {
