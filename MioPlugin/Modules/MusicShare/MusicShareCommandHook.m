@@ -28,8 +28,15 @@ static void processTextMessage(id wrap) {
         if (isSender && !cfg.replyToSelf) return;
 
         NSString *fromUsr = [wrap valueForKey:@"m_nsFromUsr"];
-        if (fromUsr.length == 0) return;
-        BOOL isGroup = [fromUsr containsString:@"@chatroom"];
+        NSString *toUsr = [wrap valueForKey:@"m_nsToUsr"];
+        if (fromUsr.length == 0 && toUsr.length == 0) return;
+        // 会话判定（自己发的消息 fromUsr=自己 wxid，群 ID 在 toUsr；别人发的相反）：
+        //   谁是 @chatroom 就用谁；双方都不是群时，自己发的取 toUsr、收到的取 fromUsr
+        BOOL fromIsGroup = [fromUsr containsString:@"@chatroom"];
+        BOOL toIsGroup = [toUsr containsString:@"@chatroom"];
+        BOOL isGroup = fromIsGroup || toIsGroup;
+        NSString *session = fromIsGroup ? fromUsr : (toIsGroup ? toUsr : (isSender ? toUsr : fromUsr));
+        if (session.length == 0) return;
         if (isGroup && !cfg.replyInGroup) return;
         if (!isGroup && !cfg.replyInPrivate) return;
 
@@ -45,9 +52,10 @@ static void processTextMessage(id wrap) {
             }
         }
 
-        // 正文：群消息 content = "wxid:\n内容"，剥离发送者前缀
+        // 正文：收到的群消息 content = "wxid:\n内容"，剥离发送者前缀取正文；
+        // 自己发的群消息（isSender）content 就是纯正文，不剥
         NSString *text = [wrap valueForKey:@"m_nsContent"] ?: @"";
-        if (isGroup) {
+        if (isGroup && !isSender) {
             NSRange r = [text rangeOfString:@":\n"];
             if (r.location != NSNotFound && r.location < 64) {
                 text = [text substringFromIndex:NSMaxRange(r)];
@@ -66,28 +74,28 @@ static void processTextMessage(id wrap) {
         // 会话冷却 3s，防连发刷屏
         if (!_lastFireTime) _lastFireTime = [NSMutableDictionary dictionary];
         @synchronized (_lastFireTime) {
-            NSDate *last = _lastFireTime[fromUsr];
+            NSDate *last = _lastFireTime[session];
             if (last && [last timeIntervalSinceNow] > -3.0) {
-                WPLog(@"Music", @"[Cmd] 冷却中，忽略 (%@)", fromUsr);
+                WPLog(@"Music", @"[Cmd] 冷却中，忽略 (%@)", session);
                 return;
             }
-            _lastFireTime[fromUsr] = [NSDate date];
+            _lastFireTime[session] = [NSDate date];
         }
 
-        WPLog(@"Music", @"[Cmd] 指令命中: \"%@\" -> %@ (group=%d)", songKeyword, fromUsr, isGroup);
+        WPLog(@"Music", @"[Cmd] 指令命中: \"%@\" -> 会话 %@ (group=%d sender=%d)", songKeyword, session, isGroup, isSender);
 
         // 后台搜歌（completion 主线程回调）→ 取第一个结果发卡
         [MusicShareService searchWithKeyword:songKeyword completion:^(NSArray<MusicSong *> *songs) {
             if (songs.count == 0) {
                 WPLog(@"Music", @"[Cmd] 无搜索结果: %@", songKeyword);
                 if (cfg.failNotice) {
-                    WXSendTextMessage([NSString stringWithFormat:@"未找到歌曲：%@", songKeyword], fromUsr);
+                    WXSendTextMessage([NSString stringWithFormat:@"未找到歌曲：%@", songKeyword], session);
                 }
                 return;
             }
             MusicSong *song = songs.firstObject;
             WPLog(@"Music", @"[Cmd] 取第一个结果: %@ - %@", song.name, song.singerName);
-            [MusicShareService sendSongCard:song to:fromUsr completion:^(BOOL ok, NSString *errMsg) {
+            [MusicShareService sendSongCard:song to:session completion:^(BOOL ok, NSString *errMsg) {
                 if (!ok) WPLog(@"Music", @"[Cmd] 发卡失败: %@", errMsg);
             }];
         }];
