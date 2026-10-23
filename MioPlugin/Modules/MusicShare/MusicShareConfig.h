@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy)   NSString *commandKeyword; // 触发词前缀（默认「点歌」）
 @property (nonatomic, assign) BOOL replyInGroup;     // 启用群聊点歌功能
 @property (nonatomic, assign) BOOL replyInPrivate;   // 启用私聊点歌功能
-@property (nonatomic, copy)   NSArray<NSString *> *songGroupWhitelist; // 点歌群聊白名单（空=所有群生效）
+@property (nonatomic, copy)   NSArray<NSString *> *songGroupWhitelist; // 点歌群聊白名单（仅白名单内的群生效，空=不生效）
 @property (nonatomic, assign) BOOL failNotice;       // 搜不到时回文本「未找到歌曲：xxx」
 
 + (instancetype)shared;

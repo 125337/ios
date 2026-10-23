@@ -78,7 +78,7 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                                desc:nil
                                 key:@"failNotice"
                                 isOn:cfg.failNotice cy:cy2 width:w];
-    cy2 = [self addSectionFooter:@"每次取搜索第一个结果发送；同一会话 3 秒冷却\n白名单为空时所有群聊均可点歌" y:cy2 width:w];
+    cy2 = [self addSectionFooter:@"每次取搜索第一个结果发送；同一会话 3 秒冷却\n仅白名单内的群聊可点歌" y:cy2 width:w];
     [self finishGroup:cmdGroup atY:0 height:cy2];
 }
 

@@ -39,8 +39,9 @@ static void processTextMessage(id wrap) {
         if (session.length == 0) return;
         if (isGroup && !cfg.replyInGroup) return;
         if (!isGroup && !cfg.replyInPrivate) return;
-        // 点歌群聊白名单：非空时仅白名单内的群生效
-        if (isGroup && cfg.songGroupWhitelist.count > 0 && ![cfg.songGroupWhitelist containsObject:session]) return;
+        // 点歌群聊白名单：仅白名单内的群生效（白名单为空 = 所有群都不生效）
+        if (isGroup && cfg.songGroupWhitelist.count == 0) return;
+        if (isGroup && ![cfg.songGroupWhitelist containsObject:session]) return;
 
         // localID 去重
         unsigned int localID = [[wrap valueForKey:@"m_uiMesLocalID"] unsignedIntValue];
