@@ -14,9 +14,11 @@
 // 也走此管道）。黄白在此入口做两件事（§4.1/4.2）：
 //   1) 快捷指令：文本 == msgTailShortcut 且开关开 → 不调 orig（消息不出网）+ 翻转
 //      enableMsgTail + toast（黄白 ★95% 确证行为）
-//   2) 文本尾巴：伪引用出网。黄白 xref 实锤（_hb_refer_xref.py）：0x63972c respondsToSelector
-//      防御 + 0x636e3c 调官方 -[CMessageWrap(APP) updateForReferMsg:replyContent:] 组包 +
-//      0x6399d0 伪造 svrid（orr 0x7000000000000000），对面原生微信收到引用卡片（用户实测）
+//   2) 文本尾巴：ext 引用卡出网。204 日志 AddAppMsg 探针实证黄白真实组包状态：
+//      不伪造被引用消息、不走 updateForReferMsg（官方"回复"流程渲染样式不对、displayname
+//      联系人现算盖不掉），而是 type=49 + 纯文本 content + extendInfo 拆字段
+//      （innerType=57 / sourceUsername=Displayname=尾巴 / referMessageSenderDisplayName=正文）
+//      → 宿主 AddAppMsg 管道从 ext 自组引用卡 XML（详见 ServiceHelper.m 注解）
 //
 // 与黄白的差异（有意为之）：
 //   - 黄白没做方向判定，但我们的实证是收发总管道 → 必须限定「自己发送」
@@ -137,17 +139,16 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
                 return;
             }
 
-            // ② 文本尾巴 = 伪引用（黄白 xref 实锤同款机制）：
-            //    伪造被引用消息 + 官方 updateForReferMsg:replyContent: 组包 + AddAppMsg 出网
-            //    → 对面原生微信看到「气泡正文 + 分隔线 + 灰字尾巴」引用卡片（用户实测确认）
+            // ② 文本尾巴 = ext 引用卡（黄白 204 探针实证同款状态，见 ServiceHelper.m 注解）：
+            //    type=49 + 纯文本 content + extendInfo 拆字段 → AddAppMsg，宿主管道自组引用卡 XML
             if (cfg.enableMsgTail && cfg.msgTail.length > 0
                 && selfSend && content.length > 0 && mtMsgType(wrap) == 1) {
                 g_tailAppending = YES;
                 @try {
                     NSString *target = mtStr(wrap, @"m_nsToUsr");
                     if (target.length == 0 && [session isKindOfClass:[NSString class]]) target = session;
-                    BOOL ok = WXSendReferMessage(content, cfg.msgTail, target);
-                    WPLog(@"MsgTail", @"[Tail] 伪引用%@（正文 %lu 字 + 尾巴 %lu 字）",
+                    BOOL ok = WXSendTailMessage(content, cfg.msgTail, target);
+                    WPLog(@"MsgTail", @"[Tail] 尾巴消息%@（正文 %lu 字 + 尾巴 %lu 字）",
                           ok ? @"已发送" : @"发送失败",
                           (unsigned long)content.length, (unsigned long)cfg.msgTail.length);
                     if (ok) return;   // 已改道出网，原始文本不再走 orig
