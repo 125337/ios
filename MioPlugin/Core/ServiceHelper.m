@@ -251,6 +251,10 @@ BOOL WXSendReferMessage(NSString *body, NSString *referContent, NSString *sessio
         if (ext) {
             @try { [ext setValue:@(57) forKey:@"m_uiAppMsgInnerType"]; }
             @catch (NSException *e) { WPLog(@"MioPlugin", @"[SEND] innerType 设置失败: %@", e); }
+            // displayname 置空（黄白同款：组包后 setReferMessageSenderDisplayName:@""，
+            // 常量 0x15b38b8 len=0 实锤）——否则灰字渲染成「我的昵称：尾巴」多了名字前缀
+            @try { [ext setValue:@"" forKey:@"referMessageSenderDisplayName"]; }
+            @catch (NSException *e) { WPLog(@"MioPlugin", @"[SEND] displayname 置空失败: %@", e); }
         }
 
         SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
