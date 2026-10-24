@@ -27,7 +27,10 @@ static NSString * const kCardSourceKey = @"cardSourcePicker";    // 卡片来源
 }
 
 - (NSString *)sourceName {
-    return ([MusicShareConfig shared].musicSource == 1) ? @"QQ 音乐" : @"网易云";
+    NSInteger src = [MusicShareConfig shared].musicSource;
+    if (src == 1) return @"QQ 音乐";
+    if (src == 2) return @"自定义接口";
+    return @"网易云";
 }
 
 // 卡片来源右值：空=自动（跟随音源官方），非空=预设名（未命中显示 appId 原文）
@@ -74,8 +77,25 @@ static NSString * const kCardSourceKey = @"cardSourcePicker";    // 卡片来源
                        alertTitle:nil
                      alertMessage:nil
                                cy:cy width:w];
-    cy = [self addSectionFooter:@"网易云使用自建接口（点击即播）\nQQ 音乐免登录取流：免费歌播全曲，VIP 歌播 60 秒试听"
-                              y:cy width:w];
+    // 自定义接口：选中后显示接口地址输入行（wpReloadUI 清空重建，条件行零成本）
+    if (cfg.musicSource == 2) {
+        cy = [self addInputRowInGroup:srcGroup
+                                title:@"接口地址"
+                                  key:@"customAPIURL"
+                                value:cfg.customAPIURL
+                                 hint:@"https://xxx.com/hb.php?"
+                           valueType:InputValueTypeText
+                          alertTitle:@"接口地址"
+                        alertMessage:@"填黄白协议服务器前缀，客户端自动追加 name=歌名\n可自带参数，如 https://xxx.com/hb.php?n=1&br=1&"
+                                  cy:cy width:w];
+    }
+    NSString *footer;
+    switch (cfg.musicSource) {
+        case 1:  footer = @"QQ 音乐免登录取流：免费歌播全曲，VIP 歌播 60 秒试听"; break;
+        case 2:  footer = @"黄白协议点歌服务器：要求返回 code/title/singer/music_url\n（cover/link/lyric 可选），一次请求即发卡"; break;
+        default: footer = @"网易云使用自建接口（点击即播）\nQQ 音乐免登录取流：免费歌播全曲，VIP 歌播 60 秒试听"; break;
+    }
+    cy = [self addSectionFooter:footer y:cy width:w];
     [self finishGroup:srcGroup atY:0 height:cy];
 
     // ===== 点歌设置 =====
@@ -154,7 +174,7 @@ static NSString * const kCardSourceKey = @"cardSourcePicker";    // 卡片来源
 - (void)presentSourcePicker {
     MusicShareConfig *cfg = [MusicShareConfig shared];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"请选择音乐源"
-                                      message:@"网易云使用自建接口\nQQ 音乐免登录取流（免费歌全曲/VIP 歌试听）"
+                                      message:@"网易云使用自建接口\nQQ 音乐免登录取流（免费歌全曲/VIP 歌试听）\n自定义接口：黄白协议点歌服务器"
                                preferredStyle:UIAlertControllerStyleActionSheet];
     void (^pick)(NSInteger) = ^(NSInteger src) {
         if (cfg.musicSource == src) return;
@@ -169,6 +189,9 @@ static NSString * const kCardSourceKey = @"cardSourcePicker";    // 卡片来源
     [sheet addAction:[UIAlertAction actionWithTitle:(cfg.musicSource == 0 ? @"✓ 网易云" : @"网易云")
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction *a) { pick(0); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:(cfg.musicSource == 2 ? @"✓ 自定义接口" : @"自定义接口")
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *a) { pick(2); }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:sheet animated:YES completion:nil];
 }

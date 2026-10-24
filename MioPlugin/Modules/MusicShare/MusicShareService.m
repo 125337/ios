@@ -2,6 +2,7 @@
 #import "MusicShareConfig.h"
 #import "NeteaseMusicService.h"
 #import "QQMusicService.h"
+#import "CustomAPIMusicService.h"
 #import "../../Core/ServiceHelper.h"
 #import "../../Core/LogManager.h"
 
@@ -16,6 +17,10 @@
         [QQMusicService searchWithKeyword:keyword completion:completion];
         return;
     }
+    if (source == 2) {
+        [CustomAPIMusicService searchWithKeyword:keyword completion:completion];
+        return;
+    }
     [NeteaseMusicService searchWithKeyword:keyword completion:completion];
 }
 
@@ -27,6 +32,8 @@
 // QQ 源 → 经典 type=3 音乐分享卡（QQ 音乐 App 分享同款）：
 //   <url>=官方播放页（点卡片主体打开）；<dataurl>=流直链（点 ▶ 客户端直接播，免费歌全曲/VIP 歌 60s 试听，
 //   取流定论见 QQMusicService.m 头注释；两源都有流后此差异仅剩 type 与 url 指向）
+// 自定义接口源（黄白协议）→ type=76 卡：一次请求回全量，<url>=link（空兜 music_url），<dataurl>=music_url；
+//   无「官方真身」appid，cardAppId 为空时兜用网易的 wx8dd6ecd81906fd84（appid 仅来源标识，渲染无差别）
 + (void)sendSongCard:(MusicSong *)song
                   to:(NSString *)session
           completion:(void (^)(BOOL ok, NSString *errMsg))completion {
@@ -39,7 +46,9 @@
             WPLog(@"Music", @"[Card] 无流无页面，放弃");
             NSString *hint = isQQ
                 ? @"这首歌连试听片段都取不到（版权/地区限制），换一首试试"
-                : @"这首歌取不到播放直链（版权限制），换一首试试";
+                : (source == 2
+                    ? @"点歌服务器未返回播放链接，请检查接口地址"
+                    : @"这首歌取不到播放直链（版权限制），换一首试试");
             completion(NO, hint);
             return;
         }
@@ -102,6 +111,10 @@
 
     if (source == 1) {
         [QQMusicService prepareSong:song completion:finish];
+        return;
+    }
+    if (source == 2) {
+        [CustomAPIMusicService prepareSong:song completion:finish];
         return;
     }
     [NeteaseMusicService prepareSong:song completion:finish];

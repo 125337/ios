@@ -8,8 +8,11 @@ NS_ASSUME_NONNULL_BEGIN
 // 总开关：关闭时音乐分享入口与指令点歌全部停用
 @property (nonatomic, assign) BOOL musicShareEnabled;
 // 音源：0=网易云（公开 web API 免登录直链，默认） 1=QQ 音乐（客户端 UA 伪装免登录取流，定论见
-//       文档/点歌功能/QQ音乐音源/ 与 网易云音源/ 文件夹）
+//       文档/点歌功能/QQ音乐音源/ 与 网易云音源/ 文件夹） 2=自定义接口（黄白协议点歌服务器）
 @property (nonatomic, assign) NSInteger musicSource;
+// 自定义接口服务器前缀（musicSource=2 时生效）：填 https://xxx.com/hb.php? 这类前缀，
+// 客户端追加 name=<URL编码歌名>；前缀可自带 n=1&br=1 等参数（末尾已带 name= 时直接接歌名）
+@property (nonatomic, copy)   NSString *customAPIURL;
 // 卡片来源 appid（appmsg/m_nsAppID）：空=自动跟随音源官方（QQ→wx5aa333606550dfd5，网易→wx8dd6ecd81906fd84）；
 // 非空=从 Moments 内置预设池选定的伪装 appid（appid 在音乐卡渲染中仅是来源标识，可任意填，黄白乱填喵喵机也正常）
 @property (nonatomic, copy)   NSString *cardAppId;
