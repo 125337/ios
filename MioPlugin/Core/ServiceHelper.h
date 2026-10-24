@@ -37,5 +37,9 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<N
 /// → AddAppMsg Scene=2，引用卡 XML 由宿主管道从 ext 拼装
 BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName);
 
+/// 应用图标尾巴（消息小尾巴·应用图标模式）：appmsg 应用卡片形态（title=正文、des=尾巴、
+/// innerType=5、无 url 点卡片无反应，appid 走预设池同款），复用 WXSendAppMessage 通道
+BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *sessionName);
+
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);

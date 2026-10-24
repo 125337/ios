@@ -265,6 +265,43 @@ BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
     }
 }
 
+// XML 文本转义（应用尾巴卡片模板用，音乐卡片同款三字符规则）
+static NSString *mtEscXml(NSString *s) {
+    if (s.length == 0) return @"";
+    NSMutableString *m = [s mutableCopy];
+    [m replaceOccurrencesOfString:@"&" withString:@"&amp;" options:0 range:NSMakeRange(0, m.length)];
+    [m replaceOccurrencesOfString:@"<" withString:@"&lt;" options:0 range:NSMakeRange(0, m.length)];
+    [m replaceOccurrencesOfString:@">" withString:@"&gt;" options:0 range:NSMakeRange(0, m.length)];
+    return m;
+}
+
+// 应用图标尾巴（应用图标模式）：appmsg 应用卡片形态的尾巴消息。
+// 与文本尾巴（WXSendTailMessage）同出 AddAppMsg 宿主管道，但卡片本身是完整 appmsg
+// （与音乐卡片同类），故复用 WXSendAppMessage 通道（XML + 结构化字段双满）：
+//   title=正文、des=尾巴、innerType=5（通用应用卡）、不配 <url>（点卡片无反应）
+//   appid 取朋友圈预设池同款 wxccac4ab14315add3（腾讯手机管家，非黄白私有），图标随 appid 渲染
+BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
+    if (!body.length || !tail.length || !sessionName.length) return NO;
+    NSString *appId = @"wxccac4ab14315add3";
+    NSString *xml = [NSString stringWithFormat:
+        @"<msg><appmsg appid=\"%@\"  sdkver=\"0\">"
+        "<title>%@</title><des>%@</des><type>5</type>"
+        "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
+        "</appmsg><appinfo><version>0</version><appname></appname>"
+        "<isforceupdate>1</isforceupdate></appinfo></msg>",
+        appId, mtEscXml(body), mtEscXml(tail)];
+    NSDictionary *extendFields = @{
+        @"m_nsAppID": appId,
+        @"m_nsTitle": body,
+        @"m_nsDesc": tail,
+        @"m_uiAppMsgInnerType": @(5),
+        @"m_bIsForceUpdate": @(1),
+    };
+    BOOL ok = WXSendAppMessage(xml, sessionName, extendFields);
+    if (ok) WPLog(@"MioPlugin", @"[SEND] 应用图标尾巴已发送 -> %@", sessionName);
+    return ok;
+}
+
 NSString *WXDisplayNameForWxid(NSString *wxid) {
     if (!wxid.length) return wxid;
     id contact = WXGetContactForWxid(wxid);

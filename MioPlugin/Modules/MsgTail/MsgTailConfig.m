@@ -21,6 +21,7 @@
         [ConfigDescriptor itemWithKey:@"msgTail" type:ConfigValueTypeString default:@""],
         [ConfigDescriptor itemWithKey:@"msgTailShortcutEnabled" type:ConfigValueTypeBool default:@(NO)],
         [ConfigDescriptor itemWithKey:@"msgTailShortcut" type:ConfigValueTypeString default:@""],
+        [ConfigDescriptor itemWithKey:@"enableAppTail" type:ConfigValueTypeBool default:@(NO)],
     ];
 }
 
