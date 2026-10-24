@@ -2,6 +2,7 @@
 #import "MusicShareConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioAlertHelper.h"
 #import "../../Settings/Controllers/MioContactPicker.h"
 #import "../../Settings/Controllers/SettingMusicCardSourceController.h"
 #import "../../Modules/Moments/MomentsConfig.h"
@@ -173,27 +174,21 @@ static NSString * const kCardSourceKey = @"cardSourcePicker";    // 卡片来源
 
 - (void)presentSourcePicker {
     MusicShareConfig *cfg = [MusicShareConfig shared];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"请选择音乐源"
-                                      message:@"网易云使用自建接口\nQQ 音乐免登录取流（免费歌全曲/VIP 歌试听）\n自定义接口：黄白协议点歌服务器"
-                               preferredStyle:UIAlertControllerStyleActionSheet];
-    void (^pick)(NSInteger) = ^(NSInteger src) {
-        if (cfg.musicSource == src) return;
-        cfg.musicSource = src;
+    NSArray<NSString *> *names = @[@"网易云", @"QQ 音乐", @"自定义接口"];
+    // 当前音源加 ✓ 前缀（项目统一风格，见 HomeCardCalendarPopup / SettingCardBackgroundController）
+    NSMutableArray<NSString *> *btns = [NSMutableArray array];
+    for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
+        [btns addObject:(cfg.musicSource == i) ? [NSString stringWithFormat:@"✓ %@", names[i]] : names[i]];
+    }
+    [MioAlertHelper showMenuAlert:@"请选择音乐源"
+                          buttons:btns
+                         onButton:^(NSInteger index) {
+        if (index >= (NSInteger)names.count || cfg.musicSource == index) return;
+        cfg.musicSource = index;
         [ConfigManager saveAll];  // 统一落盘（模块类未实现 saveArchivedData，直调必崩 unrecognized selector）
-        WPLog(@"Music", @"[Source] 切换音源 -> %ld", (long)src);
+        WPLog(@"Music", @"[Source] 切换音源 -> %@", names[index]);
         [self wpReloadUI];
-    };
-    [sheet addAction:[UIAlertAction actionWithTitle:(cfg.musicSource == 1 ? @"✓ QQ 音乐" : @"QQ 音乐")
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { pick(1); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:(cfg.musicSource == 0 ? @"✓ 网易云" : @"网易云")
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { pick(0); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:(cfg.musicSource == 2 ? @"✓ 自定义接口" : @"自定义接口")
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { pick(2); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:sheet animated:YES completion:nil];
+    }];
 }
 
 @end
