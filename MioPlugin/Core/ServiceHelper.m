@@ -198,17 +198,18 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<N
 }
 
 // 发送尾巴引用消息（消息小尾巴专用，完全复刻黄白组包状态）。
-// 机制定论（204 日志 AddAppMsg 探针实证，黄白 vs 我们逐字段对照）：
+// 机制定论（204~208 日志 AddAppMsg 探针实证，黄白 vs 我们逐字段对照）：
 //   黄白不走官方 updateForReferMsg:/generateMsgReferXML（那是普通"回复"流程：displayname
-//   由联系人现算盖不掉、渲染也不是引用卡样式——我们此前"灰色独立块"差异的根源）。
-//   黄白真实组包状态（探针 dump）：
+//   由联系人现算盖不掉、渲染也不是引用卡样式）。黄白真实组包状态（探针 dump）：
 //     wrap: type=49、content=纯文本正文（无 XML）、referingMessageWrap=nil、status=0
-//     ext:  innerType=57、sourceUsername=尾巴、sourceDisplayname=尾巴、
+//     ext:  innerType=57、sourceUsername=sourceDisplayname=尾巴、
 //           referMessageSenderDisplayName=正文、referMessageSenderUsrname=nil
-//   出网引用卡 XML 由宿主 AddAppMsg 管道从 extendInfo 自行拼装（黄白发纯文本 content
-//   也能出引用卡即实证）。
-//   ext 获取：wrap 级 setM_uiAppMsgInnerType: 经转发写入 extendInfo 并懒创建 ext
-//   （上一版探针实证：wrap 上调该 setter 后 ext.innerType=57）；其余字段直接对 ext KVC。
+//   宿主 AddAppMsg 管道从 extendInfo 自组引用卡 XML；wrap 上调 ext 系 setter 会经
+//   转发写入 ext（title/desc/appMsgInnerType 实证），但 CMessageWrap 自有同名属性
+//   的 setter 不转发（如 setM_nsAppId:），必须直接设在 ext 上。
+//   渲染定论（207 实证踩坑）：ext.m_nsAppID 为空 → 微信按无效卡片渲染（正文/尾巴全无）；
+//   appid 非空 + title/des=正文 + sourceUsername=尾巴 → 气泡正文 + 分隔线 + 灰字尾巴。
+//   黄白 appid 原值 wxccac4ab14315add3（黄白消息出网 XML 实取）。
 BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
     if (!body.length || !tail.length || !sessionName.length) return NO;
     @try {
@@ -257,10 +258,6 @@ BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
             return NO;
         }
         ((void (*)(id, SEL, id, id, id, unsigned int))objc_msgSend)(msgMgr, sendSel, sessionName, wrap, nil, 2);
-        // 诊断日志：出网后的 XML（宿主管道从 ext 拼装的结果，对照验证用）
-        NSString *outXml = [wrap valueForKey:@"m_nsContent"];
-        if (outXml.length > 800) outXml = [outXml substringToIndex:800];
-        WPLog(@"MioPlugin", @"[SEND] 尾巴消息已出网 -> %@，出网XML: %@", sessionName, outXml);
         return YES;
     } @catch (NSException *e) {
         WPLog(@"MioPlugin", @"[SEND] 尾巴消息发送异常: %@", e);

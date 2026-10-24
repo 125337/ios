@@ -8,7 +8,7 @@
 #import <objc/message.h>
 #import <substrate.h>
 
-// 消息小尾巴 · 文本类型（黄白同款，机制已全部静态实证，见 ServiceHelper.m WXSendReferMessage 注解）
+// 消息小尾巴 · 文本类型（黄白同款，机制已全部探针实证，见 ServiceHelper.m WXSendTailMessage 注解）
 //
 // 挂载点：CMessageMgr AddMsg:MsgWrap: —— 收发总管道（MsgMerge 94 号日志实证：自己发送
 // 也走此管道）。黄白在此入口做两件事（§4.1/4.2）：
@@ -23,92 +23,16 @@
 // 与黄白的差异（有意为之）：
 //   - 黄白没做方向判定，但我们的实证是收发总管道 → 必须限定「自己发送」
 //   - 只处理文本消息（m_uiMessageType==1），系统/图片等其他类型不碰
-//   - 防重入 flag（黄白 quote.tail.sending 同款思路）：发送伪引用期间置位，
+//   - 防重入 flag（黄白 quote.tail.sending 同款思路）：发送尾巴消息期间置位，
 //     防御 AddAppMsg 内部同步再入 AddMsg 管道导致二次组包
 
 static IMP g_orig_AddMsg = NULL;
 static BOOL g_tailAppending = NO;
-static IMP g_orig_AddAppMsg = NULL;
-
-// wrap 可用字段安全读取（仅调试探针用）
-static id mtVal(id obj, NSString *key) {
-    if (!obj) return nil;
-    @try { return [obj valueForKey:key]; } @catch (id e) { return nil; }
-}
-
-static NSString *mtDesc1(id v) {
-    if (!v) return @"nil";
-    NSString *d = [v description];
-    return d.length > 200 ? [d substringToIndex:200] : d;
-}
 
 static NSString *mtStr(id obj, NSString *key) {
     if (!obj) return @"";
     @try { return WXSafeStringGet(obj, key) ?: @""; } @catch (id e) { return @""; }
 }
-
-// DEBUG 探针：dump AddAppMsg 收到的 wrap 全量状态（黄白尾巴 vs 我们的，对照差异用，定案后删）
-static void repl_MsgTail_AddAppMsg(id self, SEL _cmd, id session, id wrap, id data, unsigned int scene) {
-    @try {
-        WPLog(@"MsgTail", @"[Probe-in] session=%@ data=%@ scene=%u",
-              mtDesc1(session), data ? [NSString stringWithFormat:@"%@ %@", NSStringFromClass([data class]), mtDesc1(data)] : @"nil", scene);
-        if (wrap) {
-            id ext = mtVal(wrap, @"m_extendInfoWithMsgType");
-            id referWrap = mtVal(wrap, @"referingMessageWrap");
-            WPLog(@"MsgTail", @"[ProbeAddAppMsg] === 会话=%@ scene=%u type=%@ innerType(wrap)=%@ innerType(ext)=%@",
-                  mtDesc1(session), scene,
-                  mtDesc1(mtVal(wrap, @"m_uiMessageType")),
-                  mtDesc1(mtVal(wrap, @"m_uiAppMsgInnerType")),
-                  ext ? mtDesc1(mtVal(ext, @"m_uiAppMsgInnerType")) : @"ext:nil");
-            WPLog(@"MsgTail", @"[ProbeAddAppMsg] fromUsr=%@ toUsr=%@ svrid=%@ status=%@ imgStatus=%@ createTime=%@",
-                  mtDesc1(mtVal(wrap, @"m_nsFromUsr")), mtDesc1(mtVal(wrap, @"m_nsToUsr")),
-                  mtDesc1(mtVal(wrap, @"m_n64MesSvrID")), mtDesc1(mtVal(wrap, @"m_uiStatus")),
-                  mtDesc1(mtVal(wrap, @"m_uiImgStatus")), mtDesc1(mtVal(wrap, @"m_uiCreateTime")));
-            NSString *content = mtStr(wrap, @"m_nsContent");
-            WPLog(@"MsgTail", @"[ProbeAddAppMsg] content(%lu)= %@",
-                  (unsigned long)content.length, content.length > 1200 ? [content substringToIndex:1200] : content);
-            WPLog(@"MsgTail", @"[ProbeAddAppMsg] msgSource=%@ title=%@ desc=%@",
-                  mtDesc1(mtVal(wrap, @"m_nsMsgSource")), mtDesc1(mtVal(wrap, @"m_nsTitle")),
-                  mtDesc1(mtVal(wrap, @"m_nsDesc")));
-            if (ext) {
-                WPLog(@"MsgTail", @"[ProbeAddAppMsg] ext.refUsr=%@ ext.refDisp=%@ ext.srcUsr=%@ ext.srcDisp=%@ referFromScene=%@ originSvrId=%@ realChatUsr=%@",
-                      mtDesc1(mtVal(ext, @"referMessageSenderUsrname")),
-                      mtDesc1(mtVal(ext, @"referMessageSenderDisplayName")),
-                      mtDesc1(mtVal(ext, @"m_nsSourceUsername")),
-                      mtDesc1(mtVal(ext, @"m_nsSourceDisplayname")),
-                      mtDesc1(mtVal(ext, @"m_referFromScene")),
-                      mtDesc1(mtVal(ext, @"m_uiOriginMsgSvrId")),
-                      mtDesc1(mtVal(ext, @"m_nsRealChatUsr")));
-            }
-            if (referWrap) {
-                WPLog(@"MsgTail", @"[ProbeAddAppMsg] referWrap: type=%@ content=%@ fromUsr=%@ toUsr=%@ realChatUsr=%@ svrid=%@ dispName=%@ createTime=%@",
-                      mtDesc1(mtVal(referWrap, @"m_uiMessageType")),
-                      mtDesc1(mtVal(referWrap, @"m_nsContent")),
-                      mtDesc1(mtVal(referWrap, @"m_nsFromUsr")),
-                      mtDesc1(mtVal(referWrap, @"m_nsToUsr")),
-                      mtDesc1(mtVal(referWrap, @"m_nsRealChatUsr")),
-                      mtDesc1(mtVal(referWrap, @"m_n64MesSvrID")),
-                      mtDesc1(mtVal(referWrap, @"m_nsDisplayName")),
-                      mtDesc1(mtVal(referWrap, @"m_uiCreateTime")));
-            } else {
-                WPLog(@"MsgTail", @"[ProbeAddAppMsg] referingMessageWrap = nil");
-            }
-            WPLog(@"MsgTail", @"[ProbeAddAppMsg] === end");
-        }
-    } @catch (id e) {}
-    ((void (*)(id, SEL, id, id, id, unsigned int))g_orig_AddAppMsg)(self, _cmd, session, wrap, data, scene);
-    // orig 执行完（管道已组包/改写 wrap）：dump 终态，抓黄白消息的最终 XML 用
-    @try {
-        if (wrap) {
-            NSString *outContent = mtVal(wrap, @"m_nsContent");
-            WPLog(@"MsgTail", @"[Probe-out] title=%@ status=%@ content(%lu)= %@",
-                  mtDesc1(mtVal(wrap, @"m_nsTitle")), mtDesc1(mtVal(wrap, @"m_uiStatus")),
-                  (unsigned long)outContent.length,
-                  outContent.length > 1200 ? [outContent substringToIndex:1200] : outContent);
-        }
-    } @catch (id e) {}
-}
-
 
 // 自身 wxid（懒取 + 缓存，KeywordAlert 同款）
 static NSString *mtSelfWxid(void) {
@@ -185,12 +109,6 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
         WPLog(@"MsgTail", @"[Hook] ✓ CMessageMgr AddMsg:MsgWrap: (收发总管道)");
     } else {
         WPLog(@"MsgTail", @"[Hook] ✗ CMessageMgr AddMsg:MsgWrap: not found");
-    }
-    // DEBUG 探针（定案后删）：dump 所有 AddAppMsg wrap，对照黄白尾巴 vs 我们的组包状态
-    SEL appSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
-    if (cls && [cls instancesRespondToSelector:appSel]) {
-        MSHookMessageEx(cls, appSel, (IMP)repl_MsgTail_AddAppMsg, (IMP *)&g_orig_AddAppMsg);
-        WPLog(@"MsgTail", @"[Hook] ✓ AddAppMsg DEBUG 探针已挂");
     }
 }
 
