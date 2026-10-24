@@ -265,41 +265,58 @@ BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
     }
 }
 
-// XML 文本转义（应用尾巴卡片模板用，音乐卡片同款三字符规则）
-static NSString *mtEscXml(NSString *s) {
-    if (s.length == 0) return @"";
-    NSMutableString *m = [s mutableCopy];
-    [m replaceOccurrencesOfString:@"&" withString:@"&amp;" options:0 range:NSMakeRange(0, m.length)];
-    [m replaceOccurrencesOfString:@"<" withString:@"&lt;" options:0 range:NSMakeRange(0, m.length)];
-    [m replaceOccurrencesOfString:@">" withString:@"&gt;" options:0 range:NSMakeRange(0, m.length)];
-    return m;
-}
+// 应用图标尾巴（应用图标模式）：210 探针黄白 ground truth——"尾巴"不是文本，是应用本身：
+//   wrap: type=49、content=纯文本正文、status=0、imgStatus=1
+//   ext:  appid=所选应用（空=默认腾讯手机管家）、title=des=正文、innerType=57、
+//         referMessageSenderDisplayName=正文、m_refMessageWrap=自身 wrap、
+//         无 sourceUsername/sourceDisplayname（尾巴文本不进包）
+//   出网 XML（宿主自组）：<title>正文</title><des>正文</des><type>57</type> + appattach
+// 即文本尾巴的同一套字段，仅 title/des 填正文 + refMessageWrap 自指，appid 可选
+BOOL WXSendAppIconTailMessage(NSString *body, NSString *appId, NSString *sessionName) {
+    if (!body.length || !sessionName.length) return NO;
+    @try {
+        id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
+        Class wrapCls = objc_getClass("CMessageWrap");
+        if (!msgMgr || !wrapCls) {
+            WPLog(@"MioPlugin", @"[SEND] CMessageMgr/CMessageWrap 不可用，无法发送应用尾巴消息");
+            return NO;
+        }
+        NSString *selfWxid = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
+        unsigned int now = (unsigned int)[[NSDate date] timeIntervalSince1970];
 
-// 应用图标尾巴（应用图标模式）：appmsg 应用卡片形态的尾巴消息。
-// 与文本尾巴（WXSendTailMessage）同出 AddAppMsg 宿主管道，但卡片本身是完整 appmsg
-// （与音乐卡片同类），故复用 WXSendAppMessage 通道（XML + 结构化字段双满）：
-//   title=正文、des=尾巴、innerType=5（通用应用卡）、不配 <url>（点卡片无反应）
-//   appId 空则回退默认 wxccac4ab14315add3（腾讯手机管家，Moments 预设池同款），图标随 appid 渲染
-BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *appId, NSString *sessionName) {
-    if (!body.length || !tail.length || !sessionName.length) return NO;
-    if (appId.length == 0) appId = @"wxccac4ab14315add3";
-    NSString *xml = [NSString stringWithFormat:
-        @"<msg><appmsg appid=\"%@\"  sdkver=\"0\">"
-        "<title>%@</title><des>%@</des><type>5</type>"
-        "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
-        "</appmsg><appinfo><version>0</version><appname></appname>"
-        "<isforceupdate>1</isforceupdate></appinfo></msg>",
-        appId, mtEscXml(body), mtEscXml(tail)];
-    NSDictionary *extendFields = @{
-        @"m_nsAppID": appId,
-        @"m_nsTitle": body,
-        @"m_nsDesc": tail,
-        @"m_uiAppMsgInnerType": @(5),
-        @"m_bIsForceUpdate": @(1),
-    };
-    BOOL ok = WXSendAppMessage(xml, sessionName, extendFields);
-    if (ok) WPLog(@"MioPlugin", @"[SEND] 应用图标尾巴已发送 -> %@", sessionName);
-    return ok;
+        id wrap = ((id (*)(id, SEL, long long))objc_msgSend)([wrapCls alloc], @selector(initWithMsgType:), 49LL);
+        if (!wrap) return NO;
+        [wrap setValue:sessionName forKey:@"m_nsToUsr"];
+        if (selfWxid) [wrap setValue:selfWxid forKey:@"m_nsFromUsr"];
+        [wrap setValue:@(now) forKey:@"m_uiCreateTime"];
+        [wrap setValue:@(1) forKey:@"m_uiImgStatus"];
+        [wrap setValue:body forKey:@"m_nsContent"];   // 纯文本正文（黄白 210 实证）
+
+        ((void (*)(id, SEL, int))objc_msgSend)(wrap, NSSelectorFromString(@"setM_uiAppMsgInnerType:"), 57);
+        id ext = [wrap valueForKey:@"m_extendInfoWithMsgType"];
+        if (!ext) {
+            WPLog(@"MioPlugin", @"[SEND] extendInfo 未创建，无法组应用尾巴包");
+            return NO;
+        }
+        // 黄白 210 探针逐字段对照
+        [ext setValue:(appId.length ? appId : @"wxccac4ab14315add3") forKey:@"m_nsAppID"];
+        [ext setValue:body forKey:@"referMessageSenderDisplayName"];
+        [ext setValue:wrap forKey:@"m_refMessageWrap"];   // 黄白 entry 实证有值（type=49 自身）
+        ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsTitle:"), body);
+        ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsDesc:"), body);
+
+        SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
+        if (![msgMgr respondsToSelector:sendSel]) {
+            WPLog(@"MioPlugin", @"[SEND] AddAppMsg:MsgWrap:Data:Scene: 不可用");
+            return NO;
+        }
+        ((void (*)(id, SEL, id, id, id, unsigned int))objc_msgSend)(msgMgr, sendSel, sessionName, wrap, nil, 2);
+        WPLog(@"MioPlugin", @"[SEND] 应用图标尾巴已发送 -> %@", sessionName);
+        return YES;
+    } @catch (NSException *e) {
+        WPLog(@"MioPlugin", @"[SEND] 应用尾巴消息发送异常: %@", e);
+        return NO;
+    }
 }
 
 NSString *WXDisplayNameForWxid(NSString *wxid) {

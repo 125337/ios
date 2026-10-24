@@ -127,24 +127,21 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
                 return;
             }
 
-            // ② 文本尾巴 = ext 引用卡（黄白 204 探针实证同款状态，见 ServiceHelper.m 注解）：
-            //    type=49 + 纯文本 content + extendInfo 拆字段 → AddAppMsg，宿主管道自组引用卡 XML
-            if (cfg.enableMsgTail && cfg.msgTail.length > 0
+            // ② 尾巴（黄白 204/210 探针实证，见 ServiceHelper.m 注解）：
+            //    应用图标模式 → 应用卡片（尾巴=应用本身，不用尾巴文本，gate 只看开关）；
+            //    默认 → 引用卡形态（type=49 + 纯文本 content + ext 拆字段 + 尾巴文本）
+            if (cfg.enableMsgTail && (cfg.enableAppTail || cfg.msgTail.length > 0)
                 && selfSend && content.length > 0 && mtMsgType(wrap) == 1) {
                 g_tailAppending = YES;
                 @try {
                     NSString *target = mtStr(wrap, @"m_nsToUsr");
                     if (target.length == 0 && [session isKindOfClass:[NSString class]]) target = session;
-                    // 应用图标模式 → appmsg 应用卡片（WXSendAppIconTailMessage，复用 WXSendAppMessage 通道，
-                    // appId=设置页点选的预设，空=函数内默认）；默认 → 引用卡形态（WXSendTailMessage）。
-                    // 两形态共用 msgTail 内容
                     BOOL ok = cfg.enableAppTail
-                        ? WXSendAppIconTailMessage(content, cfg.msgTail, cfg.appTailAppId, target)
+                        ? WXSendAppIconTailMessage(content, cfg.appTailAppId, target)
                         : WXSendTailMessage(content, cfg.msgTail, target);
-                    WPLog(@"MsgTail", @"[Tail] 尾巴消息%@（%@，正文 %lu 字 + 尾巴 %lu 字）",
+                    WPLog(@"MsgTail", @"[Tail] 尾巴消息%@（%@）",
                           ok ? @"已发送" : @"发送失败",
-                          cfg.enableAppTail ? @"应用图标" : @"引用卡",
-                          (unsigned long)content.length, (unsigned long)cfg.msgTail.length);
+                          cfg.enableAppTail ? @"应用图标" : @"引用卡");
                     if (ok) return;   // 已改道出网，原始文本不再走 orig
                 } @finally { g_tailAppending = NO; }
                 // 发送失败则落到底部 orig：按原文发出（无尾巴但不丢消息）

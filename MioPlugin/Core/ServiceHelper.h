@@ -37,10 +37,10 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<N
 /// → AddAppMsg Scene=2，引用卡 XML 由宿主管道从 ext 拼装
 BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName);
 
-/// 应用图标尾巴（消息小尾巴·应用图标模式）：appmsg 应用卡片形态（title=正文、des=尾巴、
-/// innerType=5、无 url 点卡片无反应），复用 WXSendAppMessage 通道。
-/// appId = 应用尾巴来源（Moments 预设池点选），空 = 默认（腾讯手机管家）
-BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *appId, NSString *sessionName);
+/// 应用图标尾巴（消息小尾巴·应用图标模式）：黄白 210 探针 ground truth——尾巴不是文本，
+/// 是应用本身。ext: appid=所选应用（空=默认腾讯手机管家）、title=des=refDisp=正文、
+/// innerType=57、m_refMessageWrap=自身；content=纯文本正文
+BOOL WXSendAppIconTailMessage(NSString *body, NSString *appId, NSString *sessionName);
 
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);
