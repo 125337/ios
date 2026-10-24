@@ -10,6 +10,8 @@
 #import "../../Modules/Privacy/PrivacyConfig.h"
 #import "../../Modules/KeywordAlert/KeywordAlertConfig.h"
 #import "SettingKeywordAlertController.h"
+#import "SettingMsgTailController.h"
+#import "../../Modules/MsgTail/MsgTailConfig.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
@@ -126,6 +128,17 @@
                           subtitle:kaStatus
                                tag:500
                             action:@selector(onKeywordAlertTap)
+                                cy:cy
+                             width:w];
+
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+
+    NSString *mtStatus = [MsgTailConfig shared].enableMsgTail ? @"已开启" : @"已关闭";
+    cy = [self addNavRowInGroup:group
+                             title:@"消息小尾巴"
+                          subtitle:mtStatus
+                               tag:600
+                            action:@selector(onMsgTailTap)
                                 cy:cy
                              width:w];
 
@@ -261,6 +274,12 @@
 - (void)onKeywordAlertTap {
     WPLog(@"Setting", @"[Nav] pushed SettingKeywordAlertController");
     SettingKeywordAlertController *vc = [[SettingKeywordAlertController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (void)onMsgTailTap {
+    WPLog(@"Setting", @"[Nav] pushed SettingMsgTailController");
+    SettingMsgTailController *vc = [[SettingMsgTailController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
 }
 

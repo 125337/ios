@@ -46,6 +46,7 @@
 #import "../Modules/MusicShare/MusicShareConfig.h"
 #import "../Modules/MusicShare/MusicShareCommandHook.h"
 #import "../Modules/SettingEntry/WPOtherVC.h"
+#import "../Modules/MsgTail/MsgTailConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -68,6 +69,7 @@
 #import "../Modules/Voice/VoiceHook.h"
 #import "../Modules/Voice/VoiceFeaturesHook.h"
 #import "../Modules/Privacy/PrivacyHook.h"
+#import "../Modules/MsgTail/MsgTailHook.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -332,6 +334,15 @@
                                                hookClasses:@[[MusicShareCommandHook class]]
                                            controllerClass:[WPOtherVC class]
                                                   subtitle:@"点歌发送音乐卡片"
+                                             sectionTitle:@"通用"],
+
+            // ──── 消息小尾巴（入口在 常用功能 页；黄白同款文本尾巴 + 快捷指令，文本类型） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"msgtail"
+                                                    title:@"消息小尾巴"
+                                               configClass:[MsgTailConfig class]
+                                               hookClasses:@[[MsgTailHook class]]
+                                           controllerClass:[SettingGeneralFunctionController class]
+                                                  subtitle:@"发消息自动附加尾巴，指令快速开关"
                                              sectionTitle:@"通用"],
 
             // ──── 设置入口（无 Config + 无 Controller） ────
