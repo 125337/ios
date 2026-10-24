@@ -40,6 +40,11 @@ static NSString *mtDesc1(id v) {
     return d.length > 200 ? [d substringToIndex:200] : d;
 }
 
+static NSString *mtStr(id obj, NSString *key) {
+    if (!obj) return @"";
+    @try { return WXSafeStringGet(obj, key) ?: @""; } @catch (id e) { return @""; }
+}
+
 // DEBUG 探针：dump AddAppMsg 收到的 wrap 全量状态（黄白尾巴 vs 我们的，对照差异用，定案后删）
 static void repl_MsgTail_AddAppMsg(id self, SEL _cmd, id session, id wrap, id data, unsigned int scene) {
     @try {
@@ -100,11 +105,6 @@ static NSString *mtSelfWxid(void) {
         if (selfContact) cached = WXSafeStringGet(selfContact, @"m_nsUsrName") ?: @"";
     });
     return cached;
-}
-
-static NSString *mtStr(id obj, NSString *key) {
-    if (!obj) return @"";
-    @try { return WXSafeStringGet(obj, key) ?: @""; } @catch (id e) { return @""; }
 }
 
 static BOOL mtIsSelfSend(id wrap) {
