@@ -1,17 +1,34 @@
 #import "SettingMsgTailController.h"
+#import "SettingAppTailSourceController.h"
 #import "../../Modules/MsgTail/MsgTailConfig.h"
+#import "../../Modules/Moments/MomentsConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/LogManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
 // 配置页布局（微信引擎渲染）：
-//   卡片1 总开关 | 卡片2 小尾巴配置（应用图标模式开关 + 尾巴内容编辑） | 卡片3 快捷指令（开关 + 自定义指令编辑）
+//   卡片1 总开关 | 卡片2 小尾巴配置（应用图标模式开关 + 模式联动行） | 卡片3 快捷指令（开关 + 自定义指令编辑）
+// 模式联动行：关=输入自定义小尾巴（文本编辑）；开=设置消息应用尾巴（push 预设选择页，卡片来源同款）
 // 文案照抄黄白 TheMessageController 解密串表（分析文档 §二）
 static NSString * const kEditTailKey = @"editMsgTail";       // 尾巴内容编辑行的伪 key（不落配置）
+static NSString * const kTailSourceKey = @"appTailSourcePicker"; // 应用尾巴选择行的伪 key（不落配置）
 static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编辑行的伪 key
 
 @implementation SettingMsgTailController
+
+// 应用尾巴来源右值：空=默认（腾讯手机管家），非空=预设名（未命中显示 appId 原文）
+- (NSString *)appTailName {
+    NSString *appId = [MsgTailConfig shared].appTailAppId ?: @"";
+    if (appId.length == 0) return @"默认（腾讯手机管家）";
+    for (NSDictionary *p in [[MomentsConfig shared] effectiveTailPresets]) {
+        if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
+            NSString *n = p[@"name"];
+            if ([n isKindOfClass:[NSString class]] && n.length > 0) return n;
+        }
+    }
+    return appId;
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -53,19 +70,31 @@ static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编�
                                       desc:nil
                                        key:@"enableAppTail"
                                       isOn:cfg.enableAppTail cy:0 width:w];
-    // 行标题随模式切换：引用卡=输入自定义小尾巴，应用图标=设置消息应用尾巴
-    NSString *tailRowTitle = cfg.enableAppTail ? @"设置消息应用尾巴" : @"输入自定义小尾巴";
-    cy2 = [self addSeparatorInGroup:group2 cy:cy2 width:w];
-    cy2 = [self addInputRowInGroup:group2
-                             title:tailRowTitle
-                               key:kEditTailKey
-                             value:(cfg.msgTail.length ? cfg.msgTail : nil)
-                              hint:@"输入尾巴内容"
-                         valueType:InputValueTypeText
-                        alertTitle:tailRowTitle
-                      alertMessage:nil
-                                cy:cy2
-                             width:w];
+    // 应用图标模式：编辑行换成应用选择行（卡片来源同款 push 选择页）；尾巴文本沿用 msgTail
+    if (cfg.enableAppTail) {
+        cy2 = [self addInputRowInGroup:group2
+                                 title:@"设置消息应用尾巴"
+                                   key:kTailSourceKey
+                                 value:[self appTailName]
+                                  hint:[self appTailName]
+                             valueType:InputValueTypeText
+                            alertTitle:nil
+                          alertMessage:nil
+                                    cy:cy2
+                                 width:w];
+    } else {
+        NSString *tailRowTitle = @"输入自定义小尾巴";
+        cy2 = [self addInputRowInGroup:group2
+                                 title:tailRowTitle
+                                   key:kEditTailKey
+                                 value:(cfg.msgTail.length ? cfg.msgTail : nil)
+                                  hint:@"输入尾巴内容"
+                             valueType:InputValueTypeText
+                            alertTitle:tailRowTitle
+                          alertMessage:nil
+                                    cy:cy2
+                                 width:w];
+    }
     cy2 = [self addSectionFooter:@"追加在原文末尾，不额外加分隔符\n可在内容开头自带换行或空格" y:cy2 width:w];
     [self finishGroup:group2 atY:y height:cy2];
 
@@ -118,10 +147,14 @@ static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编�
 
     MsgTailConfig *cfg = [MsgTailConfig shared];
 
+    // 应用尾巴选择行：push 预设选择页（卡片来源同款），返回后 viewWillAppear 刷新右值
+    if ([key isEqualToString:kTailSourceKey]) {
+        [self.navigationController pushViewController:[[SettingAppTailSourceController alloc] init] animated:YES];
+        return;
+    }
+
     if ([key isEqualToString:kEditTailKey]) {
-        // 弹窗标题随模式：应用图标模式=设置消息应用尾巴，默认=输入自定义小尾巴
-        NSString *alertTitle = cfg.enableAppTail ? @"设置消息应用尾巴" : @"输入自定义小尾巴";
-        [MioAlertHelper showInputAlert:alertTitle
+        [MioAlertHelper showInputAlert:@"输入自定义小尾巴"
                                message:@""
                            initialText:(cfg.msgTail ?: @"")
                            placeholder:@"输入尾巴内容"

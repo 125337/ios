@@ -17,6 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 // 应用图标模式：开 → 尾巴消息改发应用卡片形态（appid 图标卡片，点卡片无 url 无反应），
 // 关 → 引用卡形态（气泡正文 + 灰字尾巴）。两种形态共用 msgTail 尾巴内容
 @property (nonatomic, assign) BOOL enableAppTail;
+// 应用尾巴来源 appid（Moments 预设池点选落盘）：空 = 默认（腾讯手机管家）
+@property (nonatomic, copy)   NSString *appTailAppId;
 
 + (instancetype)shared;
 

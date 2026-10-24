@@ -38,8 +38,9 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<N
 BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName);
 
 /// 应用图标尾巴（消息小尾巴·应用图标模式）：appmsg 应用卡片形态（title=正文、des=尾巴、
-/// innerType=5、无 url 点卡片无反应，appid 走预设池同款），复用 WXSendAppMessage 通道
-BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *sessionName);
+/// innerType=5、无 url 点卡片无反应），复用 WXSendAppMessage 通道。
+/// appId = 应用尾巴来源（Moments 预设池点选），空 = 默认（腾讯手机管家）
+BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *appId, NSString *sessionName);
 
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);

@@ -279,10 +279,10 @@ static NSString *mtEscXml(NSString *s) {
 // 与文本尾巴（WXSendTailMessage）同出 AddAppMsg 宿主管道，但卡片本身是完整 appmsg
 // （与音乐卡片同类），故复用 WXSendAppMessage 通道（XML + 结构化字段双满）：
 //   title=正文、des=尾巴、innerType=5（通用应用卡）、不配 <url>（点卡片无反应）
-//   appid 取朋友圈预设池同款 wxccac4ab14315add3（腾讯手机管家，非黄白私有），图标随 appid 渲染
-BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
+//   appId 空则回退默认 wxccac4ab14315add3（腾讯手机管家，Moments 预设池同款），图标随 appid 渲染
+BOOL WXSendAppIconTailMessage(NSString *body, NSString *tail, NSString *appId, NSString *sessionName) {
     if (!body.length || !tail.length || !sessionName.length) return NO;
-    NSString *appId = @"wxccac4ab14315add3";
+    if (appId.length == 0) appId = @"wxccac4ab14315add3";
     NSString *xml = [NSString stringWithFormat:
         @"<msg><appmsg appid=\"%@\"  sdkver=\"0\">"
         "<title>%@</title><des>%@</des><type>5</type>"

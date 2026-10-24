@@ -85,10 +85,11 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
                 @try {
                     NSString *target = mtStr(wrap, @"m_nsToUsr");
                     if (target.length == 0 && [session isKindOfClass:[NSString class]]) target = session;
-                    // 应用图标模式 → appmsg 应用卡片（WXSendAppIconTailMessage，复用 WXSendAppMessage 通道）；
-                    // 默认 → 引用卡形态（WXSendTailMessage）。两形态共用 msgTail 内容
+                    // 应用图标模式 → appmsg 应用卡片（WXSendAppIconTailMessage，复用 WXSendAppMessage 通道，
+                    // appId=设置页点选的预设，空=函数内默认）；默认 → 引用卡形态（WXSendTailMessage）。
+                    // 两形态共用 msgTail 内容
                     BOOL ok = cfg.enableAppTail
-                        ? WXSendAppIconTailMessage(content, cfg.msgTail, target)
+                        ? WXSendAppIconTailMessage(content, cfg.msgTail, cfg.appTailAppId, target)
                         : WXSendTailMessage(content, cfg.msgTail, target);
                     WPLog(@"MsgTail", @"[Tail] 尾巴消息%@（%@，正文 %lu 字 + 尾巴 %lu 字）",
                           ok ? @"已发送" : @"发送失败",
