@@ -50,6 +50,8 @@ static NSString *mtStr(id obj, NSString *key) {
 // DEBUG 探针：dump AddAppMsg 收到的 wrap 全量状态（黄白尾巴 vs 我们的，对照差异用，定案后删）
 static void repl_MsgTail_AddAppMsg(id self, SEL _cmd, id session, id wrap, id data, unsigned int scene) {
     @try {
+        WPLog(@"MsgTail", @"[Probe-in] session=%@ data=%@ scene=%u",
+              mtDesc1(session), data ? [NSString stringWithFormat:@"%@ %@", NSStringFromClass([data class]), mtDesc1(data)] : @"nil", scene);
         if (wrap) {
             id ext = mtVal(wrap, @"m_extendInfoWithMsgType");
             id referWrap = mtVal(wrap, @"referingMessageWrap");
@@ -95,6 +97,16 @@ static void repl_MsgTail_AddAppMsg(id self, SEL _cmd, id session, id wrap, id da
         }
     } @catch (id e) {}
     ((void (*)(id, SEL, id, id, id, unsigned int))g_orig_AddAppMsg)(self, _cmd, session, wrap, data, scene);
+    // orig 执行完（管道已组包/改写 wrap）：dump 终态，抓黄白消息的最终 XML 用
+    @try {
+        if (wrap) {
+            NSString *outContent = mtVal(wrap, @"m_nsContent");
+            WPLog(@"MsgTail", @"[Probe-out] title=%@ status=%@ content(%lu)= %@",
+                  mtDesc1(mtVal(wrap, @"m_nsTitle")), mtDesc1(mtVal(wrap, @"m_uiStatus")),
+                  (unsigned long)outContent.length,
+                  outContent.length > 1200 ? [outContent substringToIndex:1200] : outContent);
+        }
+    } @catch (id e) {}
 }
 
 
