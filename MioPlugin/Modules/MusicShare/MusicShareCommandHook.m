@@ -17,6 +17,16 @@ static NSMutableDictionary<NSString *, NSDate *> *_lastFireTime = nil; // 会话
 
 static void processTextMessage(id wrap) {
     MusicShareConfig *cfg = [MusicShareConfig shared];
+    // [TEMP 探针] dump 收到的音乐卡片完整原文，对拍黄白真卡定位播放页返回闪退，定论后删
+    {
+        unsigned int probeType = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
+        if (probeType == 49) {
+            NSString *content = [wrap valueForKey:@"m_nsContent"] ?: @"";
+            if ([content containsString:@"<type>76</type>"] || [content containsString:@"<type>3</type>"]) {
+                WPLog(@"Music", @"[Probe76] 收到音乐卡片原文: %@", content);
+            }
+        }
+    }
     if (!cfg.musicShareEnabled) return;
 
     @try {
