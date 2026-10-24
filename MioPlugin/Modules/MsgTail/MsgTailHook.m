@@ -28,56 +28,6 @@
 
 static IMP g_orig_AddMsg = NULL;
 static BOOL g_tailAppending = NO;
-static IMP g_orig_AddAppMsg = NULL;
-static NSString *mtStr(id obj, NSString *key); // 前置声明（探针在定义之前使用）
-
-// DEBUG 探针（定案后删）：动态枚举对象全部属性逐个读值（黄白 app 尾巴组包状态对照用）
-static NSString *mtPropsDump(id obj) {
-    if (!obj) return @"(nil)";
-    NSMutableString *out = [NSMutableString string];
-    unsigned int count = 0;
-    objc_property_t *props = class_copyPropertyList([obj class], &count);
-    for (unsigned int i = 0; i < count; i++) {
-        NSString *name = @(property_getName(props[i]));
-        @try {
-            id v = [obj valueForKey:name];
-            NSString *d = v ? [v description] : @"(nil)";
-            if (d.length > 150) d = [[d substringToIndex:150] stringByAppendingString:@"…"];
-            [out appendFormat:@"\n  %@ = %@", name, d];
-        } @catch (id e) {}
-    }
-    free(props);
-    return out;
-}
-
-// DEBUG 探针（定案后删）：dump AddAppMsg 收到的 type=49 wrap 全量状态（黄白 vs 我们对照）
-static void repl_MsgTail_AddAppMsg(id self, SEL _cmd, id session, id wrap, id data, unsigned int scene) {
-    @try {
-        if (wrap) {
-            unsigned int t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
-            if (t == 49) {
-                id ext = nil;
-                @try { ext = [wrap valueForKey:@"m_extendInfoWithMsgType"]; } @catch (id e) {}
-                WPLog(@"MsgTail", @"[ProbeApp] === ENTRY 会话=%@ scene=%u data=%@\n--- wrap 属性 ---%@\n--- ext 属性 ---%@",
-                      [session isKindOfClass:[NSString class]] ? session : @"(nonstr)", scene,
-                      data ? NSStringFromClass([data class]) : @"(nil)",
-                      mtPropsDump(wrap), mtPropsDump(ext));
-            }
-        }
-    } @catch (id e) {}
-    ((void (*)(id, SEL, id, id, id, unsigned int))g_orig_AddAppMsg)(self, _cmd, session, wrap, data, scene);
-    // orig 执行完：管道已从 ext 重建 XML，dump 终态 content（黄白最终出网形态）
-    @try {
-        if (wrap) {
-            unsigned int t = ((unsigned int (*)(id, SEL, ...))objc_msgSend)(wrap, NSSelectorFromString(@"m_uiMessageType"));
-            if (t == 49) {
-                NSString *c = mtStr(wrap, @"m_nsContent");
-                WPLog(@"MsgTail", @"[ProbeApp] === OUT content(%lu)= %@",
-                      (unsigned long)c.length, c.length > 1500 ? [c substringToIndex:1500] : c);
-            }
-        }
-    } @catch (id e) {}
-}
 
 static NSString *mtStr(id obj, NSString *key) {
     if (!obj) return @"";
@@ -164,12 +114,6 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
         WPLog(@"MsgTail", @"[Hook] ✓ CMessageMgr AddMsg:MsgWrap: (收发总管道)");
     } else {
         WPLog(@"MsgTail", @"[Hook] ✗ CMessageMgr AddMsg:MsgWrap: not found");
-    }
-    // DEBUG 探针（定案后删）：dump 所有 AddAppMsg type=49 wrap 全量属性，抓黄白 app 尾巴组包状态
-    SEL appSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
-    if (cls && [cls instancesRespondToSelector:appSel]) {
-        MSHookMessageEx(cls, appSel, (IMP)repl_MsgTail_AddAppMsg, (IMP *)&g_orig_AddAppMsg);
-        WPLog(@"MsgTail", @"[Hook] ✓ AddAppMsg DEBUG 探针已挂（type=49 全属性 dump）");
     }
 }
 
