@@ -246,16 +246,15 @@ BOOL WXSendReferMessage(NSString *body, NSString *referContent, NSString *sessio
         }
         ((void (*)(id, SEL, id, id))objc_msgSend)(reply, referSel, refer, body);
 
-        // 内层 type=57（引用消息）；rebuild 数据源是 extendInfo（音乐卡同款 KVC 模式）
-        id ext = [reply valueForKey:@"m_extendInfoWithMsgType"];
-        if (ext) {
-            @try { [ext setValue:@(57) forKey:@"m_uiAppMsgInnerType"]; }
-            @catch (NSException *e) { WPLog(@"MioPlugin", @"[SEND] innerType 设置失败: %@", e); }
-            // displayname 置空（黄白同款：组包后 setReferMessageSenderDisplayName:@""，
-            // 常量 0x15b38b8 len=0 实锤）——否则灰字渲染成「我的昵称：尾巴」多了名字前缀
-            @try { [ext setValue:@"" forKey:@"referMessageSenderDisplayName"]; }
-            @catch (NSException *e) { WPLog(@"MioPlugin", @"[SEND] displayname 置空失败: %@", e); }
-        }
+        // 组包后修正三字段 —— 黄白同款 wrap category setter 直调（不走 ext KVC）：
+        //   innerType=57（0x636c48: setM_uiAppMsgInnerType: 0x39）
+        //   displayname=@""（0x636f18: setReferMessageSenderDisplayName: 空 CFString 0x15b38b8，
+        //     不置空则灰字渲染成「我的昵称：尾巴」多名字前缀——已实测踩坑）
+        //   usrname=fromUsr 同值（0x6371cc: setReferMessageSenderUsrname: 与 m_nsFromUsr 同源）
+        ((void (*)(id, SEL, int))objc_msgSend)(reply, NSSelectorFromString(@"setM_uiAppMsgInnerType:"), 57);
+        ((void (*)(id, SEL, id))objc_msgSend)(reply, NSSelectorFromString(@"setReferMessageSenderDisplayName:"), @"");
+        ((void (*)(id, SEL, id))objc_msgSend)(reply, NSSelectorFromString(@"setReferMessageSenderUsrname:"),
+                                              selfWxid ?: @"");
 
         SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
         if (![msgMgr respondsToSelector:sendSel]) {
@@ -263,7 +262,10 @@ BOOL WXSendReferMessage(NSString *body, NSString *referContent, NSString *sessio
             return NO;
         }
         ((void (*)(id, SEL, id, id, id, unsigned int))objc_msgSend)(msgMgr, sendSel, sessionName, reply, nil, 2);
-        WPLog(@"MioPlugin", @"[SEND] 伪引用已发送(AddAppMsg Scene=2) -> %@", sessionName);
+        // 诊断日志：出网后的重建 XML（下次测试直接对照黄白渲染差异，不再盲猜）
+        NSString *outXml = [reply valueForKey:@"m_nsContent"];
+        if (outXml.length > 800) outXml = [outXml substringToIndex:800];
+        WPLog(@"MioPlugin", @"[SEND] 伪引用已出网 -> %@，重建XML: %@", sessionName, outXml);
         return YES;
     } @catch (NSException *e) {
         WPLog(@"MioPlugin", @"[SEND] 伪引用发送异常: %@", e);
