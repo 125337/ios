@@ -29,6 +29,7 @@
 static IMP g_orig_AddMsg = NULL;
 static BOOL g_tailAppending = NO;
 static IMP g_orig_AddAppMsg = NULL;
+static NSString *mtStr(id obj, NSString *key); // 前置声明（探针在定义之前使用）
 
 // DEBUG 探针（定案后删）：动态枚举对象全部属性逐个读值（黄白 app 尾巴组包状态对照用）
 static NSString *mtPropsDump(id obj) {
