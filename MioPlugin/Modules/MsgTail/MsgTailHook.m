@@ -26,6 +26,70 @@
 
 static IMP g_orig_AddMsg = NULL;
 static BOOL g_tailAppending = NO;
+static IMP g_orig_AddAppMsg = NULL;
+
+// wrap 可用字段安全读取（仅调试探针用）
+static id mtVal(id obj, NSString *key) {
+    if (!obj) return nil;
+    @try { return [obj valueForKey:key]; } @catch (id e) { return nil; }
+}
+
+static NSString *mtDesc1(id v) {
+    if (!v) return @"nil";
+    NSString *d = [v description];
+    return d.length > 200 ? [d substringToIndex:200] : d;
+}
+
+// DEBUG 探针：dump AddAppMsg 收到的 wrap 全量状态（黄白尾巴 vs 我们的，对照差异用，定案后删）
+static void repl_MsgTail_AddAppMsg(id self, SEL _cmd, id session, id wrap, id data, unsigned int scene) {
+    @try {
+        if (wrap) {
+            id ext = mtVal(wrap, @"m_extendInfoWithMsgType");
+            id referWrap = mtVal(wrap, @"referingMessageWrap");
+            WPLog(@"MsgTail", @"[ProbeAddAppMsg] === 会话=%@ scene=%u type=%@ innerType(wrap)=%@ innerType(ext)=%@",
+                  mtDesc1(session), scene,
+                  mtDesc1(mtVal(wrap, @"m_uiMessageType")),
+                  mtDesc1(mtVal(wrap, @"m_uiAppMsgInnerType")),
+                  ext ? mtDesc1(mtVal(ext, @"m_uiAppMsgInnerType")) : @"ext:nil");
+            WPLog(@"MsgTail", @"[ProbeAddAppMsg] fromUsr=%@ toUsr=%@ svrid=%@ status=%@ imgStatus=%@ createTime=%@",
+                  mtDesc1(mtVal(wrap, @"m_nsFromUsr")), mtDesc1(mtVal(wrap, @"m_nsToUsr")),
+                  mtDesc1(mtVal(wrap, @"m_n64MesSvrID")), mtDesc1(mtVal(wrap, @"m_uiStatus")),
+                  mtDesc1(mtVal(wrap, @"m_uiImgStatus")), mtDesc1(mtVal(wrap, @"m_uiCreateTime")));
+            NSString *content = mtStr(wrap, @"m_nsContent");
+            WPLog(@"MsgTail", @"[ProbeAddAppMsg] content(%lu)= %@",
+                  (unsigned long)content.length, content.length > 1200 ? [content substringToIndex:1200] : content);
+            WPLog(@"MsgTail", @"[ProbeAddAppMsg] msgSource=%@ title=%@ desc=%@",
+                  mtDesc1(mtVal(wrap, @"m_nsMsgSource")), mtDesc1(mtVal(wrap, @"m_nsTitle")),
+                  mtDesc1(mtVal(wrap, @"m_nsDesc")));
+            if (ext) {
+                WPLog(@"MsgTail", @"[ProbeAddAppMsg] ext.refUsr=%@ ext.refDisp=%@ ext.srcUsr=%@ ext.srcDisp=%@ referFromScene=%@ originSvrId=%@ realChatUsr=%@",
+                      mtDesc1(mtVal(ext, @"referMessageSenderUsrname")),
+                      mtDesc1(mtVal(ext, @"referMessageSenderDisplayName")),
+                      mtDesc1(mtVal(ext, @"m_nsSourceUsername")),
+                      mtDesc1(mtVal(ext, @"m_nsSourceDisplayname")),
+                      mtDesc1(mtVal(ext, @"m_referFromScene")),
+                      mtDesc1(mtVal(ext, @"m_uiOriginMsgSvrId")),
+                      mtDesc1(mtVal(ext, @"m_nsRealChatUsr")));
+            }
+            if (referWrap) {
+                WPLog(@"MsgTail", @"[ProbeAddAppMsg] referWrap: type=%@ content=%@ fromUsr=%@ toUsr=%@ realChatUsr=%@ svrid=%@ dispName=%@ createTime=%@",
+                      mtDesc1(mtVal(referWrap, @"m_uiMessageType")),
+                      mtDesc1(mtVal(referWrap, @"m_nsContent")),
+                      mtDesc1(mtVal(referWrap, @"m_nsFromUsr")),
+                      mtDesc1(mtVal(referWrap, @"m_nsToUsr")),
+                      mtDesc1(mtVal(referWrap, @"m_nsRealChatUsr")),
+                      mtDesc1(mtVal(referWrap, @"m_n64MesSvrID")),
+                      mtDesc1(mtVal(referWrap, @"m_nsDisplayName")),
+                      mtDesc1(mtVal(referWrap, @"m_uiCreateTime")));
+            } else {
+                WPLog(@"MsgTail", @"[ProbeAddAppMsg] referingMessageWrap = nil");
+            }
+            WPLog(@"MsgTail", @"[ProbeAddAppMsg] === end");
+        }
+    } @catch (id e) {}
+    ((void (*)(id, SEL, id, id, id, unsigned int))g_orig_AddAppMsg)(self, _cmd, session, wrap, data, scene);
+}
+
 
 // 自身 wxid（懒取 + 缓存，KeywordAlert 同款）
 static NSString *mtSelfWxid(void) {
@@ -108,6 +172,12 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
         WPLog(@"MsgTail", @"[Hook] ✓ CMessageMgr AddMsg:MsgWrap: (收发总管道)");
     } else {
         WPLog(@"MsgTail", @"[Hook] ✗ CMessageMgr AddMsg:MsgWrap: not found");
+    }
+    // DEBUG 探针（定案后删）：dump 所有 AddAppMsg wrap，对照黄白尾巴 vs 我们的组包状态
+    SEL appSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
+    if (cls && [cls instancesRespondToSelector:appSel]) {
+        MSHookMessageEx(cls, appSel, (IMP)repl_MsgTail_AddAppMsg, (IMP *)&g_orig_AddAppMsg);
+        WPLog(@"MsgTail", @"[Hook] ✓ AddAppMsg DEBUG 探针已挂");
     }
 }
 
