@@ -242,15 +242,12 @@ BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
         [ext setValue:body forKey:@"referMessageSenderDisplayName"];
         // 不设 referMessageSenderUsrname（黄白为 nil），不设 referingMessageWrap
 
-        // appid/title/des（206 探针 Probe-out 实证）：我们与黄白的最终 XML 只差这三处——
-        // appid 空 → 微信按无效卡片渲染成空泡；有 appid + title/des 才走引用卡渲染
+        // appid/title/des（206/207 探针 Probe-out 实证）：最终 XML 与黄白只差 appid——
+        // appid 空 → 微信按无效卡片渲染（无尾巴灰字）；有 appid 才走引用卡渲染
+        // 注意：ext 类只实现 setM_nsAppID:（IMP 0x104b7419c 在 ext setter 家族区间），
+        // wrap 级 setM_nsAppId: 是别的类的不转发，必须直接设在 ext 上
         NSString *appId = @"wxccac4ab14315add3";   // 黄白同款（黄白消息出网 XML 原值）
-        SEL appIdSel = NSSelectorFromString(@"setM_nsAppId:");
-        SEL appId2Sel = NSSelectorFromString(@"setM_nsAppID:");
-        if ([wrap respondsToSelector:appIdSel])
-            ((void (*)(id, SEL, id))objc_msgSend)(wrap, appIdSel, appId);
-        if ([wrap respondsToSelector:appId2Sel])
-            ((void (*)(id, SEL, id))objc_msgSend)(wrap, appId2Sel, appId);
+        [ext setValue:appId forKey:@"m_nsAppID"];
         ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsTitle:"), body);
         ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsDesc:"), body);
 
