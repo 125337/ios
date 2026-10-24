@@ -6,7 +6,7 @@
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
 // 配置页布局（微信引擎渲染）：
-//   卡片1 总开关 | 卡片2 尾巴内容 | 卡片3 快捷指令（开关 + 自定义指令编辑）
+//   卡片1 总开关 | 卡片2 小尾巴配置（输入自定义小尾巴，右值=当前内容） | 卡片3 快捷指令（开关 + 自定义指令编辑）
 // 文案照抄黄白 TheMessageController 解密串表（分析文档 §二）
 static NSString * const kEditTailKey = @"editMsgTail";       // 尾巴内容编辑行的伪 key（不落配置）
 static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编辑行的伪 key
@@ -45,25 +45,19 @@ static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编�
                                        isOn:cfg.enableMsgTail cy:0 width:w];
     y = [self finishGroup:group1 atY:y height:cy];
 
-    // ===== 卡片2：尾巴内容 =====
+    // ===== 卡片2：小尾巴配置（当前内容与编辑合并为一行，右值即当前内容） =====
+    y = [self addSectionHeader:@"小尾巴配置" y:y width:w];
     UIView *group2 = [self addTableGroupAtY:y width:w];
-    CGFloat cy2 = [self addInfoRowInGroup:group2
-                                    title:@"当前内容"
-                               rightValue:(cfg.msgTail.length ? cfg.msgTail : @"暂无设置")
-                                 copyText:nil
-                                       cy:0
-                                    width:w];
-    cy2 = [self addSeparatorInGroup:group2 cy:cy2 width:w];
-    cy2 = [self addInputRowInGroup:group2
-                             title:@"编辑尾巴内容"
-                               key:kEditTailKey
-                             value:nil
-                              hint:@"输入尾巴内容"
-                         valueType:InputValueTypeText
-                        alertTitle:@"编辑尾巴内容"
-                      alertMessage:nil
-                                cy:cy2
-                             width:w];
+    CGFloat cy2 = [self addInputRowInGroup:group2
+                                     title:@"输入自定义小尾巴"
+                                       key:kEditTailKey
+                                     value:(cfg.msgTail.length ? cfg.msgTail : nil)
+                                      hint:@"输入尾巴内容"
+                                 valueType:InputValueTypeText
+                                alertTitle:@"输入自定义小尾巴"
+                              alertMessage:nil
+                                        cy:0
+                                     width:w];
     cy2 = [self addSectionFooter:@"追加在原文末尾，不额外加分隔符\n可在内容开头自带换行或空格" y:cy2 width:w];
     [self finishGroup:group2 atY:y height:cy2];
 
@@ -96,7 +90,7 @@ static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编�
     [self finishGroup:group3 atY:y height:cy3];
 }
 
-#pragma mark - 输入行拦截：编辑尾巴内容 / 自定义指令
+#pragma mark - 输入行拦截：输入自定义小尾巴 / 自定义指令
 
 - (void)wpRunInputFlow:(NSDictionary *)row {
     NSString *key = row[@"key"];
@@ -108,7 +102,7 @@ static NSString * const kEditShortcutKey = @"editMsgTailShortcut"; // 指令编�
     MsgTailConfig *cfg = [MsgTailConfig shared];
 
     if ([key isEqualToString:kEditTailKey]) {
-        [MioAlertHelper showInputAlert:@"编辑尾巴内容"
+        [MioAlertHelper showInputAlert:@"输入自定义小尾巴"
                                message:@""
                            initialText:(cfg.msgTail ?: @"")
                            placeholder:@"输入尾巴内容"
