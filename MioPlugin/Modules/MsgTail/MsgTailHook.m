@@ -110,14 +110,29 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
                 }
                 // type 必须后改且失败必须回滚 content——200 教训：m_nsTitle 赋值炸在
                 // content/type 之间，导致「XML content + type=1 纯文本出网」事故
+                BOOL transformed = NO;
                 @try {
                     [wrap setValue:@49 forKey:@"m_uiMessageType"];
+                    transformed = YES;
                     WPLog(@"MsgTail", @"[Tail] 伪引用构造完成（正文 %lu 字 + 尾巴 %lu 字）",
                           (unsigned long)content.length, (unsigned long)cfg.msgTail.length);
                 } @catch (id e) {
                     [wrap setValue:content forKey:@"m_nsContent"];  // 回滚，保底不漏 XML
                     WPLog(@"MsgTail", @"[Hook] type 改造失败已回滚: %@", e);
                 } @finally { g_tailAppending = NO; }
+
+                if (transformed) {
+                    // type=49 的 appmsg 出网必须走 AddAppMsg（202 实测：改造后仍走
+                    // orig AddMsg 文本管道 → 本机渲染正常但对面永远收不到）
+                    SEL appMsgSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
+                    if ([self respondsToSelector:appMsgSel]) {
+                        ((void (*)(id, SEL, id, id, id, int))objc_msgSend)
+                            (self, appMsgSel, session, wrap, nil, 2);   // Data=nil Scene=2（音乐卡实证组合）
+                        WPLog(@"MsgTail", @"[Tail] 已改走 AddAppMsg 出网");
+                        return;
+                    }
+                    WPLog(@"MsgTail", @"[Hook] AddAppMsg:MsgWrap:Data:Scene: 不存在，回退 orig");
+                }
             }
         }
     } @catch (NSException *e) {
