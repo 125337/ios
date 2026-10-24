@@ -57,30 +57,26 @@ static unsigned int mtMsgType(id wrap) {
     } @catch (id e) { return 0; }
 }
 
-// ===== 探针 v5（临时）：自己发送的消息 wrap 全属性 dump —— 抓微信 8.x 引用回复的
-// 真实数据存放位置（黄白静态已定性「引用机制」，此处补定量：字段名+格式）。
-// 用法：长按任意消息 -> 引用 -> 回复一句话 -> 把 [Probe] 日志发回。实测后移除。 =====
+// ===== 探针 v5b（临时）：只 dump 白名单 NSString 属性。
+// v5 教训：wrap 有大量 BOOL/uint/CGRect 属性，全量当 id getter 调用 = 返回值当指针
+// 解引用 = 段错误（@try 兜不住硬崩）。白名单全部是已知返回 NSString 的属性。 =====
 static void mtDumpWrap(id wrap) {
     if (!wrap) return;
-    Class cls = [wrap class];
-    unsigned int count = 0;
-    objc_property_t *props = class_copyPropertyList(cls, &count);
-    if (!props) return;
+    NSArray *keys = @[@"m_nsContent", @"m_nsMsgSource", @"m_nsRealChatContent",
+                      @"m_nsDisplayContent", @"m_nsFromUsr", @"m_nsToUsr",
+                      @"m_nsRealChatUsr", @"m_nsTitle", @"m_nsDes", @"m_nsPushDes",
+                      @"m_nsNotedContent", @"m_nsBizUserName"];
     NSMutableString *acc = [NSMutableString stringWithCapacity:1024];
-    for (unsigned int i = 0; i < count; i++) {
-        const char *pname = property_getName(props[i]);
+    for (NSString *k in keys) {
         @try {
-            id val = ((id (*)(id, SEL))objc_msgSend)(wrap, sel_registerName(pname));
+            id val = ((id (*)(id, SEL))objc_msgSend)(wrap, NSSelectorFromString(k));
             if ([val isKindOfClass:[NSString class]] && [(NSString *)val length] > 0) {
                 NSString *sv = (NSString *)val;
-                [acc appendFormat:@"%@=%@  ", pname,
+                [acc appendFormat:@"%@=%@  ", k,
                     sv.length > 600 ? [sv substringToIndex:600] : sv];
-            } else if ([val isKindOfClass:[NSNumber class]]) {
-                [acc appendFormat:@"%@=%@  ", pname, val];
             }
-        } @catch (id e) { /* 跳过非字符串/异常 getter */ }
+        } @catch (id e) { /* 属性不存在等情况，跳过 */ }
     }
-    free(props);
     WPLog(@"MsgTail", @"[Probe] type=%u DUMP>>> %@", mtMsgType(wrap), acc);
 }
 
