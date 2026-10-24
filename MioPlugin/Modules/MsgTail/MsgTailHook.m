@@ -57,29 +57,6 @@ static unsigned int mtMsgType(id wrap) {
     } @catch (id e) { return 0; }
 }
 
-// ===== 探针 v5b（临时）：只 dump 白名单 NSString 属性。
-// v5 教训：wrap 有大量 BOOL/uint/CGRect 属性，全量当 id getter 调用 = 返回值当指针
-// 解引用 = 段错误（@try 兜不住硬崩）。白名单全部是已知返回 NSString 的属性。 =====
-static void mtDumpWrap(id wrap) {
-    if (!wrap) return;
-    NSArray *keys = @[@"m_nsContent", @"m_nsMsgSource", @"m_nsRealChatContent",
-                      @"m_nsDisplayContent", @"m_nsFromUsr", @"m_nsToUsr",
-                      @"m_nsRealChatUsr", @"m_nsTitle", @"m_nsDes", @"m_nsPushDes",
-                      @"m_nsNotedContent", @"m_nsBizUserName"];
-    NSMutableString *acc = [NSMutableString stringWithCapacity:1024];
-    for (NSString *k in keys) {
-        @try {
-            id val = ((id (*)(id, SEL))objc_msgSend)(wrap, NSSelectorFromString(k));
-            if ([val isKindOfClass:[NSString class]] && [(NSString *)val length] > 0) {
-                NSString *sv = (NSString *)val;
-                [acc appendFormat:@"%@=%@  ", k,
-                    sv.length > 600 ? [sv substringToIndex:600] : sv];
-            }
-        } @catch (id e) { /* 属性不存在等情况，跳过 */ }
-    }
-    WPLog(@"MsgTail", @"[Probe] type=%u DUMP>>> %@", mtMsgType(wrap), acc);
-}
-
 // XML 文本转义（正文/尾巴进 <title>/<content> 用）
 static NSString *mtEsc(NSString *s) {
     if (!s) return @"";
@@ -91,10 +68,6 @@ static NSString *mtEsc(NSString *s) {
 
 static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
     @try {
-        // 探针 v5：先 dump 原始状态（尾巴附加前）
-        if (wrap && !g_tailAppending && mtIsSelfSend(wrap)) {
-            mtDumpWrap(wrap);
-        }
         if (wrap && !g_tailAppending) {
             MsgTailConfig *cfg = [MsgTailConfig shared];
             NSString *content = mtStr(wrap, @"m_nsContent");
@@ -131,10 +104,19 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
                     mtEsc(cfg.msgTail), (long)time(NULL)];
                 @try {
                     [wrap setValue:xml forKey:@"m_nsContent"];
-                    [wrap setValue:content forKey:@"m_nsTitle"];   // 真引用 dump: m_nsTitle=正文
+                } @catch (id e) {
+                    g_tailAppending = NO;
+                    return;  // content 都写不进去，按原文发，不碰 type
+                }
+                // type 必须后改且失败必须回滚 content——200 教训：m_nsTitle 赋值炸在
+                // content/type 之间，导致「XML content + type=1 纯文本出网」事故
+                @try {
                     [wrap setValue:@49 forKey:@"m_uiMessageType"];
                     WPLog(@"MsgTail", @"[Tail] 伪引用构造完成（正文 %lu 字 + 尾巴 %lu 字）",
                           (unsigned long)content.length, (unsigned long)cfg.msgTail.length);
+                } @catch (id e) {
+                    [wrap setValue:content forKey:@"m_nsContent"];  // 回滚，保底不漏 XML
+                    WPLog(@"MsgTail", @"[Hook] type 改造失败已回滚: %@", e);
                 } @finally { g_tailAppending = NO; }
             }
         }
