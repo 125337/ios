@@ -242,6 +242,18 @@ BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
         [ext setValue:body forKey:@"referMessageSenderDisplayName"];
         // 不设 referMessageSenderUsrname（黄白为 nil），不设 referingMessageWrap
 
+        // appid/title/des（206 探针 Probe-out 实证）：我们与黄白的最终 XML 只差这三处——
+        // appid 空 → 微信按无效卡片渲染成空泡；有 appid + title/des 才走引用卡渲染
+        NSString *appId = @"wxccac4ab14315add3";   // 黄白同款（黄白消息出网 XML 原值）
+        SEL appIdSel = NSSelectorFromString(@"setM_nsAppId:");
+        SEL appId2Sel = NSSelectorFromString(@"setM_nsAppID:");
+        if ([wrap respondsToSelector:appIdSel])
+            ((void (*)(id, SEL, id))objc_msgSend)(wrap, appIdSel, appId);
+        if ([wrap respondsToSelector:appId2Sel])
+            ((void (*)(id, SEL, id))objc_msgSend)(wrap, appId2Sel, appId);
+        ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsTitle:"), body);
+        ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsDesc:"), body);
+
         SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
         if (![msgMgr respondsToSelector:sendSel]) {
             WPLog(@"MioPlugin", @"[SEND] AddAppMsg:MsgWrap:Data:Scene: 不可用");
