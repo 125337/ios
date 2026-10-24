@@ -53,7 +53,7 @@ static NSString *strOf(id v) {
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
     req.timeoutInterval = 10.0;
-    [[NSURLSession sharedSession] dataTaskWithRequest:req
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
             NSMutableArray<MusicSong *> *songs = [NSMutableArray array];
             if (data.length && !err) {
