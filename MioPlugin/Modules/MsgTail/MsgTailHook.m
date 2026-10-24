@@ -57,8 +57,39 @@ static unsigned int mtMsgType(id wrap) {
     } @catch (id e) { return 0; }
 }
 
+// ===== 探针 v5（临时）：自己发送的消息 wrap 全属性 dump —— 抓微信 8.x 引用回复的
+// 真实数据存放位置（黄白静态已定性「引用机制」，此处补定量：字段名+格式）。
+// 用法：长按任意消息 -> 引用 -> 回复一句话 -> 把 [Probe] 日志发回。实测后移除。 =====
+static void mtDumpWrap(id wrap) {
+    if (!wrap) return;
+    Class cls = [wrap class];
+    unsigned int count = 0;
+    objc_property_t *props = class_copyPropertyList(cls, &count);
+    if (!props) return;
+    NSMutableString *acc = [NSMutableString stringWithCapacity:1024];
+    for (unsigned int i = 0; i < count; i++) {
+        const char *pname = property_getName(props[i]);
+        @try {
+            id val = ((id (*)(id, SEL))objc_msgSend)(wrap, sel_registerName(pname));
+            if ([val isKindOfClass:[NSString class]] && [(NSString *)val length] > 0) {
+                NSString *sv = (NSString *)val;
+                [acc appendFormat:@"%@=%@  ", pname,
+                    sv.length > 600 ? [sv substringToIndex:600] : sv];
+            } else if ([val isKindOfClass:[NSNumber class]]) {
+                [acc appendFormat:@"%@=%@  ", pname, val];
+            }
+        } @catch (id e) { /* 跳过非字符串/异常 getter */ }
+    }
+    free(props);
+    WPLog(@"MsgTail", @"[Probe] type=%u DUMP>>> %@", mtMsgType(wrap), acc);
+}
+
 static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
     @try {
+        // 探针 v5：先 dump 原始状态（尾巴附加前）
+        if (wrap && !g_tailAppending && mtIsSelfSend(wrap)) {
+            mtDumpWrap(wrap);
+        }
         if (wrap && !g_tailAppending) {
             MsgTailConfig *cfg = [MsgTailConfig shared];
             NSString *content = mtStr(wrap, @"m_nsContent");
