@@ -34,15 +34,17 @@ static NSString *mtStr(id obj, NSString *key) {
     @try { return WXSafeStringGet(obj, key) ?: @""; } @catch (id e) { return @""; }
 }
 
-// 自身 wxid（懒取 + 缓存，KeywordAlert 同款）
+// 自身 wxid（懒取 + 缓存）：拿到非空值才缓存，取不到下次重试——
+// 若用 dispatch_once 首次失败会永久缓存空值，尾巴静默失效
 static NSString *mtSelfWxid(void) {
     static NSString *cached = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        id selfContact = WXGetSelfContact();
-        if (selfContact) cached = WXSafeStringGet(selfContact, @"m_nsUsrName") ?: @"";
-    });
-    return cached;
+    if (cached.length > 0) return cached;
+    id selfContact = WXGetSelfContact();
+    if (selfContact) {
+        NSString *v = WXSafeStringGet(selfContact, @"m_nsUsrName");
+        if (v.length > 0) cached = v;
+    }
+    return cached ?: @"";
 }
 
 static BOOL mtIsSelfSend(id wrap) {
