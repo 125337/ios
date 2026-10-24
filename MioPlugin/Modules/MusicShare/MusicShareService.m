@@ -69,10 +69,14 @@
         NSString *inlineLrc = [lrc stringByReplacingOccurrencesOfString:@"\r" withString:@""];
         inlineLrc = [inlineLrc stringByReplacingOccurrencesOfString:@"\n" withString:@""];
         inlineLrc = [inlineLrc stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        // 卡片来源 appid：手选优先（MusicShareVC 选 Moments 预设池），空=自动跟随音源官方真身。
-        // appid 在音乐卡渲染中仅是来源标识（黄白乱填喵喵机 wx3858261cdede9ca0 也渲染正常，勿再默认用它）
+        // 黄白真卡歌词约 500 字符就截断（Probe76 探针实证），照抄同款截断，避免超长歌词引发播放页异常
+        if (inlineLrc.length > 500) inlineLrc = [inlineLrc substringToIndex:500];
+        // 卡片来源 appid：手选优先（MusicShareVC 选 Moments 预设池），空=黄白同款喵喵机 wx3858261cdede9ca0。
+        // [定论 2026-10-25 Probe76 探针] appid 不只影响渲染，还决定点卡后播放页形态：
+        //   网易/QQ 官方 appid → 微信挂"发现/词/评论"富媒体播放页，返回时清理媒体会话，
+        //   伪造卡上下文对不上 → 大概率闪退；喵喵机 appid 无媒体归属 → 简版播放页返回不闪（黄白实证）
         NSString *appId = [MusicShareConfig shared].cardAppId ?: @"";
-        if (appId.length == 0) appId = isQQ ? @"wx5aa333606550dfd5" : @"wx8dd6ecd81906fd84";
+        if (appId.length == 0) appId = @"wx3858261cdede9ca0";
         NSString *xml = [NSString stringWithFormat:
             @"<msg><appmsg appid=\"%@\"  sdkver=\"0\">"
             "<title>%@</title><des>%@</des><type>%ld</type>"
