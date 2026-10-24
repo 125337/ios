@@ -30,5 +30,11 @@ void WXSendTextMessage(NSString *text, NSString *sessionName);
 /// 用它重建 XML，179 探针实证字段表），发送成功返回 YES
 BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<NSString *, id> *extendFields);
 
+/// 向指定会话发送伪引用消息（消息小尾巴专用，复刻黄白同款机制）
+/// body = 气泡正文；referContent = 引用卡片灰字内容（尾巴文本）
+/// 机制：伪造 type=1 被引用消息（svrid 非 0 过 msgCanBeRefered）→ 官方 API
+/// updateForReferMsg:replyContent: 组包 → AddAppMsg Scene=2 出网
+BOOL WXSendReferMessage(NSString *body, NSString *referContent, NSString *sessionName);
+
 /// 查询联系人显示名（备注 > 昵称），查不到时原样返回 wxid
 NSString *WXDisplayNameForWxid(NSString *wxid);

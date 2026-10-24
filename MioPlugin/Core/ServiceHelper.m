@@ -197,6 +197,76 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<N
     }
 }
 
+// 发送伪引用消息（消息小尾巴专用，复刻黄白同款机制）。
+// 机制定论（宿主 8.0.78 静态反汇编 + 黄白 dylib xref 实证）：
+//   - 黄白尾巴走官方组包 API -[CMessageWrap(APP) updateForReferMsg:replyContent:]：
+//     self=回复wrap、arg2=被引用wrap、replyContent=正文；内部 setReferingMessageWrap:
+//     + setM_nsTitle:(正文) + setReferMessageSenderDisplayName/Usrname + UpdateContent:nil，
+//     refer 字段全部落 extendInfo（AddAppMsg 重建 XML 的数据源）
+//   - 被引用 wrap 需过 msgCanBeRefered：type!=10000、非(49/16)、svrid 非 0
+//     （isMsgCanFindByServerId 只查字段不查 DB）→ 伪造 type=1 文本 + 假 svrid
+//     （黄白同款：orr 0x7000000000000000 伪造）
+//   - 出网走 AddAppMsg Data=nil Scene=2（黄白/音乐卡同款组合），refermsg 块由宿主
+//     generateMsgReferXML 从 referingMessageWrap 生成
+BOOL WXSendReferMessage(NSString *body, NSString *referContent, NSString *sessionName) {
+    if (!body.length || !sessionName.length) return NO;
+    @try {
+        id msgMgr = WXGetService(objc_getClass("CMessageMgr"));
+        Class wrapCls = objc_getClass("CMessageWrap");
+        if (!msgMgr || !wrapCls) {
+            WPLog(@"MioPlugin", @"[SEND] CMessageMgr/CMessageWrap 不可用，无法发送伪引用");
+            return NO;
+        }
+        NSString *selfWxid = WXSafeStringGet(WXGetSelfContact(), @"m_nsUsrName");
+        unsigned int now = (unsigned int)[[NSDate date] timeIntervalSince1970];
+
+        // ① 被引用的假消息：type=1 文本 + 非 0 svrid（过 msgCanBeRefered）
+        id refer = ((id (*)(id, SEL, long long))objc_msgSend)([wrapCls alloc], @selector(initWithMsgType:), 1LL);
+        if (!refer) return NO;
+        [refer setValue:(referContent ?: @"") forKey:@"m_nsContent"];
+        [refer setValue:sessionName forKey:@"m_nsToUsr"];
+        if (selfWxid) [refer setValue:selfWxid forKey:@"m_nsFromUsr"];
+        long long svrid = (long long)(0x7000000000000000ULL | (unsigned long long)now);
+        [refer setValue:@(svrid) forKey:@"m_n64MesSvrID"];
+        [refer setValue:@(now) forKey:@"m_uiCreateTime"];
+
+        // ② 回复消息：官方 API 组包（title=正文、extendInfo refer 字段自动填好）
+        id reply = ((id (*)(id, SEL, long long))objc_msgSend)([wrapCls alloc], @selector(initWithMsgType:), 49LL);
+        if (!reply) return NO;
+        [reply setValue:sessionName forKey:@"m_nsToUsr"];
+        if (selfWxid) [reply setValue:selfWxid forKey:@"m_nsFromUsr"];
+        [reply setValue:@(now) forKey:@"m_uiCreateTime"];
+        [reply setValue:@(1) forKey:@"m_uiStatus"];
+        [reply setValue:@(1) forKey:@"m_uiImgStatus"];
+
+        SEL referSel = NSSelectorFromString(@"updateForReferMsg:replyContent:");
+        if (![reply respondsToSelector:referSel]) {
+            WPLog(@"MioPlugin", @"[SEND] updateForReferMsg:replyContent: 不可用");
+            return NO;
+        }
+        ((void (*)(id, SEL, id, id))objc_msgSend)(reply, referSel, refer, body);
+
+        // 内层 type=57（引用消息）；rebuild 数据源是 extendInfo（音乐卡同款 KVC 模式）
+        id ext = [reply valueForKey:@"m_extendInfoWithMsgType"];
+        if (ext) {
+            @try { [ext setValue:@(57) forKey:@"m_uiAppMsgInnerType"]; }
+            @catch (NSException *e) { WPLog(@"MioPlugin", @"[SEND] innerType 设置失败: %@", e); }
+        }
+
+        SEL sendSel = NSSelectorFromString(@"AddAppMsg:MsgWrap:Data:Scene:");
+        if (![msgMgr respondsToSelector:sendSel]) {
+            WPLog(@"MioPlugin", @"[SEND] AddAppMsg:MsgWrap:Data:Scene: 不可用");
+            return NO;
+        }
+        ((void (*)(id, SEL, id, id, id, unsigned int))objc_msgSend)(msgMgr, sendSel, sessionName, reply, nil, 2);
+        WPLog(@"MioPlugin", @"[SEND] 伪引用已发送(AddAppMsg Scene=2) -> %@", sessionName);
+        return YES;
+    } @catch (NSException *e) {
+        WPLog(@"MioPlugin", @"[SEND] 伪引用发送异常: %@", e);
+        return NO;
+    }
+}
+
 NSString *WXDisplayNameForWxid(NSString *wxid) {
     if (!wxid.length) return wxid;
     id contact = WXGetContactForWxid(wxid);
