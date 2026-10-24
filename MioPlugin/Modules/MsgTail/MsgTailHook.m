@@ -80,6 +80,15 @@ static void mtDumpWrap(id wrap) {
     WPLog(@"MsgTail", @"[Probe] type=%u DUMP>>> %@", mtMsgType(wrap), acc);
 }
 
+// XML 文本转义（正文/尾巴进 <title>/<content> 用）
+static NSString *mtEsc(NSString *s) {
+    if (!s) return @"";
+    NSString *r = [s stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"];
+    r = [r stringByReplacingOccurrencesOfString:@"<" withString:@"&lt;"];
+    r = [r stringByReplacingOccurrencesOfString:@">" withString:@"&gt;"];
+    return r;
+}
+
 static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
     @try {
         // 探针 v5：先 dump 原始状态（尾巴附加前）
@@ -101,16 +110,32 @@ static void repl_MsgTail_AddMsg(id self, SEL _cmd, id session, id wrap) {
                 return;
             }
 
-            // ② 文本尾巴：原文后直接追加 msgTail（黄白 §4.4 推断路线）
+            // ② 文本尾巴 = 伪引用（探针 199 实证的微信 8.x 引用结构，黄白同款机制）：
+            //    type=1 文本 → type=49 appmsg(type=57)，正文进 <title>，
+            //    尾巴进 <refermsg><content> → 微信原生渲染成「气泡正文 + 下方灰字尾巴」
             if (cfg.enableMsgTail && cfg.msgTail.length > 0
-                && selfSend && content.length > 0 && mtMsgType(wrap) == 1
-                && [content rangeOfString:cfg.msgTail].location == NSNotFound) {
+                && selfSend && content.length > 0 && mtMsgType(wrap) == 1) {
                 g_tailAppending = YES;
-                NSString *nv = [content stringByAppendingString:cfg.msgTail];
-                @try { [wrap setValue:nv forKey:@"m_nsContent"]; }
-                @finally { g_tailAppending = NO; }
-                WPLog(@"MsgTail", @"[Tail] 已附加尾巴（原长 %lu -> %lu）",
-                      (unsigned long)content.length, (unsigned long)nv.length);
+                NSString *fromUsr = mtStr(wrap, @"m_nsFromUsr");
+                NSString *toUsr = mtStr(wrap, @"m_nsToUsr");
+                // appid="" 后双空格照抄真引用抓包原样
+                NSString *xml = [NSString stringWithFormat:
+                    @"<msg><appmsg appid=\"\"  sdkver=\"0\"><title>%@</title>"
+                    @"<type>57</type>"
+                    @"<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
+                    @"<refermsg><type>1</type><svrid>0</svrid>"
+                    @"<fromusr>%@</fromusr><chatusr>%@</chatusr><displayname></displayname>"
+                    @"<content>%@</content><createtime>%ld</createtime>"
+                    @"</refermsg></appmsg></msg>",
+                    mtEsc(content), mtEsc(fromUsr), mtEsc(toUsr),
+                    mtEsc(cfg.msgTail), (long)time(NULL)];
+                @try {
+                    [wrap setValue:xml forKey:@"m_nsContent"];
+                    [wrap setValue:content forKey:@"m_nsTitle"];   // 真引用 dump: m_nsTitle=正文
+                    [wrap setValue:@49 forKey:@"m_uiMessageType"];
+                    WPLog(@"MsgTail", @"[Tail] 伪引用构造完成（正文 %lu 字 + 尾巴 %lu 字）",
+                          (unsigned long)content.length, (unsigned long)cfg.msgTail.length);
+                } @finally { g_tailAppending = NO; }
             }
         }
     } @catch (NSException *e) {
