@@ -3,22 +3,44 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import "../../Settings/Controllers/MioContactPicker.h"
+#import "../../Settings/Controllers/SettingMusicCardSourceController.h"
+#import "../../Modules/Moments/MomentsConfig.h"
 
 // 音乐分享配置页：启用开关 + 音源选择（input 行右值预览 + 拦截 wpRunInputFlow 弹 ActionSheet）
-// + 指令点歌开关区。搜歌/发卡逻辑在 MusicShareService，指令监听在 MusicShareCommandHook。
+// + 卡片来源选择（push SettingMusicCardSourceController）+ 指令点歌开关区。
+// 搜歌/发卡逻辑在 MusicShareService，指令监听在 MusicShareCommandHook。
 
 static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的伪 key（只做行标识，不落配置）
+static NSString * const kCardSourceKey = @"cardSourcePicker";    // 卡片来源行的伪 key（同上）
 
 @implementation MusicShareVC
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"音乐分享";
+}
+
+// push 返回后刷新右值（卡片来源/音源可能已变）；wpReloadUI 幂等（清空重建）
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
     [self wpReloadUI];
 }
 
 - (NSString *)sourceName {
     return ([MusicShareConfig shared].musicSource == 1) ? @"QQ 音乐" : @"网易云";
+}
+
+// 卡片来源右值：空=自动（跟随音源官方），非空=预设名（未命中显示 appId 原文）
+- (NSString *)cardSourceName {
+    NSString *appId = [MusicShareConfig shared].cardAppId ?: @"";
+    if (appId.length == 0) return @"自动（官方）";
+    for (NSDictionary *p in [[MomentsConfig shared] effectiveTailPresets]) {
+        if ([p isKindOfClass:[NSDictionary class]] && [appId isEqualToString:p[@"appId"]]) {
+            NSString *n = p[@"name"];
+            if ([n isKindOfClass:[NSString class]] && n.length > 0) return n;
+        }
+    }
+    return appId;
 }
 
 - (void)wpBuildRows {
@@ -38,6 +60,16 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
                               key:kSourcePickerKey
                             value:[self sourceName]
                              hint:[self sourceName]
+                       valueType:InputValueTypeText
+                       alertTitle:nil
+                     alertMessage:nil
+                               cy:cy width:w];
+    // 卡片来源行：input 型展示（右值=自动/所选伪装名），点击在 wpRunInputFlow 拦截 push 选择页
+    cy = [self addInputRowInGroup:srcGroup
+                            title:@"卡片来源"
+                              key:kCardSourceKey
+                            value:[self cardSourceName]
+                             hint:[self cardSourceName]
                        valueType:InputValueTypeText
                        alertTitle:nil
                      alertMessage:nil
@@ -107,7 +139,12 @@ static NSString * const kSourcePickerKey = @"musicSourcePicker"; // 音源行的
 #pragma mark - 输入行拦截：音源行弹 ActionSheet，其余走默认输入弹窗
 
 - (void)wpRunInputFlow:(NSDictionary *)row {
-    if ([row[@"key"] isEqualToString:kSourcePickerKey]) {
+    NSString *key = row[@"key"];
+    if ([key isKindOfClass:[NSString class]] && [key isEqualToString:kCardSourceKey]) {
+        [self.navigationController pushViewController:[[SettingMusicCardSourceController alloc] init] animated:YES];
+        return;
+    }
+    if ([key isEqualToString:kSourcePickerKey]) {
         [self presentSourcePicker];
         return;
     }

@@ -60,8 +60,12 @@
         NSString *inlineLrc = [lrc stringByReplacingOccurrencesOfString:@"\r" withString:@""];
         inlineLrc = [inlineLrc stringByReplacingOccurrencesOfString:@"\n" withString:@""];
         inlineLrc = [inlineLrc stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        // 卡片来源 appid：手选优先（MusicShareVC 选 Moments 预设池），空=自动跟随音源官方真身。
+        // appid 在音乐卡渲染中仅是来源标识（黄白乱填喵喵机 wx3858261cdede9ca0 也渲染正常，勿再默认用它）
+        NSString *appId = [MusicShareConfig shared].cardAppId ?: @"";
+        if (appId.length == 0) appId = isQQ ? @"wx5aa333606550dfd5" : @"wx8dd6ecd81906fd84";
         NSString *xml = [NSString stringWithFormat:
-            @"<msg><appmsg appid=\"wx3858261cdede9ca0\"  sdkver=\"0\">"
+            @"<msg><appmsg appid=\"%@\"  sdkver=\"0\">"
             "<title>%@</title><des>%@</des><type>%ld</type>"
             "<url>%@</url><lowurl>%@</lowurl><dataurl>%@</dataurl><lowdataurl>%@</lowdataurl>"
             "<songalbumurl>%@</songalbumurl>"
@@ -69,6 +73,7 @@
             "<appattach><cdnthumbaeskey></cdnthumbaeskey><aeskey></aeskey></appattach>"
             "</appmsg><appinfo><version>0</version><appname></appname>"
             "<isforceupdate>1</isforceupdate></appinfo></msg>",
+            appId,
             esc(song.name), esc(song.singerName), (long)innerType,
             url, url, dataUrl, dataUrl,
             esc(coverURL), esc(inlineLrc)];
@@ -77,7 +82,7 @@
         // 注意：des 对应 m_nsDesc（不是 m_nsDes）；值传原文无需转义
         NSString *rawPage = pageURL.length ? pageURL : playURL;
         NSDictionary *extendFields = @{
-            @"m_nsAppID": @"wx3858261cdede9ca0",
+            @"m_nsAppID": appId,
             @"m_nsTitle": song.name ?: @"",
             @"m_nsDesc": song.singerName ?: @"",
             @"m_uiAppMsgInnerType": @(innerType),
