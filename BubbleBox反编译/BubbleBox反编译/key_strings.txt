@@ -1,9 +1,0 @@
-BubbleSettingViewController
-addSettingSection
-bubbleSetting
-colorSetting
-headCardSetting
-headSetting
-m_oSetting
-mergeSetting
-timeSetting

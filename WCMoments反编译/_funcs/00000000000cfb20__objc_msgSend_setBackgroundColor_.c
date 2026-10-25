@@ -1,9 +1,0 @@
-// _objc_msgSend$setBackgroundColor: @0xcfb20
-
-void _objc_msgSend_setBackgroundColor_(undefined8 param_1)
-
-{
-  (*(code *)PTR__objc_msgSend_00110420)(param_1,"setBackgroundColor:");
-  return;
-}
-

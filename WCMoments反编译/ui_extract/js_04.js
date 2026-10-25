@@ -1,5 +1,0 @@
-');if(image.startsWith('data:image/png;base64,')&&image.length<600000){const picture=element('img','header-brand-image');picture.src=image;picture.alt=text;button.appendChild(picture)}else button.textContent=text}
-function icon(name,fallback){if(!symbols[name])return element('span','',fallback);const image=element('img','symbol');image.src=symbols[name];image.alt='';image.setAttribute('aria-hidden','true');return image}
-function installSymbols(values){symbols=values;document.querySelectorAll('[data-symbol]').forEach(slot=>slot.replaceChildren(icon(slot.dataset.symbol,slot.textContent)));render()}
-function stat(name,value,fallback){const e=element('span','stat'+(name==='heart.fill'?' liked':''));e.appendChild(icon(name,fallback));e.appendChild(element('span','',String(value)));return e}
-function dateLabel(timestamp){if(!timestamp)return '';const date=new Date(timestamp*1000),today=new Date();return date.toDateString()===today.toDateString()?'
