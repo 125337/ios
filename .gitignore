@@ -54,3 +54,10 @@ BubbleBox反编译/
 WCMoments反编译/
 XOS159反编译/
 双列朋友圈/
+
+# ===== 仓库只留构建内容（MioPlugin + .github），以下本地留存 =====
+/tools/
+/analyze_wechat.py
+/WCMoments-loading-diagnostics.json
+/vkey*.json
+/*.md
