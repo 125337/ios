@@ -209,7 +209,7 @@ BOOL WXSendAppMessage(NSString *appMsgXml, NSString *sessionName, NSDictionary<N
 //   的 setter 不转发（如 setM_nsAppId:），必须直接设在 ext 上。
 //   渲染定论（207 实证踩坑）：ext.m_nsAppID 为空 → 微信按无效卡片渲染（正文/尾巴全无）；
 //   appid 非空 + title/des=正文 + sourceUsername=尾巴 → 气泡正文 + 分隔线 + 灰字尾巴。
-//   黄白 appid 原值 wxccac4ab14315add3（黄白消息出网 XML 实取）。
+//   出网 XML（宿主自组）：<title>正文</title><des>正文</des><type>57</type> + appattach；
 BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
     if (!body.length || !tail.length || !sessionName.length) return NO;
     @try {
@@ -247,7 +247,7 @@ BOOL WXSendTailMessage(NSString *body, NSString *tail, NSString *sessionName) {
         // appid 空 → 微信按无效卡片渲染（无尾巴灰字）；有 appid 才走引用卡渲染
         // 注意：ext 类只实现 setM_nsAppID:（IMP 0x104b7419c 在 ext setter 家族区间），
         // wrap 级 setM_nsAppId: 是别的类的不转发，必须直接设在 ext 上
-        NSString *appId = @"wxccac4ab14315add3";   // 黄白同款（黄白消息出网 XML 原值）
+        NSString *appId = @"wxccac4ab14315add3";   // 腾讯手机管家（Moments 预设池同款，黄白出网 XML 实取）
         [ext setValue:appId forKey:@"m_nsAppID"];
         ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsTitle:"), body);
         ((void (*)(id, SEL, id))objc_msgSend)(wrap, NSSelectorFromString(@"setM_nsDesc:"), body);

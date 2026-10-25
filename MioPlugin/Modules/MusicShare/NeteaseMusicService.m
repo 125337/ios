@@ -1,7 +1,8 @@
 #import "NeteaseMusicService.h"
 #import "../../Core/LogManager.h"
 
-// 网易云公开 web API 统一请求头（os=pc cookie 是免登录取直链的关键，实证见 scripts/_wyy_probe.py）
+// 网易云公开 web API 统一请求头（os=pc cookie 是免登录取直链的关键，
+// 实证脚本 _wyy_probe.py 在 文档/点歌功能/网易云音源/ 文件夹）
 static NSMutableURLRequest *wyyRequest(NSString *urlString) {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
     [req setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];

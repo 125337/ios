@@ -1,4 +1,4 @@
-﻿#import <Foundation/Foundation.h>
+﻿﻿#import <Foundation/Foundation.h>
 #import "MusicSong.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -13,6 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
 //          purl 服务端已带 guid&vkey，拼 http://ws.stream.qqmusic.qq.com/ 直接可播。
 // 历史：本地爬链（Cookie/g_tk/sign/vkey 网页通道）死于 QQ 500001 风控；宿主官方 MusicLiveSearch CGI
 //       （黄白同款）在"官替已改"宿主上一调用即段错误。勿回头。
+// 完整定论文档：文档/点歌功能/QQ音乐音源/QQ音乐音源_免登录取流_终版定论.md（含请求示例/文件名矩阵/死路清单/验证脚本）
+// 请求形态出处：借鉴 luren-dc/QQMusicApi 的「客户端 UA + comm 参数集 + UrlGetVkey module」三样
+//   （抓其真实报文反推，插件零依赖该库）；filename 拼法该库是错的（RS02 双mid），以本文档 2.4 节为准。
 @interface QQMusicService : NSObject
 
 // 搜索（completion 主线程回调）
