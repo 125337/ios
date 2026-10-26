@@ -47,6 +47,7 @@
 #import "../Modules/MusicShare/MusicShareCommandHook.h"
 #import "../Modules/SettingEntry/WPOtherVC.h"
 #import "../Modules/MsgTail/MsgTailConfig.h"
+#import "../Modules/SystemCamera/SystemCameraConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -70,6 +71,7 @@
 #import "../Modules/Voice/VoiceFeaturesHook.h"
 #import "../Modules/Privacy/PrivacyHook.h"
 #import "../Modules/MsgTail/MsgTailHook.h"
+#import "../Modules/SystemCamera/SystemCameraHook.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -343,6 +345,15 @@
                                                hookClasses:@[[MsgTailHook class]]
                                            controllerClass:[SettingGeneralFunctionController class]
                                                   subtitle:@"发消息自动附加尾巴，指令快速开关"
+                                             sectionTitle:@"通用"],
+
+            // ──── 拍摄改系统相机（入口在 常用功能 页；聊天相机入口改呼出系统相机，拍完走微信原流程） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"systemcamera"
+                                                    title:@"系统相机"
+                                               configClass:[SystemCameraConfig class]
+                                               hookClasses:@[[SystemCameraHook class]]
+                                           controllerClass:[SettingGeneralFunctionController class]
+                                                  subtitle:@"拍摄改用系统相机"
                                              sectionTitle:@"通用"],
 
             // ──── 设置入口（无 Config + 无 Controller） ────

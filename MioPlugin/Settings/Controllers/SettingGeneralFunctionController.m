@@ -12,6 +12,7 @@
 #import "SettingKeywordAlertController.h"
 #import "SettingMsgTailController.h"
 #import "../../Modules/MsgTail/MsgTailConfig.h"
+#import "../../Modules/SystemCamera/SystemCameraConfig.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
@@ -141,6 +142,16 @@
                             action:@selector(onMsgTailTap)
                                 cy:cy
                              width:w];
+
+    cy = [self addSeparatorInGroup:group cy:cy width:w];
+
+    cy = [self addSwitchRowInGroup:group
+                              title:@"拍摄改用系统相机"
+                               desc:@"聊天相机入口改呼出系统相机，拍完仍走微信发送流程"
+                                key:@"enableSystemCamera"
+                               isOn:[SystemCameraConfig shared].enableSystemCamera
+                                 cy:cy
+                              width:w];
 
     y = [self finishGroup:group atY:y height:cy];
 
