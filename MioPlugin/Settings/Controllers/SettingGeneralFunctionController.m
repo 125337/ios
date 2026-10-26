@@ -146,7 +146,7 @@
     cy = [self addSeparatorInGroup:group cy:cy width:w];
 
     cy = [self addSwitchRowInGroup:group
-                              title:@"拍摄改用系统相机"
+                              title:@"启用系统原相机拍照"
                                desc:@"聊天相机入口改呼出系统相机，拍完仍走微信发送流程"
                                 key:@"enableSystemCamera"
                                isOn:[SystemCameraConfig shared].enableSystemCamera
