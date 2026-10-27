@@ -6,15 +6,18 @@
 #import <objc/runtime.h>
 #import <substrate.h>
 
-// 字体美化 Hook（参考开源 WCR 2.1.8 全局字体的思路，简化实现）
+// 字体美化 Hook（锤子助手 2.6.9 反编译实锤的同款设计）
 //
-// 原理（WCR 反编译确认的核心手法）：
-//   不遍历微信的界面控件，而是 hook UIFont 的工厂方法——微信每次要系统字体时，
-//   用「导入字体 family + CascadeList 苹方回退」的 UIFontDescriptor 重建返回值。
-//   微信代码一行不改，所有 [UIFont systemFontOfSize:...] 调用点自动换装。
+// 原理：
+//   hook UIFont 的工厂方法，把请求重定向为 [UIFont fontWithName:自定义字体PS名 size:原字号]。
+//   字重、粗细、缺字回退全部交给自定义字体自身——字体是什么样就显示什么样，
+//   不再拼 UIFontDescriptor（那套每次调用都重建 descriptor + CoreText 现查，
+//   微信后台回来缓存被清、瞬间上万次请求时会卡）。
+//   fontWithName: 对已注册字体 UIKit 内部自带缓存，重复请求近乎零成本。
 //
-// 覆盖三个入口（都是 UIFont 的类方法，必须挂在元类上）：
-//   systemFontOfSize:weight: / boldSystemFontOfSize: / preferredFontForTextStyle:
+// 覆盖五个入口（都是 UIFont 的类方法，必须挂在元类上）：
+//   systemFontOfSize:weight: / systemFontOfSize: / boldSystemFontOfSize: /
+//   preferredFontForTextStyle: / fontWithName:size:（后者只拦系统字体名）
 //
 // 安全设计：
 //   - 配置每次调用实时读取，开关即时生效，无需重启微信
@@ -38,32 +41,28 @@ static NSString * const kMioFontBypassFlag = @"mio_font_factory_bypass";
 static BOOL s_fontReady = NO;
 static NSInteger s_rebuildLogBudget = 5; // 限量诊断日志
 
-// 按配置把原始字体重建为自定义字体；任一条件不满足即原样返回
+// 按配置把原始字体替换为自定义字体（锤子式报菜名）；任一条件不满足即原样返回
 static UIFont *MioRebuildFont(UIFont *orig, CGFloat size, CGFloat weight) {
+    (void)weight; // 字重交给自定义字体自身，不透传微信的粗细请求
     // 线程旁路放行：调用方要求拿真字体（预览等场景），5 个 hook 入口都汇聚到这里
     if ([[[NSThread currentThread] threadDictionary] objectForKey:kMioFontBypassFlag]) return orig;
     if (s_inFlight || !s_fontReady) return orig;
     FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
-    if (!cfg.enableFontBeautify || cfg.fontBeautifyFamilyName.length == 0) return orig;
+    if (!cfg.enableFontBeautify) return orig;
     if (![orig isKindOfClass:[UIFont class]]) return orig;
+    NSString *psName = cfg.fontBeautifyPostScriptName.length
+        ? cfg.fontBeautifyPostScriptName : cfg.fontBeautifyFamilyName;
+    if (psName.length == 0) return orig;
 
     s_inFlight = YES;
     @try {
-        // 自定义 family + PingFangSC 回退链（特殊字符不缺字，同 WCR 的 CascadeList 思路）
-        UIFontDescriptor *pingFang = [UIFontDescriptor fontDescriptorWithFontAttributes:
-            @{ UIFontDescriptorFamilyAttribute : @"PingFangSC" }];
-        UIFontDescriptor *desc = [UIFontDescriptor fontDescriptorWithFontAttributes:
-            @{ UIFontDescriptorFamilyAttribute : cfg.fontBeautifyFamilyName,
-               UIFontDescriptorCascadeListAttribute : @[pingFang] }];
-        if (weight > 0) {
-            desc = [desc fontDescriptorByAddingAttributes:
-                @{ UIFontDescriptorTraitsAttribute : @{ UIFontWeightTrait : @(weight) } }];
-        }
-        UIFont *f = [UIFont fontWithDescriptor:desc size:size];
+        // 直接报菜名：UIKit 对已注册字体自带缓存，重复请求近乎零成本。
+        // 内部这次 fontWithName: 会再进 repl_fontWithName_size，但 PS 名不是系统字体名
+        // 直接放行原实现，无死循环
+        UIFont *f = [UIFont fontWithName:psName size:size];
         if (s_rebuildLogBudget > 0) {
             s_rebuildLogBudget--;
-            WPLog(@"FontBeautify", @"[Hook] rebuild size=%.1f → %@ (%@)",
-                  size, f ? f.fontName : @"nil", f ? f.familyName : @"-");
+            WPLog(@"FontBeautify", @"[Hook] rebuild size=%.1f → %@", size, f ? f.fontName : @"nil");
         }
         return f ?: orig;
     } @catch (NSException *e) {
