@@ -17,7 +17,6 @@
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
-#import "../../Core/MioRestartHelper.h"
 #import "../../Settings/Controllers/SettingCornerRadiusController.h"
 #import "../../Settings/Common/WPWeChatTable.h"
 #import "../../Settings/Common/WPEntrySearchCollector.h"
@@ -85,7 +84,6 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             @{ @"title": @"界面定制", @"action": @"openUI:", @"kw": @"界面 定制 主题 ui" },
             @{ @"title": @"圆角美化", @"action": @"openCorner:", @"kw": @"圆角 美化 corner" },
             @{ @"title": @"字体美化", @"action": @"openFontBeautify:", @"kw": @"字体 美化 全局字体 换字体 font" },
-            @{ @"title": @"重启微信", @"action": @"restartTapped:", @"kw": @"重启 微信 restart relaunch" },
             @{ @"title": @"红包设置", @"action": @"openRedEnvelop:", @"kw": @"红包 抢红包 收款 转账 拉群" },
             @{ @"title": @"朋友圈", @"action": @"openMoments:", @"kw": @"朋友圈 pyq 时刻 moments 集赞" },
             @{ @"title": @"其他功能", @"action": @"openOther:", @"kw": @"其他 other" },
@@ -111,7 +109,7 @@ static void wpEntryBuildRows(WPWeChatTable *wc, NSString *keyword) {
 
     if (kw.length == 0) {
         [g wpSetHeader:@"功能列表" footer:nil];
-        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"字体美化", @"openFontBeautify:"], @[@"重启微信", @"restartTapped:"], @[@"红包设置", @"openRedEnvelop:"], @[@"朋友圈", @"openMoments:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"]];
+        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"字体美化", @"openFontBeautify:"], @[@"红包设置", @"openRedEnvelop:"], @[@"朋友圈", @"openMoments:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"]];
         for (NSUInteger i = 0; i < navItems.count; i++) {
             id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"),
                                   handler,
@@ -458,19 +456,6 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     WPBackupVC *subVC = [[WPBackupVC alloc] init];
     [vc.navigationController pushViewController:subVC animated:YES];
     WPLog(@"Setting", @"[Nav] pushed WPBackupVC");
-}
-
-// 重启微信（动作非导航）：确认后走优雅重启（dismiss→截图收缩动画→自动拉起）
-- (void)restartTapped:(id)sender {
-    UIViewController *vc = [self currentVCFrom:sender];
-    if (!vc) { WPLog(@"Setting", @"[Nav] restartTapped: currentVC nil"); return; }
-    [MioAlertHelper showConfirmAlertWithTitle:@"重启微信"
-                                      message:@"将关闭并重新打开微信，确定继续吗？"
-                                 confirmTitle:@"立即重启"
-                                    onConfirm:^{
-        WPLog(@"Setting", @"[Nav] restarting WeChat (elegant)");
-        [MioRestartHelper elegantRestartFromVC:vc];
-    }];
 }
 
 - (UIViewController *)currentVCFrom:(id)sender {
