@@ -73,7 +73,8 @@ static NSMutableSet *g_hookedClasses = nil;
 
 static id repl_didFinishNavigation(id self, SEL _cmd, id webView, id navigation) {
     // 调原实现（页面正常加载完成）
-    IMP orig = (IMP)objc_getAssociatedObject(object_getClass(self), "mioOrigDidFinish");
+    NSValue *origBox = (NSValue *)objc_getAssociatedObject(object_getClass(self), "mioOrigDidFinish");
+    IMP orig = origBox ? (IMP)origBox.pointerValue : NULL;
     if (orig) ((void (*)(id, SEL, id, id))orig)(self, _cmd, webView, navigation);
     // 注入字体（开关关闭时 MioInjectIfEnabled 内部直接跳过）
     MioInjectIfEnabled(webView);
@@ -99,7 +100,7 @@ static id repl_setNavigationDelegate(id self, SEL _cmd, id delegate) {
             return result;
         }
         IMP orig = method_getImplementation(m);
-        objc_setAssociatedObject(cls, "mioOrigDidFinish", (__bridge id)(void *)orig, OBJC_ASSOCIATION_RETAIN);
+        objc_setAssociatedObject(cls, "mioOrigDidFinish", [NSValue valueWithPointer:orig], OBJC_ASSOCIATION_RETAIN);
         MSHookMessageEx(cls, sel, (IMP)repl_didFinishNavigation, NULL);
         [g_hookedClasses addObject:cls];
         WPLog(@"FontBeautify", @"[WEB] ✓ 已挂钩代理类 %@ 的 didFinishNavigation", NSStringFromClass(cls));
