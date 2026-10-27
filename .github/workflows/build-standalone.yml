@@ -92,6 +92,7 @@ jobs:
               -framework CoreMedia \
               -framework UserNotifications \
               -framework CoreGraphics \
+              -framework UniformTypeIdentifiers \
               -framework QuartzCore \
               -framework ImageIO \
               -framework PhotosUI \

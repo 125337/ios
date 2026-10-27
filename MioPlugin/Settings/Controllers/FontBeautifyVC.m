@@ -3,6 +3,7 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import <CoreText/CoreText.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 // 字体美化设置页（同款 UI 框架：master switch 手风琴 + 按钮行 + hint）
 // 导入流程：UIDocumentPicker 选 ttf/otf → 拷入沙盒 Library/MioFonts →
@@ -77,13 +78,10 @@
 
 // ── 导入：文件选择器 ──
 - (void)presentFontPicker {
-    NSArray<NSString *> *types = @[
-        @"public.truetype-typeface",   // ttf
-        @"public.opentype-typeface",   // otf
-        @"public.font",                // 通用字体
-    ];
+    // UTTypeFont（public.font）覆盖 ttf/otf 等全部字体类型
     UIDocumentPickerViewController *picker =
-        [[UIDocumentPickerViewController alloc] initWithDocumentTypes:types inPlace:NO];
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeFont]
+                                                                    inPlace:NO];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];
