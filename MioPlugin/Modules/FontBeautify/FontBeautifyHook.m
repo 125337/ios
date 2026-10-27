@@ -43,7 +43,7 @@ static UIFont *MioRebuildFont(UIFont *orig, CGFloat size, CGFloat weight) {
             @{ UIFontDescriptorFamilyAttribute : cfg.fontBeautifyFamilyName,
                UIFontDescriptorCascadeListAttribute : @[pingFang] }];
         if (weight > 0) {
-            desc = [desc descriptorByAddingAttributes:
+            desc = [desc fontDescriptorByAddingAttributes:
                 @{ UIFontDescriptorTraitsAttribute : @{ UIFontWeightTrait : @(weight) } }];
         }
         UIFont *f = [UIFont fontWithDescriptor:desc size:size];
