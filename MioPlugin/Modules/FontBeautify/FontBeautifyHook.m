@@ -1,5 +1,6 @@
 #import "FontBeautifyHook.h"
 #import "FontBeautifyConfig.h"
+#import "FontBeautifyWebView.h"
 #import "../../Core/LogManager.h"
 #import <CoreText/CoreText.h>
 #import <objc/runtime.h>
@@ -161,6 +162,9 @@ static void MioRegisterAllImportedFonts(void) {
                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         MioRegisterAllImportedFonts();
     });
+
+    // WebView 层：公众号文章/搜一搜等 H5 页面的字体注入
+    [FontBeautifyWebView install];
 }
 
 @end
