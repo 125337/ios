@@ -16,15 +16,27 @@
 
 - (void)webView:(id)webView startURLSchemeTask:(id)task {
     @try {
+        // WCR 反编译同款：URL 走 task.request.URL（task 上没有 URL 属性）
+        NSURLRequest *req = ((NSURLRequest *(*)(id, SEL))objc_msgSend)(task, NSSelectorFromString(@"request"));
+        NSURL *url = req.URL;
         NSString *path = [FontBeautifyConfig shared].fontBeautifyFilePath;
         NSData *data = path.length ? [NSData dataWithContentsOfFile:path] : nil;
-        if (!data) data = [NSData data]; // 空响应，网页回退系统字体
+        if (data.length == 0) {
+            // WCR 同款：读不到文件回 404 错误，让网页走字体回退
+            NSError *err = [NSError errorWithDomain:@"MioFont" code:404 userInfo:nil];
+            ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didFailWithError:"), err);
+            WPLog(@"FontBeautify", @"[WEB] 字体文件读取失败 → didFailWithError 404");
+            return;
+        }
         WPLog(@"FontBeautify", @"[WEB] ✓ 网页请求字体 %@ → 回吐 %lu 字节", path.lastPathComponent, (unsigned long)data.length);
         NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
-            initWithURL:((NSURL *(*)(id, SEL))objc_msgSend)(task, NSSelectorFromString(@"URL"))
+            initWithURL:url
                statusCode:200
               HTTPVersion:@"HTTP/1.1"
-             headerFields:@{ @"Content-Type": @"font/ttf", @"Access-Control-Allow-Origin": @"*" }];
+             headerFields:@{ @"Content-Type": @"font/ttf",
+                             @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
+                             @"Access-Control-Allow-Origin": @"*",
+                             @"Cache-Control": @"no-cache" }];
         ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didReceiveResponse:"), resp);
         ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didReceiveData:"), data);
         ((void (*)(id, SEL))objc_msgSend)(task, NSSelectorFromString(@"didFinishLoading"));
