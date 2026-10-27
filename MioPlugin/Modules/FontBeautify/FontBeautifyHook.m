@@ -20,6 +20,7 @@
 //   - 配置每次调用实时读取，开关即时生效，无需重启微信
 //   - s_inFlight 防重入（fontWithDescriptor 内部可能再触发 UIFont 工厂调用）
 //   - 异常/@try 兜底，hook 失败时一律返回原始字体
+//   - 线程字典旁路标记 mio_font_factory_bypass：UI 层取真字体（预览）时设置，hook 放行
 //   - 导入字体走 CTFontManagerRegisterFontsForURL（进程级注册），
 //     冷启动后按落盘路径静默重注册，注册失败仅影响字体不生效，不崩
 
@@ -29,6 +30,9 @@ static IMP g_orig_boldSystemFont   = NULL;
 static IMP g_orig_preferredFont    = NULL;
 static IMP g_orig_fontWithName     = NULL;
 static BOOL s_inFlight = NO;
+// WCR 同款线程字典旁路：调用方（UI 层取真字体做预览）在当前线程字典设此标记，
+// hook 入口检测到即直接放行原字体，工厂调用返回后清标记
+static NSString * const kMioFontBypassFlag = @"mio_font_factory_bypass";
 // 字体目录注册完成后才允许重建：注册前若让带自定义 family 的 descriptor 进 UIKit，
 // fontWithDescriptor 会解析为回退字体并被 UIKit 按 descriptor 死缓存，之后永远不生效
 static BOOL s_fontReady = NO;
@@ -36,6 +40,8 @@ static NSInteger s_rebuildLogBudget = 5; // 限量诊断日志
 
 // 按配置把原始字体重建为自定义字体；任一条件不满足即原样返回
 static UIFont *MioRebuildFont(UIFont *orig, CGFloat size, CGFloat weight) {
+    // 线程旁路放行：调用方要求拿真字体（预览等场景），5 个 hook 入口都汇聚到这里
+    if ([[[NSThread currentThread] threadDictionary] objectForKey:kMioFontBypassFlag]) return orig;
     if (s_inFlight || !s_fontReady) return orig;
     FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
     if (!cfg.enableFontBeautify || cfg.fontBeautifyFamilyName.length == 0) return orig;
@@ -123,6 +129,36 @@ static void MioRegisterAllImportedFonts(void) {
     }
     s_fontReady = YES;
     WPLog(@"FontBeautify", @"[Hook] 字体库注册完成 %ld 个，ready=YES", (long)n);
+}
+
+#pragma mark - 线程旁路取真字体（供 UI 层预览用）
+
+// 预览字体缓存：字体对象随进程字体注册常驻内存，可安全缓存（key = "PS名|字号"）
+static NSCache *g_previewFontCache = nil;
+
+UIFont *MioFontForPreview(NSString *postScriptName, CGFloat size) {
+    if (postScriptName.length == 0) return nil;
+    if (!g_previewFontCache) g_previewFontCache = [NSCache new];
+    NSString *key = [NSString stringWithFormat:@"%@|%.1f", postScriptName, size];
+    UIFont *cached = [g_previewFontCache objectForKey:key];
+    if (cached) return cached;
+
+    NSMutableDictionary *td = [[NSThread currentThread] threadDictionary];
+    td[kMioFontBypassFlag] = @YES;
+    UIFont *f = [UIFont fontWithName:postScriptName size:size];
+    [td removeObjectForKey:kMioFontBypassFlag];
+    if (f) [g_previewFontCache setObject:f forKey:key];
+    return f;
+}
+
+UIFont *MioTrueSystemFont(CGFloat size, CGFloat weight) {
+    NSMutableDictionary *td = [[NSThread currentThread] threadDictionary];
+    td[kMioFontBypassFlag] = @YES;
+    UIFont *f = (weight == UIFontWeightRegular)
+        ? [UIFont systemFontOfSize:size]
+        : [UIFont systemFontOfSize:size weight:weight];
+    [td removeObjectForKey:kMioFontBypassFlag];
+    return f;
 }
 
 @implementation FontBeautifyHook

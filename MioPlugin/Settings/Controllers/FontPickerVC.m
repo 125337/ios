@@ -2,6 +2,7 @@
 #import <CoreText/CoreText.h>
 #import <objc/message.h>
 #import "../../Modules/FontBeautify/FontBeautifyConfig.h"
+#import "../../Modules/FontBeautify/FontBeautifyHook.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
@@ -68,13 +69,11 @@ static NSString *MioPreviewTemplate(void) {
            @"今天是个好日子，@#¥%……&*！（标点符号样例）";
 }
 
-// 按字体的 PostScript 名取渲染字体（size 15；读取失败/加载失败回退系统字体）
+// 按字体的 PostScript 名取渲染字体（线程旁路拿 hook 前真字体 + NSCache 缓存；
+// 读取失败/加载失败回退真系统字体）
 static UIFont *MioFontForItem(MioFontItem *item, CGFloat size) {
-    if (item.postScriptName.length) {
-        UIFont *f = [UIFont fontWithName:item.postScriptName size:size];
-        if (f) return f;
-    }
-    return [UIFont systemFontOfSize:size];
+    UIFont *f = MioFontForPreview(item.postScriptName, size);
+    return f ?: MioTrueSystemFont(size, UIFontWeightRegular);
 }
 
 // 预览文本在指定字体/宽度下的自适应高度（行高与 label frame 同源，防裁切）
@@ -370,16 +369,14 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
 
     if (indexPath.section == 0) {
-        // 系统默认字体：本行标签字体统一走未 hook 的 fontWithDescriptor:（PingFangSC），
-        // 全局 UIFont 工厂 hook 启用时本行仍显真系统字体，保留参照意义
-        UIFontDescriptor *sysDesc = [UIFontDescriptor fontDescriptorWithFontAttributes:
-            @{UIFontDescriptorFamilyAttribute : @"PingFangSC"}];
+        // 系统默认字体：三标签走线程旁路取真系统字体（全局 UIFont 工厂 hook 启用时
+        // 本行仍显真系统字体，保留参照意义）
         cell.textLabel.text = @"系统默认字体";
-        cell.textLabel.font = [UIFont fontWithDescriptor:sysDesc size:16] ?: [UIFont systemFontOfSize:16];
+        cell.textLabel.font = MioTrueSystemFont(16, UIFontWeightRegular);
         cell.textLabel.textColor = WPT1();
-        nameLabel.font = [UIFont fontWithDescriptor:sysDesc size:12] ?: [UIFont systemFontOfSize:12];
+        nameLabel.font = MioTrueSystemFont(12, UIFontWeightRegular);
         nameLabel.text = @"";
-        previewLabel.font = [UIFont fontWithDescriptor:sysDesc size:15] ?: [UIFont systemFontOfSize:15];
+        previewLabel.font = MioTrueSystemFont(15, UIFontWeightRegular);
         previewLabel.text = @"";
         cell.accessoryType = (cfg.fontBeautifyFileName.length == 0)
             ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
@@ -388,7 +385,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
 
     MioFontItem *item = self.visibleItems[indexPath.row];
     cell.textLabel.text = @"";
-    // 复用自「默认」行的 cell 会带 descriptor 字体，这里重挂回 systemFontOfSize:
+    // 复用自「默认」行的 cell 字体可能被改挂过，这里重挂回 systemFontOfSize:
     // （与建 cell 时一致，自定义行渲染不受默认行影响）
     nameLabel.font = [UIFont systemFontOfSize:12];
     nameLabel.text = [NSString stringWithFormat:@"%@ · %@",
