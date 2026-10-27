@@ -66,9 +66,8 @@
 
     y = [self finishGroup:group atY:y height:cy];
 
-    // ── 通用卡片：重启微信（独立分组，参照多分组设置页写法） ──
+    // ── 重启微信（独立分组，无标题头） ──
     y += 8;
-    y = [self addSectionHeader:@"通用" y:y width:w];
     UIView *rGroup = [self addTableGroupAtY:y width:w];
     CGFloat rcy = 0;
     rcy = [self addButtonRowInGroup:rGroup
