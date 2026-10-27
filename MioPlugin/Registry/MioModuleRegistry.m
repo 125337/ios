@@ -48,6 +48,7 @@
 #import "../Modules/SettingEntry/WPOtherVC.h"
 #import "../Modules/MsgTail/MsgTailConfig.h"
 #import "../Modules/SystemCamera/SystemCameraConfig.h"
+#import "../Modules/FontBeautify/FontBeautifyConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -72,6 +73,8 @@
 #import "../Modules/Privacy/PrivacyHook.h"
 #import "../Modules/MsgTail/MsgTailHook.h"
 #import "../Modules/SystemCamera/SystemCameraHook.h"
+#import "../Modules/FontBeautify/FontBeautifyHook.h"
+#import "../Settings/Controllers/FontBeautifyVC.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -354,6 +357,15 @@
                                                hookClasses:@[[SystemCameraHook class]]
                                            controllerClass:[SettingGeneralFunctionController class]
                                                   subtitle:@"拍摄改用系统相机"
+                                             sectionTitle:@"通用"],
+
+            // ──── 字体美化（入口在 功能列表 红包设置上方；hook UIFont 工厂方法全局换字体，WCR 同思路） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"fontbeautify"
+                                                    title:@"字体美化"
+                                               configClass:[FontBeautifyConfig class]
+                                               hookClasses:@[[FontBeautifyHook class]]
+                                           controllerClass:[FontBeautifyVC class]
+                                                  subtitle:@"全局字体替换（导入 ttf/otf）"
                                              sectionTitle:@"通用"],
 
             // ──── 设置入口（无 Config + 无 Controller） ────
