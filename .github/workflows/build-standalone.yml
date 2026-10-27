@@ -93,6 +93,7 @@ jobs:
               -framework UserNotifications \
               -framework CoreGraphics \
               -framework UniformTypeIdentifiers \
+              -framework CoreText \
               -framework QuartzCore \
               -framework ImageIO \
               -framework PhotosUI \
