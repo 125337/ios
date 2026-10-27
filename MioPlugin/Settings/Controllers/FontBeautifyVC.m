@@ -4,6 +4,7 @@
 #import "../../Core/LogManager.h"
 #import <CoreText/CoreText.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <objc/message.h>
 
 // 字体美化设置页（同款 UI 框架：master switch 手风琴 + 按钮行 + hint）
 // 导入流程：UIDocumentPicker 选 ttf/otf → 拷入沙盒 Library/MioFonts →
@@ -77,13 +78,27 @@
 }
 
 // ── 导入：文件选择器 ──
+// 注：CI 用的 SDK 头文件把 UIDocumentPicker 新旧两个 init 都按弃用裁掉了，
+// 改走 runtime 发消息（运行时 iOS14 上 initForOpeningContentTypes:inPlace: 必然存在）
 - (void)presentFontPicker {
-    // UTTypeFont（public.font）覆盖 ttf/otf 等全部字体类型
-    UIDocumentPickerViewController *picker =
-        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeFont]
-                                                                    inPlace:NO];
-    picker.delegate = self;
-    picker.allowsMultipleSelection = NO;
+    id picker = nil;
+    id (*initFn)(id, SEL, NSArray *, BOOL) = (id (*)(id, SEL, NSArray *, BOOL))objc_msgSend;
+    SEL modernSel = NSSelectorFromString(@"initForOpeningContentTypes:inPlace:");
+    if ([UIDocumentPickerViewController instancesRespondToSelector:modernSel]) {
+        picker = initFn([UIDocumentPickerViewController alloc], modernSel, @[UTTypeFont], NO);
+    } else {
+        // iOS14 以下兜底：UTI 字符串版
+        SEL legacySel = NSSelectorFromString(@"initWithDocumentTypes:inPlace:");
+        picker = initFn([UIDocumentPickerViewController alloc], legacySel,
+                        @[@"public.truetype-typeface", @"public.opentype-typeface", @"public.font"], NO);
+    }
+    if (!picker) return;
+    if ([picker respondsToSelector:@selector(setDelegate:)]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(picker, NSSelectorFromString(@"setDelegate:"), self);
+    }
+    if ([picker respondsToSelector:@selector(setAllowsMultipleSelection:)]) {
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, NSSelectorFromString(@"setAllowsMultipleSelection:"), NO);
+    }
     [self presentViewController:picker animated:YES completion:nil];
 }
 
