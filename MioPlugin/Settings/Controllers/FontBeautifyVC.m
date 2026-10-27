@@ -84,28 +84,43 @@
 }
 
 // ── 导入：文件选择器 ──
-// 注：CI 用的 SDK 头文件把 UIDocumentPicker 新旧两个 init 都按弃用裁掉了，
-// 改走 runtime 发消息（运行时 iOS14 上 initForOpeningContentTypes:inPlace: 必然存在）
+// 注：CI 的 SDK 头文件裁了 UIDocumentPicker 的 init 声明，改走 runtime 发消息。
+// 现代选择器为 initWithForOpeningContentTypes:inPlace:（iOS14+）；
+// 旧版 initWithDocumentTypes:inPlace: 在新系统上可能已被移除 → 任何异常只提示不崩
 - (void)presentFontPicker {
-    id picker = nil;
-    id (*initFn)(id, SEL, NSArray *, BOOL) = (id (*)(id, SEL, NSArray *, BOOL))objc_msgSend;
-    SEL modernSel = NSSelectorFromString(@"initForOpeningContentTypes:inPlace:");
-    if ([UIDocumentPickerViewController instancesRespondToSelector:modernSel]) {
-        picker = initFn([UIDocumentPickerViewController alloc], modernSel, @[UTTypeFont], NO);
-    } else {
-        // iOS14 以下兜底：UTI 字符串版
-        SEL legacySel = NSSelectorFromString(@"initWithDocumentTypes:inPlace:");
-        picker = initFn([UIDocumentPickerViewController alloc], legacySel,
-                        @[@"public.truetype-typeface", @"public.opentype-typeface", @"public.font"], NO);
-    }
-    if (!picker) return;
-    if ([picker respondsToSelector:@selector(setDelegate:)]) {
+    @try {
+        id picker = nil;
+        id (*initFn)(id, SEL, NSArray *, BOOL) = (id (*)(id, SEL, NSArray *, BOOL))objc_msgSend;
+        // 依次探测现代版两种拼写（防名字记岔），命中即构造
+        for (NSString *name in @[@"initWithForOpeningContentTypes:inPlace:",
+                                 @"initForOpeningContentTypes:inPlace:"]) {
+            SEL sel = NSSelectorFromString(name);
+            if ([UIDocumentPickerViewController instancesRespondToSelector:sel]) {
+                picker = initFn([UIDocumentPickerViewController alloc], sel, @[UTTypeFont], NO);
+                WPLog(@"FontBeautify", @"[PICKER] modern init via %@ → %@", name, picker ? @"OK" : @"nil");
+                break;
+            }
+        }
+        if (!picker) {
+            // iOS14 以下兜底：UTI 字符串版
+            SEL legacySel = NSSelectorFromString(@"initWithDocumentTypes:inPlace:");
+            if ([UIDocumentPickerViewController instancesRespondToSelector:legacySel]) {
+                picker = initFn([UIDocumentPickerViewController alloc], legacySel,
+                                @[@"public.truetype-typeface", @"public.opentype-typeface", @"public.font"], NO);
+                WPLog(@"FontBeautify", @"[PICKER] legacy init → %@", picker ? @"OK" : @"nil");
+            }
+        }
+        if (!picker) {
+            [self showAlert:@"无法打开" message:@"当前系统不支持文件选择器"];
+            return;
+        }
         ((void (*)(id, SEL, id))objc_msgSend)(picker, NSSelectorFromString(@"setDelegate:"), self);
-    }
-    if ([picker respondsToSelector:@selector(setAllowsMultipleSelection:)]) {
         ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, NSSelectorFromString(@"setAllowsMultipleSelection:"), NO);
+        [self presentViewController:picker animated:YES completion:nil];
+    } @catch (NSException *e) {
+        WPLog(@"FontBeautify", @"[PICKER] exception: %@", e);
+        [self showAlert:@"无法打开文件选择器" message:e.localizedDescription ?: @"未知错误"];
     }
-    [self presentViewController:picker animated:YES completion:nil];
 }
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller
