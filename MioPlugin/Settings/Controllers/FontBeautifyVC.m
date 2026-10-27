@@ -119,7 +119,7 @@
         [self presentViewController:picker animated:YES completion:nil];
     } @catch (NSException *e) {
         WPLog(@"FontBeautify", @"[PICKER] exception: %@", e);
-        [self showAlert:@"无法打开文件选择器" message:e.localizedDescription ?: @"未知错误"];
+        [self showAlert:@"无法打开文件选择器" message:e.reason ?: @"未知错误"];
     }
 }
 
