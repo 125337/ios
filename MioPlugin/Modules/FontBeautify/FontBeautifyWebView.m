@@ -39,7 +39,19 @@
                              @"Cache-Control": @"no-cache" }];
         ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didReceiveResponse:"), resp);
         ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didReceiveData:"), data);
-        ((void (*)(id, SEL))objc_msgSend)(task, NSSelectorFromString(@"didFinishLoading"));
+        // 收尾选择器运行时探测：WCR 反编译发的是 didFinish（此运行时的
+        // WKURLSchemeTaskImpl 不认公开协议的 didFinishLoading），有则优先
+        SEL finishSel = NSSelectorFromString(@"didFinish");
+        if ([(id)task respondsToSelector:finishSel]) {
+            ((void (*)(id, SEL))objc_msgSend)(task, finishSel);
+        } else {
+            SEL fallbackSel = NSSelectorFromString(@"didFinishLoading");
+            if ([(id)task respondsToSelector:fallbackSel]) {
+                ((void (*)(id, SEL))objc_msgSend)(task, fallbackSel);
+            } else {
+                WPLog(@"FontBeautify", @"[WEB] ⚠️ didFinish/didFinishLoading 均不可用");
+            }
+        }
     } @catch (NSException *e) {
         WPLog(@"FontBeautify", @"[WEB] scheme task exception: %@", e);
     }
