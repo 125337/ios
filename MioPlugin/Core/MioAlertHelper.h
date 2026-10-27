@@ -51,6 +51,16 @@
             confirmTitle:(NSString *)confirmTitle
                onConfirm:(void(^)(void))onConfirm;
 
+/// 确认弹窗（双按钮：取消 + 确认，自定义标题）
+/// @param title 弹窗标题（如 @"重启微信"）
+/// @param message 提示内容
+/// @param confirmTitle 确认按钮文字
+/// @param onConfirm 确认回调（主线程）
++ (void)showConfirmAlertWithTitle:(NSString *)title
+                          message:(NSString *)message
+                     confirmTitle:(NSString *)confirmTitle
+                        onConfirm:(void(^)(void))onConfirm;
+
 /// 日期时间选择面板（WCR 同款：底部弹出 + 六轮 年/月/日/时/分/秒 + 右上绿色确定）
 /// 确定时内建校验：至少 1 分钟后、至多 1 年内，超限 toast 不回调
 /// @param title 面板标题（左上角，如 @"选择发送时间"）

@@ -528,8 +528,15 @@ static UIWindow *MioAlertKeyWindow(void) {
 + (void)showConfirmAlert:(NSString *)message
             confirmTitle:(NSString *)confirmTitle
                onConfirm:(void(^)(void))onConfirm {
+    [self showConfirmAlertWithTitle:@"Mio助手" message:message confirmTitle:confirmTitle onConfirm:onConfirm];
+}
+
++ (void)showConfirmAlertWithTitle:(NSString *)title
+                          message:(NSString *)message
+                     confirmTitle:(NSString *)confirmTitle
+                        onConfirm:(void(^)(void))onConfirm {
     @try {
-        WCUIAlertView *alert = [self createAlertWithTitle:@"Mio助手" message:message];
+        WCUIAlertView *alert = [self createAlertWithTitle:title message:message];
         if (!alert) return;
 
         _WAlertAnchor *anchor = walertAnchor();

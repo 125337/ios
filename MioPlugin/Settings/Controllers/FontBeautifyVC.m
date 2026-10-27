@@ -5,7 +5,7 @@
 #import "FontPickerVC.h"
 
 // 字体美化设置页（同款 UI 框架：普通开关行 + 按钮行 + hint 平铺，无手风琴）
-// 主页只留开关 + "选择字体"入口（push FontPickerVC）+ "恢复默认字体"；
+// 主页只留开关 + "选择字体"入口（push FontPickerVC）；
 // 导入/删除/预览都在 FontPickerVC 内完成。配置只存字体文件名，
 // 运行时按 Library/MioFonts/<文件名> 解析（容器迁移不失效）。
 @interface FontBeautifyVC ()
@@ -57,13 +57,6 @@
                                 cy:cy
                              width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
-    cy = [self addButtonRowInGroup:group
-                             title:@"恢复默认字体"
-                              hint:@"清除已启用的字体配置"
-                               key:@"resetFont"
-                                cy:cy
-                             width:w];
-    cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addHintRowInGroup:group
                             text:@"全局替换微信原生界面字体（列表/聊天/设置页均生效）\n支持 .ttf / .otf 字体文件"
                               cy:cy
@@ -79,20 +72,7 @@
     WPLog(@"FontBeautify", @"[BUTTON] key=%@", key);
     if ([key isEqualToString:@"pickFont"]) {
         [self.navigationController pushViewController:[[FontPickerVC alloc] init] animated:YES];
-    } else if ([key isEqualToString:@"resetFont"]) {
-        [self resetFont];
     }
-}
-
-// ── 恢复默认：清空文件名/字族名/PostScript 名 ──
-- (void)resetFont {
-    FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
-    cfg.fontBeautifyFileName = @"";
-    cfg.fontBeautifyFamilyName = @"";
-    cfg.fontBeautifyPostScriptName = @"";
-    [ConfigManager saveAll];
-    [self wpReloadUI];
-    WPLog(@"FontBeautify", @"[RESET] font cleared");
 }
 
 @end
