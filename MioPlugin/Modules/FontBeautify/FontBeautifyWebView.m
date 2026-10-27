@@ -15,38 +15,38 @@
 // 触发点：hook setNavigationDelegate: 截获微信的代理对象，再在其
 //      webView:didFinishNavigation: 上补一层（页面就绪后注入，与 CZ 同型）
 
-// base64 缓存：字体路径没变就不重复编码（11MB → 15MB 字符串，编码不便宜）
-static NSString *g_b64Font = nil;
-static NSString *g_b64Path = nil;
+// 字体 data URL 缓存：路径不变不重复编码
+static NSString *g_fontDataUrl = nil;
+static NSString *g_fontDataUrlPath = nil;
 
-static NSString *MioFontBase64(void) {
+static NSString *MioFontDataUrl(void) {
     NSString *path = [FontBeautifyConfig shared].fontBeautifyFilePath;
     if (path.length == 0) return nil;
-    if (g_b64Font && [g_b64Path isEqualToString:path]) return g_b64Font;
+    if (g_fontDataUrl && [g_fontDataUrlPath isEqualToString:path]) return g_fontDataUrl;
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (data.length == 0) return nil;
-    g_b64Font = [data base64EncodedStringWithOptions:0];
-    g_b64Path = path;
-    WPLog(@"FontBeautify", @"[WEB] 字体已编码 base64：%lu 字节 → %lu 字符",
-          (unsigned long)data.length, (unsigned long)g_b64Font.length);
-    return g_b64Font;
+    NSString *b64 = [data base64EncodedStringWithOptions:0];
+    g_fontDataUrl = [NSString stringWithFormat:@"data:font/ttf;base64,%@", b64];
+    g_fontDataUrlPath = path;
+    WPLog(@"FontBeautify", @"[WEB] 字体已编码 data URL：%lu 字节", (unsigned long)data.length);
+    return g_fontDataUrl;
 }
 
-// 锤子助手同款 JS 模板（函数名从 afont 改为 mio 前缀，逻辑一致）
+// 注入 JS：FontFace 直接吃 data: URL（base64 由 WebKit 原生解码，避免
+// JS 侧 atob + charCodeAt 千万级循环卡页面主线程）；文章页 CSP font-src
+// 白名单含 data:（已抓头实锤），合规。已注册过则跳过，避免重复开销。
 static NSString *MioFontJS(void) {
-    NSString *b64 = MioFontBase64();
-    if (!b64) return nil;
+    NSString *url = MioFontDataUrl();
+    if (!url) return nil;
     return [NSString stringWithFormat:
-        @"function mio642buf(b64){var bs=window.atob(b64);var len=bs.length;"
-        "var bytes=new Uint8Array(len);for(var i=0;i<len;i++){bytes[i]=bs.charCodeAt(i);}"
-        "return bytes.buffer;}"
-        "(async()=>{try{"
-        "let f=new FontFace('MioCustomFont',mio642buf('%@'));"
+        @"(async()=>{try{"
+        "if(document.fonts.check('12px MioCustomFont'))return;"
+        "let f=new FontFace('MioCustomFont',\"url(%@)\");"
         "await f.load();document.fonts.add(f);"
         "let fs=document.createElement('style');"
         "fs.innerHTML=\"*{font-family:'MioCustomFont' !important;}\";"
         "(document.head||document.documentElement).appendChild(fs);"
-        "}catch(e){}})()", b64];
+        "}catch(e){}})()", url];
 }
 
 static void MioInjectIfEnabled(id webView) {
