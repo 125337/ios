@@ -67,13 +67,20 @@
 
 static IMP g_orig_wkInit = NULL;
 
+// 注入策略（针对文章页 CSP font-src 白名单会拦掉 miofont:// 的 url() 加载）：
+// 1. CSS 只声明 font-family，不写 @font-face url() —— 不触发 font-src 检查
+// 2. fetch('miofont://') 拿字体字节流（该域名 CSP 无 connect-src 指令，fetch 不受限）
+// 3. new FontFace(ArrayBuffer) 从内存注册 —— 数据源不走网络层，无 CSP 拦截点
 static NSString * const kFontJS =
     @"(function(){"
     "try{"
     "var s=document.createElement('style');"
-    "s.textContent=\"@font-face{font-family:'MioCustomFont';src:url('miofont://local/font.ttf') format('truetype');}"
-    "*{font-family:'MioCustomFont' !important;}\";"
+    "s.textContent=\"*{font-family:'MioCustomFont' !important;}\";"
     "(document.head||document.documentElement).appendChild(s);"
+    "fetch('miofont://local/font.ttf').then(function(r){return r.arrayBuffer();})"
+    ".then(function(buf){return new FontFace('MioCustomFont',buf).load();})"
+    ".then(function(f){document.fonts.add(f);})"
+    ".catch(function(e){});"
     "}catch(e){}"
     "})();";
 
