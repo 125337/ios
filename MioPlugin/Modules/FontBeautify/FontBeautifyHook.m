@@ -12,7 +12,7 @@
 //   用「导入字体 family + CascadeList 苹方回退」的 UIFontDescriptor 重建返回值。
 //   微信代码一行不改，所有 [UIFont systemFontOfSize:...] 调用点自动换装。
 //
-// 覆盖三个入口：
+// 覆盖三个入口（都是 UIFont 的类方法，必须挂在元类上）：
 //   systemFontOfSize:weight: / boldSystemFontOfSize: / preferredFontForTextStyle:
 //
 // 安全设计：
@@ -90,7 +90,13 @@ static void MioReRegisterSavedFont(void) {
 @implementation FontBeautifyHook
 
 + (void)install {
-    Class uiFont = [UIFont class];
+    // UIFont 的三个工厂方法都是类方法 → 挂在元类上（MioSubstrate 内部走 class_getInstanceMethod，
+    // 对元类查实例方法即查类方法）
+    Class uiFontMeta = objc_getMetaClass("UIFont");
+    if (!uiFontMeta) {
+        WPLog(@"FontBeautify", @"[Hook] UIFont 元类不存在，未安装");
+        return;
+    }
 
     struct SelImp { SEL sel; IMP *orig; IMP repl; const char *tag; };
     struct SelImp list[] = {
@@ -99,12 +105,13 @@ static void MioReRegisterSavedFont(void) {
         { NSSelectorFromString(@"preferredFontForTextStyle:"),&g_orig_preferredFont,    (IMP)repl_preferredFontForTextStyle, "preferredFontForTextStyle:"},
     };
     for (NSUInteger i = 0; i < sizeof(list) / sizeof(list[0]); i++) {
-        Method m = class_getInstanceMethod(uiFont, list[i].sel);
+        Method m = class_getInstanceMethod(uiFontMeta, list[i].sel);
         if (!m) {
-            WPLog(@"FontBeautify", @"[Hook] UIFont %@ 不存在，跳过", list[i].tag);
+            // 注意：tag 是 C 字符串，必须用 %s（用 %@ 会把 char* 当 ObjC 对象指针解引用 → 闪退）
+            WPLog(@"FontBeautify", @"[Hook] UIFont %s 不存在，跳过", list[i].tag);
             continue;
         }
-        MSHookMessageEx(uiFont, list[i].sel, list[i].repl, list[i].orig);
+        MSHookMessageEx(uiFontMeta, list[i].sel, list[i].repl, list[i].orig);
         WPLog(@"FontBeautify", @"[Hook] ✓ UIFont::%s", list[i].tag);
     }
 
