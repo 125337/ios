@@ -40,7 +40,9 @@ static NSString *MioFontJS(void) {
         "var bytes=new Uint8Array(len);for(var i=0;i<len;i++){bytes[i]=bs.charCodeAt(i);}"
         "return bytes.buffer;}"
         "(async()=>{try{"
-        "if(document.fonts.check('12px MioCustomFont'))return;"
+        // 不能用 document.fonts.check 判重：字体族未注册时 check() 返回 true
+        // （规范语义"现有字体可渲染"），会把首次注册也短路掉。改用页面级标志。
+        "if(window.__mioFontDone)return;window.__mioFontDone=1;"
         "let f=new FontFace('MioCustomFont',mio642buf('%@'));"
         "await f.load();document.fonts.add(f);"
         "let fs=document.createElement('style');"
