@@ -62,7 +62,7 @@
                                    width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
         *ecy = [self addHintRowInGroup:expand
-                                  text:@"全局替换微信原生界面字体（列表/聊天/设置页均生效）\n导入后立即生效，无需重启微信\n支持 .ttf / .otf 字体文件"
+                                  text:@"全局替换微信原生界面字体（列表/聊天/设置页均生效）\n导入后立即生效，无需重启微信\n支持 .ttf / .otf，可多选批量导入"
                                     cy:*ecy
                                  width:w];
     } cy:cy width:w];
@@ -105,7 +105,7 @@
             return;
         }
         ((void (*)(id, SEL, id))objc_msgSend)(picker, NSSelectorFromString(@"setDelegate:"), self);
-        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, NSSelectorFromString(@"setAllowsMultipleSelection:"), NO);
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(picker, NSSelectorFromString(@"setAllowsMultipleSelection:"), YES);
         [self presentViewController:picker animated:YES completion:nil];
     } @catch (NSException *e) {
         WPLog(@"FontBeautify", @"[PICKER] exception: %@", e);
@@ -115,25 +115,20 @@
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller
 didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
-    NSURL *src = urls.firstObject;
-    if (!src) return;
-    [self importFontFromURL:src];
+    if (urls.count == 0) return;
+    [self importFontsFromURLs:urls];
 }
 
-// ── 导入：拷贝 → 注册 → 读字族名 → 存配置 ──
-- (void)importFontFromURL:(NSURL *)srcURL {
-    NSError *fsErr = nil;
+// ── 导入：批量拷贝 → 注册 → 读字族名 → 单个直接启用 / 多个弹选择 ──
+// 单个文件的「拷贝+注册+读元数据」，成功时回填 family/psName/dstPath
+- (BOOL)importOneFont:(NSURL *)srcURL outFamily:(NSString **)outFamily outPS:(NSString **)outPS outPath:(NSString **)outPath errText:(NSString **)errText {
     NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)
                      firstObject];
     dir = [dir stringByAppendingPathComponent:@"MioFonts"];
     [[NSFileManager defaultManager] createDirectoryAtPath:dir
                               withIntermediateDirectories:YES
                                                attributes:nil
-                                                    error:&fsErr];
-    if (fsErr) {
-        [self showAlert:@"导入失败" message:[NSString stringWithFormat:@"创建目录失败: %@", fsErr.localizedDescription]];
-        return;
-    }
+                                                    error:nil];
 
     NSString *fileName = srcURL.lastPathComponent;
     NSString *dstPath = [dir stringByAppendingPathComponent:fileName];
@@ -141,9 +136,10 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
 
     // 同名旧文件先删（覆盖导入）
     [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil];
+    NSError *fsErr = nil;
     if (![[NSFileManager defaultManager] copyItemAtURL:srcURL toURL:dstURL error:&fsErr]) {
-        [self showAlert:@"导入失败" message:[NSString stringWithFormat:@"拷贝文件失败: %@", fsErr.localizedDescription]];
-        return;
+        *errText = [NSString stringWithFormat:@"拷贝 %@ 失败: %@", fileName, fsErr.localizedDescription];
+        return NO;
     }
 
     // 注册进进程字体表（已注册会报错，忽略）
@@ -153,8 +149,8 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
         CFIndex code = CFErrorGetCode(regErr);
         CFRelease(regErr);
         if (code != 105 /* kCTFontManagerErrorAlreadyRegistered */) {
-            [self showAlert:@"注册失败" message:[NSString stringWithFormat:@"错误码 %ld，字体文件可能已损坏", (long)code]];
-            return;
+            *errText = [NSString stringWithFormat:@"注册 %@ 失败: 错误码 %ld", fileName, (long)code];
+            return NO;
         }
     }
 
@@ -162,8 +158,8 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     CFArrayRef descs = CTFontManagerCreateFontDescriptorsFromURL((__bridge CFURLRef)dstURL);
     if (!descs || CFArrayGetCount(descs) == 0) {
         if (descs) CFRelease(descs);
-        [self showAlert:@"导入失败" message:@"文件中未找到字体描述符"];
-        return;
+        *errText = [NSString stringWithFormat:@"%@ 中未找到字体描述符", fileName];
+        return NO;
     }
     CTFontDescriptorRef d0 = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descs, 0);
     NSString *family = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontFamilyNameAttribute));
@@ -171,13 +167,62 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     CFRelease(descs);
 
     if (family.length == 0) {
-        [self showAlert:@"导入失败" message:@"未读取到字族名"];
+        *errText = [NSString stringWithFormat:@"%@ 未读取到字族名", fileName];
+        return NO;
+    }
+    *outFamily = family;
+    *outPS = psName ?: @"";
+    *outPath = dstPath;
+    return YES;
+}
+
+- (void)importFontsFromURLs:(NSArray<NSURL *> *)urls {
+    NSMutableArray<NSString *> *families = [NSMutableArray array];
+    NSMutableArray<NSString *> *psNames  = [NSMutableArray array];
+    NSMutableArray<NSString *> *paths    = [NSMutableArray array];
+    NSMutableArray<NSString *> *errs     = [NSMutableArray array];
+
+    for (NSURL *src in urls) {
+        NSString *fam = nil, *ps = nil, *path = nil, *err = nil;
+        if ([self importOneFont:src outFamily:&fam outPS:&ps outPath:&path errText:&err]) {
+            [families addObject:fam];
+            [psNames addObject:ps];
+            [paths addObject:path];
+        } else if (err) {
+            [errs addObject:err];
+        }
+    }
+
+    if (families.count == 0) {
+        [self showAlert:@"导入失败" message:errs.firstObject ?: @"未导入任何字体"];
         return;
     }
 
+    if (families.count == 1) {
+        [self activateFontFamily:families[0] ps:psNames[0] path:paths[0]];
+    } else {
+        // 多选导入：弹 action sheet 选要启用的字体
+        UIAlertController *sheet =
+            [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"已导入 %lu 个字体，启用哪个？", (unsigned long)families.count]
+                                                message:errs.count ? [errs componentsJoinedByString:@"\n"] : nil
+                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        [families enumerateObjectsUsingBlock:^(NSString *fam, NSUInteger idx, BOOL *stop) {
+            [sheet addAction:[UIAlertAction actionWithTitle:fam style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                [self activateFontFamily:fam ps:psNames[idx] path:paths[idx]];
+            }]];
+        }];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"仅导入不启用" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self wpReloadUI];
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentViewController:sheet animated:YES completion:nil];
+    }
+}
+
+- (void)activateFontFamily:(NSString *)family ps:(NSString *)psName path:(NSString *)dstPath {
     FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
     cfg.fontBeautifyFamilyName = family;
-    cfg.fontBeautifyPostScriptName = psName ?: @"";
+    cfg.fontBeautifyPostScriptName = psName;
     cfg.fontBeautifyFilePath = dstPath;
     [ConfigManager saveAll];
     [self wpReloadUI];

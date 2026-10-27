@@ -26,10 +26,14 @@ static IMP g_orig_systemFontWeight = NULL;
 static IMP g_orig_boldSystemFont   = NULL;
 static IMP g_orig_preferredFont    = NULL;
 static BOOL s_inFlight = NO;
+// 字体目录注册完成后才允许重建：注册前若让带自定义 family 的 descriptor 进 UIKit，
+// fontWithDescriptor 会解析为回退字体并被 UIKit 按 descriptor 死缓存，之后永远不生效
+static BOOL s_fontReady = NO;
+static NSInteger s_rebuildLogBudget = 5; // 限量诊断日志
 
 // 按配置把原始字体重建为自定义字体；任一条件不满足即原样返回
 static UIFont *MioRebuildFont(UIFont *orig, CGFloat size, CGFloat weight) {
-    if (s_inFlight) return orig;
+    if (s_inFlight || !s_fontReady) return orig;
     FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
     if (!cfg.enableFontBeautify || cfg.fontBeautifyFamilyName.length == 0) return orig;
     if (![orig isKindOfClass:[UIFont class]]) return orig;
@@ -47,6 +51,11 @@ static UIFont *MioRebuildFont(UIFont *orig, CGFloat size, CGFloat weight) {
                 @{ UIFontDescriptorTraitsAttribute : @{ UIFontWeightTrait : @(weight) } }];
         }
         UIFont *f = [UIFont fontWithDescriptor:desc size:size];
+        if (s_rebuildLogBudget > 0) {
+            s_rebuildLogBudget--;
+            WPLog(@"FontBeautify", @"[Hook] rebuild size=%.1f → %@ (%@)",
+                  size, f ? f.fontName : @"nil", f ? f.familyName : @"-");
+        }
         return f ?: orig;
     } @catch (NSException *e) {
         WPLog(@"FontBeautify", @"[Hook] rebuild exception: %@", e);
@@ -71,20 +80,25 @@ static id repl_preferredFontForTextStyle(id self, SEL _cmd, id textStyle) {
     return MioRebuildFont(orig, orig.pointSize, 0);
 }
 
-// 冷启动重注册：配置里的字体文件按路径注册回进程字体表（进程级注册不跨启动）
-static void MioReRegisterSavedFont(void) {
-    FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
-    if (cfg.fontBeautifyFilePath.length == 0) return;
-    if (![[NSFileManager defaultManager] fileExistsAtPath:cfg.fontBeautifyFilePath]) return;
-    NSURL *url = [NSURL fileURLWithPath:cfg.fontBeautifyFilePath];
-    CFErrorRef err = NULL;
-    CTFontManagerRegisterFontsForURL((__bridge CFURLRef)url, kCTFontManagerScopeProcess, &err);
-    if (err) {
-        WPLog(@"FontBeautify", @"[Hook] re-register: %@（已注册/失败均不影响使用）", cfg.fontBeautifyFamilyName);
-        CFRelease(err);
-    } else {
-        WPLog(@"FontBeautify", @"[Hook] ✓ re-registered font: %@", cfg.fontBeautifyFamilyName);
+// 注册 MioFonts 目录下全部字体（进程级；导入后新增文件靠 3 秒兜底重扫）
+// 必须在 hook 生效后尽快执行，s_fontReady 立起前重建函数不工作（防 UIKit 死缓存）
+static void MioRegisterAllImportedFonts(void) {
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)
+                     firstObject];
+    dir = [dir stringByAppendingPathComponent:@"MioFonts"];
+    NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil];
+    NSInteger n = 0;
+    for (NSString *name in files) {
+        NSString *ext = name.pathExtension.lowercaseString;
+        if (![ext isEqualToString:@"ttf"] && ![ext isEqualToString:@"otf"]) continue;
+        NSURL *url = [NSURL fileURLWithPath:[dir stringByAppendingPathComponent:name]];
+        CFErrorRef err = NULL;
+        CTFontManagerRegisterFontsForURL((__bridge CFURLRef)url, kCTFontManagerScopeProcess, &err);
+        if (err) CFRelease(err); // 105=已注册，静默
+        n++;
     }
+    s_fontReady = YES;
+    WPLog(@"FontBeautify", @"[Hook] 字体库注册完成 %ld 个，ready=YES", (long)n);
 }
 
 @implementation FontBeautifyHook
@@ -115,10 +129,11 @@ static void MioReRegisterSavedFont(void) {
         WPLog(@"FontBeautify", @"[Hook] ✓ UIFont::%s", list[i].tag);
     }
 
-    // 字体注册是进程级属性，冷启动后延迟补注册（等沙盒就绪）
+    // 立即同步注册字体库（晚一毫秒都可能让死缓存成形）；3 秒后再兜底重扫一次
+    MioRegisterAllImportedFonts();
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        MioReRegisterSavedFont();
+        MioRegisterAllImportedFonts();
     });
 }
 
