@@ -17,6 +17,12 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"字体美化";
+    // 不在此处构建：viewWillAppear 统一 wpReloadUI（同 SettingRedEnvelopController 模式）
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self wpReloadUI];
 }
 
 // ── 页面构建（SettingCategoryController 同款） ──
