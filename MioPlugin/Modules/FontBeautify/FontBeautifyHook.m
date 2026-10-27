@@ -23,8 +23,10 @@
 //     冷启动后按落盘路径静默重注册，注册失败仅影响字体不生效，不崩
 
 static IMP g_orig_systemFontWeight = NULL;
+static IMP g_orig_systemFont       = NULL; // 不带 weight 的版本，老代码最常用
 static IMP g_orig_boldSystemFont   = NULL;
 static IMP g_orig_preferredFont    = NULL;
+static IMP g_orig_fontWithName     = NULL;
 static BOOL s_inFlight = NO;
 // 字体目录注册完成后才允许重建：注册前若让带自定义 family 的 descriptor 进 UIKit，
 // fontWithDescriptor 会解析为回退字体并被 UIKit 按 descriptor 死缓存，之后永远不生效
@@ -80,6 +82,28 @@ static id repl_preferredFontForTextStyle(id self, SEL _cmd, id textStyle) {
     return MioRebuildFont(orig, orig.pointSize, 0);
 }
 
+static id repl_systemFontOfSize(id self, SEL _cmd, CGFloat size) {
+    UIFont *orig = ((id (*)(id, SEL, CGFloat))g_orig_systemFont)(self, _cmd, size);
+    return MioRebuildFont(orig, size, 0);
+}
+
+// fontWithName 护栏：只替换系统字体名（微信用 fontWithName 建苹方/系统字体渲染正文），
+// 图标/内置字体（WeChatSans 等）原样放行
+static BOOL MioIsSystemFontName(NSString *name) {
+    if (name.length == 0) return NO;
+    if ([name hasPrefix:@"."]) return YES;        // .SFUI / .AppleSystemUIFont
+    if ([name hasPrefix:@"PingFang"]) return YES; // 中文正文
+    if ([name hasPrefix:@"Helvetica"]) return YES;
+    if ([name isEqualToString:@"System"]) return YES;
+    return NO;
+}
+
+static id repl_fontWithName_size(id self, SEL _cmd, id name, CGFloat size) {
+    UIFont *orig = ((id (*)(id, SEL, id, CGFloat))g_orig_fontWithName)(self, _cmd, name, size);
+    if (!MioIsSystemFontName(name)) return orig;
+    return MioRebuildFont(orig, size, 0);
+}
+
 // 注册 MioFonts 目录下全部字体（进程级；导入后新增文件靠 3 秒兜底重扫）
 // 必须在 hook 生效后尽快执行，s_fontReady 立起前重建函数不工作（防 UIKit 死缓存）
 static void MioRegisterAllImportedFonts(void) {
@@ -115,8 +139,10 @@ static void MioRegisterAllImportedFonts(void) {
     struct SelImp { SEL sel; IMP *orig; IMP repl; const char *tag; };
     struct SelImp list[] = {
         { NSSelectorFromString(@"systemFontOfSize:weight:"),  &g_orig_systemFontWeight, (IMP)repl_systemFontOfSize_weight,   "systemFontOfSize:weight:"  },
+        { NSSelectorFromString(@"systemFontOfSize:"),         &g_orig_systemFont,       (IMP)repl_systemFontOfSize,          "systemFontOfSize:"         },
         { NSSelectorFromString(@"boldSystemFontOfSize:"),     &g_orig_boldSystemFont,   (IMP)repl_boldSystemFontOfSize,      "boldSystemFontOfSize:"     },
         { NSSelectorFromString(@"preferredFontForTextStyle:"),&g_orig_preferredFont,    (IMP)repl_preferredFontForTextStyle, "preferredFontForTextStyle:"},
+        { NSSelectorFromString(@"fontWithName:size:"),        &g_orig_fontWithName,     (IMP)repl_fontWithName_size,         "fontWithName:size:"        },
     };
     for (NSUInteger i = 0; i < sizeof(list) / sizeof(list[0]); i++) {
         Method m = class_getInstanceMethod(uiFontMeta, list[i].sel);
