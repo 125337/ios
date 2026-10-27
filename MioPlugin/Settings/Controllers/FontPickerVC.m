@@ -10,7 +10,7 @@
 //   Section 0「默认」：系统默认字体（fontBeautifyFileName 为空时打勾）
 //   Section 1「自定义字体 (N)」：扫描 Library/MioFonts，每行「文件名 · 大小」+
 //              预览文本用该字体渲染（PostScript 名从 CTFontManager 描述符读取）
-//   右上「添加」：系统文件选择器（WCR 同款 legacy initWithDocumentTypes:inMode:，
+//   右上「导入」：系统文件选择器（WCR 同款 legacy initWithDocumentTypes:inMode:，
 //              绕过 SDK 头文件裁剪），批量导入 → 拷贝 → 进程级注册 → 刷新列表
 //   自定义行左滑：红色「删除」按钮删除文件（若是当前启用字体则同步清配置）
 // 性能：字体元数据扫一次存静态缓存（fileName/fileSize/postScriptName/familyName），
@@ -110,7 +110,7 @@ static NSString *MioFileSizeText(unsigned long long bytes) {
     self.view.backgroundColor = WPBgColor();
 
     self.navigationItem.rightBarButtonItem =
-        [[UIBarButtonItem alloc] initWithTitle:@"添加"
+        [[UIBarButtonItem alloc] initWithTitle:@"导入"
                                          style:UIBarButtonItemStylePlain
                                         target:self
                                         action:@selector(presentFontPicker)];
@@ -370,11 +370,16 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
 
     if (indexPath.section == 0) {
-        // 系统默认字体
+        // 系统默认字体：本行标签字体统一走未 hook 的 fontWithDescriptor:（PingFangSC），
+        // 全局 UIFont 工厂 hook 启用时本行仍显真系统字体，保留参照意义
+        UIFontDescriptor *sysDesc = [UIFontDescriptor fontDescriptorWithFontAttributes:
+            @{UIFontDescriptorFamilyAttribute : @"PingFangSC"}];
         cell.textLabel.text = @"系统默认字体";
-        cell.textLabel.font = [UIFont systemFontOfSize:16];
+        cell.textLabel.font = [UIFont fontWithDescriptor:sysDesc size:16] ?: [UIFont systemFontOfSize:16];
         cell.textLabel.textColor = WPT1();
+        nameLabel.font = [UIFont fontWithDescriptor:sysDesc size:12] ?: [UIFont systemFontOfSize:12];
         nameLabel.text = @"";
+        previewLabel.font = [UIFont fontWithDescriptor:sysDesc size:15] ?: [UIFont systemFontOfSize:15];
         previewLabel.text = @"";
         cell.accessoryType = (cfg.fontBeautifyFileName.length == 0)
             ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
@@ -383,6 +388,9 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
 
     MioFontItem *item = self.visibleItems[indexPath.row];
     cell.textLabel.text = @"";
+    // 复用自「默认」行的 cell 会带 descriptor 字体，这里重挂回 systemFontOfSize:
+    // （与建 cell 时一致，自定义行渲染不受默认行影响）
+    nameLabel.font = [UIFont systemFontOfSize:12];
     nameLabel.text = [NSString stringWithFormat:@"%@ · %@",
                       item.fileName, MioFileSizeText(item.fileSize)];
     // 固定多行模板整体用该字体的 PostScript 名渲染（size 15，行高自适应）
