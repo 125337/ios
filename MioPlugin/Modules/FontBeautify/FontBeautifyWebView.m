@@ -7,129 +7,119 @@
 #import "../../Core/LogManager.h"
 #import "FontBeautifyConfig.h"
 
-// ── 自定义 scheme handler：把本机字体文件回吐给网页 ──
-// 网页里 @font-face 指向 miofont://xxx，由本类提供字节流
-@interface MioFontSchemeHandler : NSObject
-@end
+// ── 文章页字体注入（照抄锤子助手 CZHelper 反编译实现）──
+// 机制：字体文件整体 base64 → 内嵌进 JS（atob→Uint8Array→FontFace 内存注册）
+//      → evaluateJavaScript 打进"已经活着"的 WebView → 全局 font-family !important
+// 优点：完全免疫页面 CSP（evaluateJavaScript 不受管，FontFace 内存数据不过 font-src）
+//      且能覆盖已存在的 WebView（scheme handler / WKUserScript 方案均覆盖不到）
+// 触发点：hook setNavigationDelegate: 截获微信的代理对象，再在其
+//      webView:didFinishNavigation: 上补一层（页面就绪后注入，与 CZ 同型）
 
-@implementation MioFontSchemeHandler
+// base64 缓存：字体路径没变就不重复编码（11MB → 15MB 字符串，编码不便宜）
+static NSString *g_b64Font = nil;
+static NSString *g_b64Path = nil;
 
-- (void)webView:(id)webView startURLSchemeTask:(id)task {
+static NSString *MioFontBase64(void) {
+    NSString *path = [FontBeautifyConfig shared].fontBeautifyFilePath;
+    if (path.length == 0) return nil;
+    if (g_b64Font && [g_b64Path isEqualToString:path]) return g_b64Font;
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data.length == 0) return nil;
+    g_b64Font = [data base64EncodedStringWithOptions:0];
+    g_b64Path = path;
+    WPLog(@"FontBeautify", @"[WEB] 字体已编码 base64：%lu 字节 → %lu 字符",
+          (unsigned long)data.length, (unsigned long)g_b64Font.length);
+    return g_b64Font;
+}
+
+// 锤子助手同款 JS 模板（函数名从 afont 改为 mio 前缀，逻辑一致）
+static NSString *MioFontJS(void) {
+    NSString *b64 = MioFontBase64();
+    if (!b64) return nil;
+    return [NSString stringWithFormat:
+        @"function mio642buf(b64){var bs=window.atob(b64);var len=bs.length;"
+        "var bytes=new Uint8Array(len);for(var i=0;i<len;i++){bytes[i]=bs.charCodeAt(i);}"
+        "return bytes.buffer;}"
+        "(async()=>{try{"
+        "let f=new FontFace('MioCustomFont',mio642buf('%@'));"
+        "await f.load();document.fonts.add(f);"
+        "let fs=document.createElement('style');"
+        "fs.innerHTML=\"*{font-family:'MioCustomFont' !important;}\";"
+        "(document.head||document.documentElement).appendChild(fs);"
+        "}catch(e){}})()", b64];
+}
+
+static void MioInjectIfEnabled(id webView) {
     @try {
-        // WCR 反编译同款：URL 走 task.request.URL（task 上没有 URL 属性）
-        NSURLRequest *req = ((NSURLRequest *(*)(id, SEL))objc_msgSend)(task, NSSelectorFromString(@"request"));
-        NSURL *url = req.URL;
-        NSString *path = [FontBeautifyConfig shared].fontBeautifyFilePath;
-        NSData *data = path.length ? [NSData dataWithContentsOfFile:path] : nil;
-        if (data.length == 0) {
-            // WCR 同款：读不到文件回 404 错误，让网页走字体回退
-            NSError *err = [NSError errorWithDomain:@"MioFont" code:404 userInfo:nil];
-            ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didFailWithError:"), err);
-            WPLog(@"FontBeautify", @"[WEB] 字体文件读取失败 → didFailWithError 404");
-            return;
-        }
-        WPLog(@"FontBeautify", @"[WEB] ✓ 网页请求字体 %@ → 回吐 %lu 字节", path.lastPathComponent, (unsigned long)data.length);
-        NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
-            initWithURL:url
-               statusCode:200
-              HTTPVersion:@"HTTP/1.1"
-             headerFields:@{ @"Content-Type": @"font/ttf",
-                             @"Content-Length": [NSString stringWithFormat:@"%lu", (unsigned long)data.length],
-                             @"Access-Control-Allow-Origin": @"*",
-                             @"Cache-Control": @"no-cache" }];
-        ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didReceiveResponse:"), resp);
-        ((void (*)(id, SEL, id))objc_msgSend)(task, NSSelectorFromString(@"didReceiveData:"), data);
-        // 收尾选择器运行时探测：WCR 反编译发的是 didFinish（此运行时的
-        // WKURLSchemeTaskImpl 不认公开协议的 didFinishLoading），有则优先
-        SEL finishSel = NSSelectorFromString(@"didFinish");
-        if ([(id)task respondsToSelector:finishSel]) {
-            ((void (*)(id, SEL))objc_msgSend)(task, finishSel);
-        } else {
-            SEL fallbackSel = NSSelectorFromString(@"didFinishLoading");
-            if ([(id)task respondsToSelector:fallbackSel]) {
-                ((void (*)(id, SEL))objc_msgSend)(task, fallbackSel);
-            } else {
-                WPLog(@"FontBeautify", @"[WEB] ⚠️ didFinish/didFinishLoading 均不可用");
-            }
-        }
+        FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
+        if (!cfg.enableFontBeautify || cfg.fontBeautifyFilePath.length == 0) return;
+        NSString *js = MioFontJS();
+        if (!js) return;
+        ((void (*)(id, SEL, id, id))objc_msgSend)(
+            webView, NSSelectorFromString(@"evaluateJavaScript:completionHandler:"), js, nil);
+        WPLog(@"FontBeautify", @"[WEB] ✓ evaluateJavaScript 注入完成");
     } @catch (NSException *e) {
-        WPLog(@"FontBeautify", @"[WEB] scheme task exception: %@", e);
+        WPLog(@"FontBeautify", @"[WEB] inject exception: %@", e);
     }
 }
 
-- (void)webView:(id)webView stopURLSchemeTask:(id)task {
-    // 一次性小响应，无需取消逻辑
+// ── hook setNavigationDelegate: 捕获微信的导航代理 ──
+
+static IMP g_orig_setNavDelegate = NULL;
+
+// 已挂钩的代理类集合（一个类只挂一次；orig IMP 存在类的关联对象上，
+// 支持微信使用多个不同代理类的情况）
+static NSMutableSet *g_hookedClasses = nil;
+
+static id repl_didFinishNavigation(id self, SEL _cmd, id webView, id navigation) {
+    // 调原实现（页面正常加载完成）
+    IMP orig = (IMP)objc_getAssociatedObject(object_getClass(self), "mioOrigDidFinish");
+    if (orig) ((void (*)(id, SEL, id, id))orig)(self, _cmd, webView, navigation);
+    // 注入字体（开关关闭时 MioInjectIfEnabled 内部直接跳过）
+    MioInjectIfEnabled(webView);
+    return nil;
 }
 
-@end
+static id repl_setNavigationDelegate(id self, SEL _cmd, id delegate) {
+    id result = ((id (*)(id, SEL, id))g_orig_setNavDelegate)(self, _cmd, delegate);
+    @try {
+        if (!delegate) return result;
+        FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
+        if (!cfg.enableFontBeautify || cfg.fontBeautifyFilePath.length == 0) return result;
 
-// ── WKWebView init hook：注册 scheme + 注入 @font-face 样式 ──
+        if (!g_hookedClasses) g_hookedClasses = [NSMutableSet set];
+        Class cls = object_getClass(delegate);
+        if ([g_hookedClasses containsObject:cls]) return result;
 
-static IMP g_orig_wkInit = NULL;
-
-// 注入策略（针对文章页 CSP font-src 白名单会拦掉 miofont:// 的 url() 加载）：
-// 1. CSS 只声明 font-family，不写 @font-face url() —— 不触发 font-src 检查
-// 2. fetch('miofont://') 拿字体字节流（该域名 CSP 无 connect-src 指令，fetch 不受限）
-// 3. new FontFace(ArrayBuffer) 从内存注册 —— 数据源不走网络层，无 CSP 拦截点
-static NSString * const kFontJS =
-    @"(function(){"
-    "try{"
-    "var s=document.createElement('style');"
-    "s.textContent=\"*{font-family:'MioCustomFont' !important;}\";"
-    "(document.head||document.documentElement).appendChild(s);"
-    "fetch('miofont://local/font.ttf').then(function(r){return r.arrayBuffer();})"
-    ".then(function(buf){return new FontFace('MioCustomFont',buf).load();})"
-    ".then(function(f){document.fonts.add(f);})"
-    ".catch(function(e){});"
-    "}catch(e){}"
-    "})();";
-
-static id repl_wkInit(id self, SEL _cmd, CGRect frame, id config) {
-    // 每次建 WebView 时检查开关（切换开关后新页面立即生效）
-    FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
-    if (cfg.enableFontBeautify && cfg.fontBeautifyFilePath.length > 0) {
-        @try {
-            if (!config) {
-                config = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("WKWebViewConfiguration"), NSSelectorFromString(@"alloc"));
-                config = ((id (*)(id, SEL))objc_msgSend)(config, NSSelectorFromString(@"init"));
-            }
-            SEL handlerSel = NSSelectorFromString(@"setURLSchemeHandler:forURLScheme:");
-            if ([config respondsToSelector:handlerSel]) {
-                id handler = [[MioFontSchemeHandler alloc] init];
-                ((void (*)(id, SEL, id, NSString *))objc_msgSend)(config, handlerSel, handler, @"miofont");
-            }
-            // 注入样式：documentEnd 挂载（晚于页面样式表，等特异性 !important 后写者胜）
-            Class scriptCls = objc_getClass("WKUserScript");
-            SEL scriptSel = NSSelectorFromString(@"initWithSource:injectionTime:forMainFrameOnly:");
-            WPLog(@"FontBeautify", @"[WEB] 注入 webview config=%@ scheme=%@ script=%@",
-                  NSStringFromClass([config class]),
-                  [config respondsToSelector:handlerSel] ? @"OK" : @"不支持",
-                  (scriptCls && [scriptCls instancesRespondToSelector:scriptSel]) ? @"OK" : @"不支持");
-            if (scriptCls && [scriptCls instancesRespondToSelector:scriptSel]) {
-                id script = ((id (*)(id, SEL, NSString *, NSInteger, BOOL))objc_msgSend)(
-                    ((id (*)(id, SEL))objc_msgSend)(scriptCls, NSSelectorFromString(@"alloc")),
-                    scriptSel, kFontJS, 1 /* atDocumentEnd */, NO);
-                id ucc = ((id (*)(id, SEL))objc_msgSend)(config, NSSelectorFromString(@"userContentController"));
-                ((void (*)(id, SEL, id))objc_msgSend)(ucc, NSSelectorFromString(@"addUserScript:"), script);
-            }
-        } @catch (NSException *e) {
-            WPLog(@"FontBeautify", @"[WEB] inject exception: %@", e);
+        SEL sel = NSSelectorFromString(@"webView:didFinishNavigation:");
+        Method m = class_getInstanceMethod(cls, sel);
+        if (!m) {
+            WPLog(@"FontBeautify", @"[WEB] 代理类 %@ 无 didFinishNavigation，跳过", NSStringFromClass(cls));
+            [g_hookedClasses addObject:cls]; // 标记已检查，避免重复探测
+            return result;
         }
+        IMP orig = method_getImplementation(m);
+        objc_setAssociatedObject(cls, "mioOrigDidFinish", (__bridge id)(void *)orig, OBJC_ASSOCIATION_RETAIN);
+        MSHookMessageEx(cls, sel, (IMP)repl_didFinishNavigation, NULL);
+        [g_hookedClasses addObject:cls];
+        WPLog(@"FontBeautify", @"[WEB] ✓ 已挂钩代理类 %@ 的 didFinishNavigation", NSStringFromClass(cls));
+    } @catch (NSException *e) {
+        WPLog(@"FontBeautify", @"[WEB] setNavDelegate exception: %@", e);
     }
-    return ((id (*)(id, SEL, CGRect, id))g_orig_wkInit)(self, _cmd, frame, config);
+    return result;
 }
 
 @implementation FontBeautifyWebView
 
 + (void)install {
     Class wkCls = objc_getClass("WKWebView");
-    SEL initSel = NSSelectorFromString(@"initWithFrame:configuration:");
-    if (!wkCls || ![wkCls instancesRespondToSelector:initSel]) {
-        WPLog(@"FontBeautify", @"[WEB] WKWebView initWithFrame:configuration: 不存在，未安装");
+    SEL sel = NSSelectorFromString(@"setNavigationDelegate:");
+    if (!wkCls || ![wkCls instancesRespondToSelector:sel]) {
+        WPLog(@"FontBeautify", @"[WEB] WKWebView setNavigationDelegate: 不存在，未安装");
         return;
     }
-    MSHookMessageEx(wkCls, initSel, (IMP)repl_wkInit, &g_orig_wkInit);
-    WPLog(@"FontBeautify", @"[WEB] ✓ WKWebView init hook 已安装（@font-face + miofont:// scheme）");
+    MSHookMessageEx(wkCls, sel, (IMP)repl_setNavigationDelegate, &g_orig_setNavDelegate);
+    WPLog(@"FontBeautify", @"[WEB] ✓ 锤子助手同款注入已安装（base64 内嵌 + evaluateJavaScript）");
 }
 
 @end
