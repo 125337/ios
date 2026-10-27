@@ -19,6 +19,7 @@
         NSString *path = [FontBeautifyConfig shared].fontBeautifyFilePath;
         NSData *data = path.length ? [NSData dataWithContentsOfFile:path] : nil;
         if (!data) data = [NSData data]; // 空响应，网页回退系统字体
+        WPLog(@"FontBeautify", @"[WEB] ✓ 网页请求字体 %@ → 回吐 %lu 字节", path.lastPathComponent, (unsigned long)data.length);
         NSHTTPURLResponse *resp = [[NSHTTPURLResponse alloc]
             initWithURL:((NSURL *(*)(id, SEL))objc_msgSend)(task, NSSelectorFromString(@"URL"))
                statusCode:200
@@ -69,6 +70,10 @@ static id repl_wkInit(id self, SEL _cmd, CGRect frame, id config) {
             // 注入样式：documentEnd 挂载（晚于页面样式表，等特异性 !important 后写者胜）
             Class scriptCls = objc_getClass("WKUserScript");
             SEL scriptSel = NSSelectorFromString(@"initWithSource:injectionTime:forMainFrameOnly:");
+            WPLog(@"FontBeautify", @"[WEB] 注入 webview config=%@ scheme=%@ script=%@",
+                  NSStringFromClass([config class]),
+                  [config respondsToSelector:handlerSel] ? @"OK" : @"不支持",
+                  (scriptCls && [scriptCls instancesRespondToSelector:scriptSel]) ? @"OK" : @"不支持");
             if (scriptCls && [scriptCls instancesRespondToSelector:scriptSel]) {
                 id script = ((id (*)(id, SEL, NSString *, NSInteger, BOOL))objc_msgSend)(
                     ((id (*)(id, SEL))objc_msgSend)(scriptCls, NSSelectorFromString(@"alloc")),
