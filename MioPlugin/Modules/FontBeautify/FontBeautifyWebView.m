@@ -20,7 +20,8 @@ static NSString *g_b64Font = nil;
 static NSString *g_b64Path = nil;
 
 static NSString *MioFontBase64(void) {
-    NSString *path = [FontBeautifyConfig shared].fontBeautifyFilePath;
+    // 配置只存文件名，运行时按当前容器 Library/MioFonts 解析（容器迁移不失效）
+    NSString *path = [[FontBeautifyConfig shared] resolvedActiveFontPath];
     if (path.length == 0) return nil;
     if (g_b64Font && [g_b64Path isEqualToString:path]) return g_b64Font;
     NSData *data = [NSData dataWithContentsOfFile:path];
@@ -54,7 +55,7 @@ static NSString *MioFontJS(void) {
 static void MioInjectIfEnabled(id webView) {
     @try {
         FontBeautifyConfig *cfg = [FontBeautifyConfig shared];
-        if (!cfg.enableFontBeautify || cfg.fontBeautifyFilePath.length == 0) return;
+        if (!cfg.enableFontBeautify || [cfg resolvedActiveFontPath].length == 0) return;
         NSString *js = MioFontJS();
         if (!js) return;
         ((void (*)(id, SEL, id, id))objc_msgSend)(

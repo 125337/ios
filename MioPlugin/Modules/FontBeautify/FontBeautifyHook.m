@@ -105,12 +105,11 @@ static id repl_fontWithName_size(id self, SEL _cmd, id name, CGFloat size) {
     return MioRebuildFont(orig, size, 0);
 }
 
-// 注册 MioFonts 目录下全部字体（进程级；导入后新增文件靠 3 秒兜底重扫）
+// 注册 MioFonts 目录下全部字体（进程级；目录由 FontBeautifyConfig mioFontsDir 按当前容器解析，
+// 配置只存文件名，容器迁移不失效。导入后新增文件靠 3 秒兜底重扫）
 // 必须在 hook 生效后尽快执行，s_fontReady 立起前重建函数不工作（防 UIKit 死缓存）
 static void MioRegisterAllImportedFonts(void) {
-    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)
-                     firstObject];
-    dir = [dir stringByAppendingPathComponent:@"MioFonts"];
+    NSString *dir = [FontBeautifyConfig mioFontsDir];
     NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil];
     NSInteger n = 0;
     for (NSString *name in files) {

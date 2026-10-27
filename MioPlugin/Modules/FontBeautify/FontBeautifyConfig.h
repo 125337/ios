@@ -12,10 +12,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *fontBeautifyFamilyName;
 // PostScript 名（kCTFontNameAttribute，预留）
 @property (nonatomic, copy) NSString *fontBeautifyPostScriptName;
-// 字体文件在沙盒内的落盘路径（重启后按此路径重新注册进进程字体表）
-@property (nonatomic, copy) NSString *fontBeautifyFilePath;
+// 字体文件名（只存文件名不存路径：容器 UUID 迁移后绝对路径会失效，
+// 运行时统一按 Library/MioFonts/<文件名> 解析）
+@property (nonatomic, copy) NSString *fontBeautifyFileName;
 
 + (instancetype)shared;
+
+/// 字体统一落盘目录：Library/MioFonts（目录不存在则创建）
++ (NSString *)mioFontsDir;
+/// 当前启用字体的完整路径：fontBeautifyFileName 非空且文件存在时返回路径，否则返回 nil
+- (NSString *)resolvedActiveFontPath;
 
 @end
 
