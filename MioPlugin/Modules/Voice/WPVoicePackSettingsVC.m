@@ -54,7 +54,7 @@
     } cy:pcy width:w];
     y = [self finishGroup:packGroup atY:y height:pcy];
 
-    y = [self addSectionFooter:@"语音包目录：Documents/Mio助手/语音包\n导入 mp3/m4a/wav 等常见格式可直接预览，伪装语音发送以实际兼容性为准。"
+    y = [self addSectionFooter:@"语音包目录：Library/Preferences/Mio/语音包\n导入 mp3/m4a/wav 等常见格式可直接预览，伪装语音发送以实际兼容性为准。"
                              y:y + 4
                           width:w];
     y += 8;

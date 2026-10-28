@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface VoicePackStore : NSObject
 
 #pragma mark - 目录
-/// 语音包根目录：Documents/Mio助手/语音包
+/// 语音包根目录：Library/Preferences/Mio/语音包（Preferences 目录"部分还原"式安装会整体还原，免疫丢文件）
 + (NSString *)rootDirectory;
 + (void)ensureRootDirectoryExists;
 + (nullable NSString *)relPathForAbsPath:(NSString *)absPath;

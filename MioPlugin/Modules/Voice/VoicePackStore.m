@@ -156,8 +156,11 @@ static NSData *MioDecodeSilkToPlayable(NSData *wire) {
 #pragma mark - 目录
 
 + (NSString *)rootDirectory {
-    NSString *docs = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    return [docs stringByAppendingPathComponent:@"Mio助手/语音包"];
+    // Library/Preferences/Mio/语音包：Preferences 是"部分还原"式安装唯一会被还原的目录
+    // （NSUserDefaults 也在这），语音包放这里跟着一起活下来，免疫覆盖安装丢文件
+    // （Documents 实测重签覆盖安装会丢，见 MioImageVault.h 头注释同款教训）
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) firstObject];
+    return [dir stringByAppendingPathComponent:@"Preferences/Mio/语音包"];
 }
 
 + (void)ensureRootDirectoryExists {
