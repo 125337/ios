@@ -35,18 +35,25 @@ static NSString *MioFontImportFilePath(id cellView, NSString * _Nullable * _Null
     @try { task = [taskWrap valueForKey:@"task"]; } @catch (NSException *e) {}
     if (!task) return nil;
 
-    // 原始文件名：task 的文件名属性名未知（description 串里显示 name: 是拼出来的），
-    // 多候选 KVC 逐个试，命中即用（聊天界面显示的那个，如"松子琥珀.ttf"）
+    // 原始文件名：task 的文件名属性名未知（description 串里显示 name: 是拼出来的，
+    // 5 个候选 KVC 全落空，log 27 实锤）。改从 cell 的 accessibilityLabel 取——
+    // 视图查看器实锤内容为"小涵 松子琥珀.ttf,11.20MB,已下载"，按空格/逗号拆词
+    // 取带字体扩展名的那段，这个数据源稳定存在
     @try {
-        for (NSString *key in @[@"name", @"m_nsName", @"m_nsFileName", @"fileName", @"m_nsOriginFileName"]) {
-            id n = [task valueForKey:key];
-            if ([n isKindOfClass:[NSString class]] && [(NSString *)n length] > 0 && outTaskName) {
-                *outTaskName = n;
-                if (s_menuDiagBudget > 0) {
-                    s_menuDiagBudget--;
-                    WPLog(@"FontImport", @"[MENU] taskName key=%@ value=%@", key, n);
+        NSString *al = [(id)cellView accessibilityLabel];
+        if (al.length > 0 && outTaskName && !*outTaskName) {
+            for (NSString *word in [al componentsSeparatedByCharactersInSet:
+                 [NSCharacterSet characterSetWithCharactersInString:@" ,，"]]) {
+                NSString *ext = word.pathExtension.lowercaseString;
+                if ([ext isEqualToString:@"ttf"] || [ext isEqualToString:@"otf"] ||
+                    [ext isEqualToString:@"ttc"]) {
+                    *outTaskName = word;
+                    if (s_menuDiagBudget > 0) {
+                        s_menuDiagBudget--;
+                        WPLog(@"FontImport", @"[MENU] taskName ← accessibilityLabel: %@", word);
+                    }
+                    break;
                 }
-                break;
             }
         }
     } @catch (NSException *e) {}

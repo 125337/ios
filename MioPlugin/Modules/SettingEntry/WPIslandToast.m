@@ -80,6 +80,16 @@ static const CGFloat kTopMargin  = 6.0;
 
 @end
 
+#pragma mark - 触摸穿透窗（hitTest 永远 nil：触摸全部落回下层微信窗口）
+
+// 实测（log 27）：仅靠 rootViewController.view.userInteractionEnabled=NO 挡不住
+// 触摸（toast 期间刷不动屏幕），直接重写 hitTest 一劳永逸
+@interface WPIslandWindow : UIWindow
+@end
+@implementation WPIslandWindow
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event { return nil; }
+@end
+
 #pragma mark - WPIslandToast
 
 @interface WPIslandToast ()
@@ -177,12 +187,12 @@ static WPIslandToast *_current = nil;
     // 照跑 6 秒但画面早就没了（"闪一下"）。自己建高窗 + 触摸穿透，生命周期自管
     UIWindowScene *scene = anchor.windowScene;
     if (!scene) return;
-    UIWindow *toastWindow = [[UIWindow alloc] initWithWindowScene:scene];
+    UIWindow *toastWindow = [[WPIslandWindow alloc] initWithWindowScene:scene];
     toastWindow.windowLevel = UIWindowLevelAlert + 1000.0; // 压过微信自己的浮层窗
     toastWindow.frame = scene.coordinateSpace.bounds;
     toastWindow.backgroundColor = UIColor.clearColor;
     toastWindow.rootViewController = [UIViewController new];
-    toastWindow.rootViewController.view.userInteractionEnabled = NO; // 整窗穿透，不挡微信操作
+    toastWindow.rootViewController.view.userInteractionEnabled = NO; // 双保险（主穿透在 hitTest）
     self.hostWindow = toastWindow;
     toastWindow.hidden = NO;
 
