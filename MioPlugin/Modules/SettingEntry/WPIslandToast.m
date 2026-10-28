@@ -83,13 +83,14 @@ static const CGFloat kTopMargin  = 6.0;
 #pragma mark - WPIslandToast
 
 @interface WPIslandToast ()
-@property (nonatomic, strong) UIWindow *hostWindow;
+@property (nonatomic, strong) UIWindow *hostWindow;     // 专属宿主窗（自己创建，不寄微信窗口）
 @property (nonatomic, strong) UIView *stage;            // 定位 + 外阴影（不裁剪）
 @property (nonatomic, strong) WPIslandCapsuleView *capsule;
 @property (nonatomic, strong) UILabel *iconLabel;       // 彩色圆形图标
 @property (nonatomic, strong) UILabel *msgLabel;
 @property (nonatomic, assign) BOOL isShowing;
 @property (nonatomic, assign) NSTimeInterval startedAt; // 弹出时刻（实测全程用）
+@property (nonatomic, assign) CGFloat topInset;         // 弹出时定格的顶部间距（收起复用）
 @end
 
 @implementation WPIslandToast
@@ -161,13 +162,29 @@ static WPIslandToast *_current = nil;
 #pragma mark - Present
 
 - (void)presentWithType:(WPIslandToastType)type message:(NSString *)message {
-    UIWindow *window = self.hostWindow;
-    if (!window) return;
+    UIWindow *anchor = [WPIslandToast keyWindow];
+    if (!anchor) return;
 
-    CGFloat topInset = window.safeAreaInsets.top + kTopMargin;
-    CGSize screen = window.bounds.size;
+    // 顶部间距按锚点窗（真实屏幕参数）定格；后面自己建窗用
+    CGFloat topInset = anchor.safeAreaInsets.top + kTopMargin;
+    self.topInset = topInset;
+    CGSize screen = anchor.bounds.size;
     CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0, topInset,
                                   kCollapsedW, kCollapsedH);
+
+    // ---- 专属宿主窗：不挂在微信的 keyWindow 上 ----
+    // 实测（log 26）：挂微信窗口时，长按菜单收起会连带把 toast 视图带走——计时器
+    // 照跑 6 秒但画面早就没了（"闪一下"）。自己建高窗 + 触摸穿透，生命周期自管
+    UIWindowScene *scene = anchor.windowScene;
+    if (!scene) return;
+    UIWindow *toastWindow = [[UIWindow alloc] initWithWindowScene:scene];
+    toastWindow.windowLevel = UIWindowLevelAlert + 1000.0; // 压过微信自己的浮层窗
+    toastWindow.frame = scene.coordinateSpace.bounds;
+    toastWindow.backgroundColor = UIColor.clearColor;
+    toastWindow.rootViewController = [UIViewController new];
+    toastWindow.rootViewController.view.userInteractionEnabled = NO; // 整窗穿透，不挡微信操作
+    self.hostWindow = toastWindow;
+    toastWindow.hidden = NO;
 
     // stage：负责外阴影（capsule masksToBounds 会裁阴影，两者分离）
     UIView *stage = [[UIView alloc] initWithFrame:collapsed];
@@ -183,7 +200,7 @@ static WPIslandToast *_current = nil;
     capsule.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.capsule = capsule;
     [stage addSubview:capsule];
-    [window addSubview:stage];
+    [toastWindow.rootViewController.view addSubview:stage];
 
     // ---- 图标（初始缩小+透明，弹出时弹簧浮现）----
     UILabel *icon = [[UILabel alloc] initWithFrame:CGRectMake((kCollapsedW - kIconSize) / 2.0,
@@ -291,7 +308,7 @@ static WPIslandToast *_current = nil;
 
     CGSize screen = self.hostWindow.bounds.size;
     CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0,
-                                  self.hostWindow.safeAreaInsets.top + kTopMargin - 2,
+                                  self.topInset - 2,
                                   kCollapsedW, kCollapsedH);
 
     // 内容先淡出
@@ -306,6 +323,7 @@ static WPIslandToast *_current = nil;
                      animations:^{
         self.stage.frame = collapsed;
     } completion:^(BOOL finished) {
+        self.hostWindow.hidden = YES; // 专属窗自管生命周期：隐藏即收
         [self.stage removeFromSuperview];
         self.stage = nil;
     }];
