@@ -8,8 +8,10 @@ static const CGFloat kMaxW       = 330.0;
 static const CGFloat kIconSize   = 22.0;
 static const CGFloat kGap        = 10.0;
 static const CGFloat kPadX       = 18.0;
-static const CGFloat kTopInset   = 11.0;
 static const CGFloat kStaySec    = 2.4;
+// 顶部间距不再写死：真机灵动岛/刘海会压住固定 11pt 的位置，改为动态取
+// safeAreaInsets.top（灵动岛机型 ≈54pt 自动避让，无刘海机型 ≈20/0 再加基础间距）
+static const CGFloat kTopMargin  = 6.0;
 
 #pragma mark - 胶囊容器（毛玻璃 + 高光 + 圆角同步）
 
@@ -160,8 +162,9 @@ static WPIslandToast *_current = nil;
     UIWindow *window = self.hostWindow;
     if (!window) return;
 
+    CGFloat topInset = window.safeAreaInsets.top + kTopMargin;
     CGSize screen = window.bounds.size;
-    CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0, kTopInset,
+    CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0, topInset,
                                   kCollapsedW, kCollapsedH);
 
     // stage：负责外阴影（capsule masksToBounds 会裁阴影，两者分离）
@@ -212,7 +215,7 @@ static WPIslandToast *_current = nil;
     CGSize textSize = [msg sizeThatFits:CGSizeMake(maxTextW, kExpandedH)];
     CGFloat textW = ceil(MIN(textSize.width, maxTextW));
     CGFloat targetW = MIN(textW + kIconSize + kGap + kPadX * 2, kMaxW);
-    CGRect expanded = CGRectMake((screen.width - targetW) / 2.0, kTopInset,
+    CGRect expanded = CGRectMake((screen.width - targetW) / 2.0, topInset,
                                  targetW, kExpandedH);
 
     self.isShowing = YES;
@@ -281,7 +284,8 @@ static WPIslandToast *_current = nil;
     }
 
     CGSize screen = self.hostWindow.bounds.size;
-    CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0, kTopInset - 2,
+    CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0,
+                                  self.hostWindow.safeAreaInsets.top + kTopMargin - 2,
                                   kCollapsedW, kCollapsedH);
 
     // 内容先淡出
