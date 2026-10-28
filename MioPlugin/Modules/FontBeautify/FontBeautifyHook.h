@@ -22,8 +22,12 @@ UIFont *MioTrueSystemFont(CGFloat size, CGFloat weight);
 
 // 共享导入核心：把字体文件导入字体库（魔数校验 → 拷入 Preferences/Mio/fonts →
 // 进程级注册 → 读字族名/PostScript 名）。成功返回 YES 并回填 family/ps；
-// 失败 *errText 给出原因（nullable 出参）。选择页"导入"与聊天长按"导入字体"菜单共用
+// 失败 *errText 给出原因（nullable 出参）。
+// preferName：期望的落盘文件名（nullable，须带字体扩展名才生效）。微信聊天附件的
+// 真实文件名是"消息本地ID.ttf"（如 986.ttf），聊天导入时传 task.name 恢复原始名；
+// 选择页导入传 nil 用源文件名
 BOOL MioImportFontFromPath(NSString *srcPath,
+                           NSString * _Nullable preferName,
                            NSString * _Nullable * _Nullable outFamily,
                            NSString * _Nullable * _Nullable outPS,
                            NSString * _Nullable * _Nullable errText);

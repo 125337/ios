@@ -59,6 +59,7 @@ static NSString *MioFontMagicError(NSData *head) {
 }
 
 BOOL MioImportFontFromPath(NSString *srcPath,
+                           NSString * _Nullable preferName,
                            NSString * _Nullable * _Nullable outFamily,
                            NSString * _Nullable * _Nullable outPS,
                            NSString * _Nullable * _Nullable errText) {
@@ -70,6 +71,14 @@ BOOL MioImportFontFromPath(NSString *srcPath,
         ![[NSFileManager defaultManager] fileExistsAtPath:srcPath]) {
         if (errText) *errText = @"字体文件不存在（可能尚未下载）";
         return NO;
+    }
+
+    // 落盘名：preferName 带字体扩展名才采信（聊天附件源名是"消息本地ID.ttf"这种内部名）；
+    // 不做扩展名白名单拒绝——改名过的真字体（选择页 public.data UTI）照样能导，真伪由魔数把关
+    NSString *dstName = fileName;
+    if (preferName.length > 0 &&
+        [@[@"ttf", @"otf", @"ttc"] containsObject:preferName.pathExtension.lowercaseString]) {
+        dstName = preferName.lastPathComponent;
     }
 
     // 1) 魔数校验（只读头 4 字节，不整读大文件）
@@ -84,7 +93,7 @@ BOOL MioImportFontFromPath(NSString *srcPath,
 
     // 2) 拷入字体库（同名旧文件覆盖导入）
     NSString *dstPath = [[FontBeautifyConfig mioFontsDir]
-                         stringByAppendingPathComponent:fileName];
+                         stringByAppendingPathComponent:dstName];
     NSURL *dstURL = [NSURL fileURLWithPath:dstPath];
     [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil];
     NSError *fsErr = nil;

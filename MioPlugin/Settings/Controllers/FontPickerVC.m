@@ -244,12 +244,13 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
 }
 
 // 单个文件的「拷贝 + 注册 + 读元数据」——实现下沉到 FontBeautifyHook 的
-// MioImportFontFromPath（与聊天长按"导入字体"菜单共用，含魔数校验），本页只做转发
+// MioImportFontFromPath（与聊天长按"导入字体"菜单共用，含魔数校验），本页只做转发。
+// preferName 传 nil：选择页源文件就是用户看到的真实文件名
 - (BOOL)importOneFont:(NSURL *)srcURL
             outFamily:(NSString **)outFamily
                 outPS:(NSString **)outPS
               errText:(NSString **)errText {
-    return MioImportFontFromPath(srcURL.path, outFamily, outPS, errText);
+    return MioImportFontFromPath(srcURL.path, nil, outFamily, outPS, errText);
 }
 
 // 批量导入：拷入 Preferences/Mio/fonts → 进程级注册 → 失效缓存刷新列表（选择交给列表点选）

@@ -20,8 +20,11 @@ static NSInteger s_menuDiagBudget = 8; // 菜单诊断日志预算
 //   → MsgFileTransferTask(messageWrap) → CMessageWrap 的 msgFilePath 方法
 // 注意：CMessageWrap 没有 m_nsFilePath 属性（Filter path 实锤只有一个 weapp 冷门属性），
 // 路径只能调 msgFilePath（兜底 GetAppAttachmentPath）。文件未下载时路径为空，
-// 退回 task.name（纯文件名）供菜单门禁用，点击时 action 里会提示先下载
-static NSString *MioFontImportFilePath(id cellView) {
+// 退回 task.name（纯文件名）供菜单门禁用，点击时 action 里会提示先下载。
+// outTaskName：回传聊天里的原始文件名（如"松子琥珀.ttf"）——微信附件落盘名是
+// "消息本地ID.ttf"（986.ttf 实锤），导入落盘时用它恢复可读名
+static NSString *MioFontImportFilePath(id cellView, NSString * _Nullable * _Nullable outTaskName) {
+    if (outTaskName) *outTaskName = nil;
     id infoView = nil;
     @try { infoView = [cellView valueForKey:@"infoView"]; } @catch (NSException *e) {}
     if (!infoView) return nil;
@@ -31,6 +34,14 @@ static NSString *MioFontImportFilePath(id cellView) {
     id task = nil;
     @try { task = [taskWrap valueForKey:@"task"]; } @catch (NSException *e) {}
     if (!task) return nil;
+
+    // 原始文件名（task.name，聊天界面显示的那个）
+    @try {
+        id n = [task valueForKey:@"name"];
+        if ([n isKindOfClass:[NSString class]] && [(NSString *)n length] > 0 && outTaskName) {
+            *outTaskName = n;
+        }
+    } @catch (NSException *e) {}
 
     id wrap = nil;
     @try { wrap = [task valueForKey:@"messageWrap"]; } @catch (NSException *e) {}
@@ -44,11 +55,7 @@ static NSString *MioFontImportFilePath(id cellView) {
         }
     }
     // 未下载：拿纯文件名撑起菜单门禁
-    @try {
-        id n = [task valueForKey:@"name"];
-        if ([n isKindOfClass:[NSString class]] && [(NSString *)n length] > 0) return n;
-    } @catch (NSException *e) {}
-    return nil;
+    return outTaskName ? *outTaskName : nil;
 }
 
 // 扩展名粗筛（菜单显示与否）；ttc=字体集合，woff/woff2 显示菜单但导入时明确报错提示转换
@@ -67,9 +74,8 @@ static id hooked_AppFile_operationMenuItems(id self, SEL _cmd) {
     }
     if (!items) items = [NSMutableArray array];
 
-    NSString *path = MioFontImportFilePath(self);
-
-    // 诊断（限量）：菜单为何没挂上——cell 类名、解析出的路径、原始菜单项数
+    NSString *taskName = nil;
+    NSString *path = MioFontImportFilePath(self, &taskName);
     if (s_menuDiagBudget > 0) {
         s_menuDiagBudget--;
         id vm = nil;
@@ -102,15 +108,18 @@ static id hooked_AppFile_operationMenuItems(id self, SEL _cmd) {
     return items;
 }
 
-// 菜单点击：文件不存在提示先下载；否则走共享导入核心（魔数+拷贝+注册）
+// 菜单点击：文件不存在提示先下载；否则走共享导入核心（魔数+拷贝+注册）。
+// preferName 传聊天原始文件名：微信附件落盘名是"消息本地ID.ttf"（986.ttf 实锤），
+// 用 task.name（如"松子琥珀.ttf"）落盘才能对上聊天里看到的名字
 static void mioFontImportAction(id self, SEL _cmd) {
-    NSString *path = MioFontImportFilePath(self);
+    NSString *taskName = nil;
+    NSString *path = MioFontImportFilePath(self, &taskName);
     if (path.length == 0 || ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
         WPShowToast(@"文件尚未下载，请下载后再导入");
         return;
     }
     NSString *fam = nil, *ps = nil, *err = nil;
-    if (MioImportFontFromPath(path, &fam, &ps, &err)) {
+    if (MioImportFontFromPath(path, taskName, &fam, &ps, &err)) {
         [FontPickerVC invalidateFontCache]; // 失效选择页静态缓存，下次进页重扫
         WPShowToast([NSString stringWithFormat:@"已导入字体库：%@", fam ?: path.lastPathComponent]);
     } else {
