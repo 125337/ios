@@ -15,33 +15,39 @@ static IMP orig_AppFile_operationMenuItems = NULL;
 
 static NSInteger s_menuDiagBudget = 8; // 菜单诊断日志预算
 
-// 从 cell 取文件消息本地路径。属性名多候选：各家 cell 的 viewModel/wrap 命名不统一，
-// KVC 逐个试，取不到时由诊断日志暴露真实类名再补
+// 从 cell 取文件消息的本地路径。链路为视图查看器逐层实锤（2026-10-29）：
+//   cell(infoView) → ContentView(taskWrap) → FileTransferTaskWrap(task)
+//   → MsgFileTransferTask(messageWrap) → CMessageWrap 的 msgFilePath 方法
+// 注意：CMessageWrap 没有 m_nsFilePath 属性（Filter path 实锤只有一个 weapp 冷门属性），
+// 路径只能调 msgFilePath（兜底 GetAppAttachmentPath）。文件未下载时路径为空，
+// 退回 task.name（纯文件名）供菜单门禁用，点击时 action 里会提示先下载
 static NSString *MioFontImportFilePath(id cellView) {
+    id infoView = nil;
+    @try { infoView = [cellView valueForKey:@"infoView"]; } @catch (NSException *e) {}
+    if (!infoView) return nil;
+    id taskWrap = nil;
+    @try { taskWrap = [infoView valueForKey:@"taskWrap"]; } @catch (NSException *e) {}
+    if (!taskWrap) return nil;
+    id task = nil;
+    @try { task = [taskWrap valueForKey:@"task"]; } @catch (NSException *e) {}
+    if (!task) return nil;
+
     id wrap = nil;
-    for (NSString *vmKey in @[@"m_viewModel", @"viewModel", @"m_messageViewModel"]) {
-        @try {
-            id vm = [cellView valueForKey:vmKey];
-            if (!vm) continue;
-            for (NSString *wrapKey in @[@"m_messageWrap", @"messageWrap"]) {
-                @try {
-                    id w = [vm valueForKey:wrapKey];
-                    if (w) { wrap = w; break; }
-                } @catch (NSException *e) {}
+    @try { wrap = [task valueForKey:@"messageWrap"]; } @catch (NSException *e) {}
+    if (wrap) {
+        for (NSString *selName in @[@"msgFilePath", @"GetAppAttachmentPath"]) {
+            SEL pSel = NSSelectorFromString(selName);
+            if ([wrap respondsToSelector:pSel]) {
+                id p = ((id(*)(id, SEL))objc_msgSend)(wrap, pSel);
+                if ([p isKindOfClass:[NSString class]] && [(NSString *)p length] > 0) return p;
             }
-            if (wrap) break;
-        } @catch (NSException *e) {}
+        }
     }
-    if (!wrap) {
-        @try { wrap = [cellView valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
-    }
-    if (!wrap) return nil;
-    for (NSString *key in @[@"m_nsFilePath", @"m_nsRealChatFilePath"]) {
-        @try {
-            NSString *p = [wrap valueForKey:key];
-            if ([p isKindOfClass:[NSString class]] && p.length > 0) return p;
-        } @catch (NSException *e) {}
-    }
+    // 未下载：拿纯文件名撑起菜单门禁
+    @try {
+        id n = [task valueForKey:@"name"];
+        if ([n isKindOfClass:[NSString class]] && [(NSString *)n length] > 0) return n;
+    } @catch (NSException *e) {}
     return nil;
 }
 
