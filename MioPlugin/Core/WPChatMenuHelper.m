@@ -132,6 +132,9 @@ static id hooked_generateOperationMenu(id self, SEL _cmd) {
     return items;
 }
 
+@implementation MioChatMenuSpec
+@end
+
 @implementation WPChatMenuHelper
 
 + (void)install {
