@@ -108,19 +108,25 @@ static WPIslandToast *_current = nil;
         return;
     }
 
-    // 已有旧的，先收掉（新提示顶掉旧提示）
-    if (_current) {
-        [_current collapseAnimated:NO];
-        _current = nil;
-    }
+    // 实锤（log 28）：长按菜单点击回调触发的瞬间，keyWindow 还是菜单自己的浮层窗，
+    // toast 挂上去会跟着菜单收起一起销毁——6 秒定时器照跑但画面"闪一下就没了"。
+    // 对策双保险：① 跳到下一个主队列 tick，让菜单 teardown 先走完；② hostWindow
+    // 只认有 rootViewController 的主窗（浮层窗没有 rootViewController，见下）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // 已有旧的，先收掉（新提示顶掉旧提示）
+        if (_current) {
+            [_current collapseAnimated:NO];
+            _current = nil;
+        }
 
-    UIWindow *window = [self keyWindow];
-    if (!window) return;
+        UIWindow *window = [self hostWindow];
+        if (!window) return;
 
-    WPIslandToast *toast = [WPIslandToast new];
-    toast.hostWindow = window;
-    _current = toast;
-    [toast presentWithType:type message:message];
+        WPIslandToast *toast = [WPIslandToast new];
+        toast.hostWindow = window;
+        _current = toast;
+        [toast presentWithType:type message:message];
+    });
 }
 
 + (void)hide {
@@ -136,17 +142,20 @@ static WPIslandToast *_current = nil;
 
 #pragma mark - Window
 
-+ (UIWindow *)keyWindow {
-    UIWindow *window = nil;
+// 只认"主窗"：有 rootViewController 的窗（微信主窗/导航窗都有，菜单、键盘等浮层
+// 窗没有 rootViewController）。优先 keyWindow，其次任意主窗，最后兜底第一扇窗
++ (UIWindow *)hostWindow {
+    UIWindow *fallback = nil;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if (![scene isKindOfClass:UIWindowScene.class]) continue;
         for (UIWindow *w in ((UIWindowScene *)scene).windows) {
-            if (w.isKeyWindow) { window = w; break; }
+            if (!w.rootViewController) continue; // 浮层窗：跳过
+            if (w.isKeyWindow) return w;
+            if (!fallback) fallback = w;
         }
-        if (window) break;
     }
-    if (!window) window = UIApplication.sharedApplication.windows.firstObject;
-    return window;
+    if (fallback) return fallback;
+    return UIApplication.sharedApplication.windows.firstObject;
 }
 
 #pragma mark - 内容布局（展开态：图标 + 间距 + 文字水平排列，垂直居中）
@@ -162,7 +171,7 @@ static WPIslandToast *_current = nil;
 #pragma mark - Present
 
 - (void)presentWithType:(WPIslandToastType)type message:(NSString *)message {
-    UIWindow *anchor = [WPIslandToast keyWindow];
+    UIWindow *anchor = self.hostWindow ?: [WPIslandToast hostWindow];
     if (!anchor) return;
 
     // 顶部间距按锚点窗（真实屏幕参数）定格；后面自己建窗用
