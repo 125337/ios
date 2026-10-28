@@ -115,7 +115,7 @@ static WPIslandToast *_current = nil;
     dispatch_async(dispatch_get_main_queue(), ^{
         // 已有旧的，先收掉（新提示顶掉旧提示）
         if (_current) {
-            [_current collapseAnimated:NO];
+            [_current collapseAnimated:NO reason:@"被新提示顶掉"];
             _current = nil;
         }
 
@@ -135,7 +135,7 @@ static WPIslandToast *_current = nil;
         return;
     }
     if (_current) {
-        [_current collapseAnimated:YES];
+        [_current collapseAnimated:YES reason:@"主动hide"];
         _current = nil;
     }
 }
@@ -293,18 +293,21 @@ static WPIslandToast *_current = nil;
                    dispatch_get_main_queue(), ^{
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || !self.isShowing) return;
-        [self collapseAnimated:YES];
+        [self collapseAnimated:YES reason:@"定时到点"];
         if (_current == self) _current = nil;
     });
 }
 
 #pragma mark - Collapse
 
-- (void)collapseAnimated:(BOOL)animated {
+- (void)collapseAnimated:(BOOL)animated reason:(NSString *)reason {
     if (!self.stage) return;
     self.isShowing = NO;
-    WPLog(@"UI", @"[Toast] └ 收起：全程 %.2f 秒（设计值 2.40 弹出 + 0.44 收尾）",
-          CACurrentMediaTime() - self.startedAt);
+    // stage 已被外力摘除（不在任何窗口上）时特别标注——这是排查"闪没"的关键证据
+    BOOL orphaned = (self.stage.superview == nil);
+    WPLog(@"UI", @"[Toast] └ 收起(%@)：全程 %.2f 秒%@",
+          reason, CACurrentMediaTime() - self.startedAt,
+          orphaned ? @"⚠️ stage已被外力移除" : @"");
 
     if (!animated) {
         [self.stage removeFromSuperview];
