@@ -35,11 +35,19 @@ static NSString *MioFontImportFilePath(id cellView, NSString * _Nullable * _Null
     @try { task = [taskWrap valueForKey:@"task"]; } @catch (NSException *e) {}
     if (!task) return nil;
 
-    // 原始文件名（task.name，聊天界面显示的那个）
+    // 原始文件名：task 的文件名属性名未知（description 串里显示 name: 是拼出来的），
+    // 多候选 KVC 逐个试，命中即用（聊天界面显示的那个，如"松子琥珀.ttf"）
     @try {
-        id n = [task valueForKey:@"name"];
-        if ([n isKindOfClass:[NSString class]] && [(NSString *)n length] > 0 && outTaskName) {
-            *outTaskName = n;
+        for (NSString *key in @[@"name", @"m_nsName", @"m_nsFileName", @"fileName", @"m_nsOriginFileName"]) {
+            id n = [task valueForKey:key];
+            if ([n isKindOfClass:[NSString class]] && [(NSString *)n length] > 0 && outTaskName) {
+                *outTaskName = n;
+                if (s_menuDiagBudget > 0) {
+                    s_menuDiagBudget--;
+                    WPLog(@"FontImport", @"[MENU] taskName key=%@ value=%@", key, n);
+                }
+                break;
+            }
         }
     } @catch (NSException *e) {}
 
@@ -121,7 +129,10 @@ static void mioFontImportAction(id self, SEL _cmd) {
     NSString *fam = nil, *ps = nil, *err = nil;
     if (MioImportFontFromPath(path, taskName, &fam, &ps, &err)) {
         [FontPickerVC invalidateFontCache]; // 失效选择页静态缓存，下次进页重扫
-        WPShowToast([NSString stringWithFormat:@"已导入字体库：%@", fam ?: path.lastPathComponent]);
+        // 提示用文件名（聊天里看到的那个），不用字体内部元数据的字族名（可能是
+        // "SZHPLMSXT (Non-Commercial Use)"这种怪名）
+        WPShowToast([NSString stringWithFormat:@"已导入字体库：%@",
+                     taskName ?: path.lastPathComponent]);
     } else {
         WPShowToast(err ?: @"导入失败");
         WPLog(@"FontImport", @"[FontImport] import FAIL %@ → %@", path.lastPathComponent, err ?: @"?");

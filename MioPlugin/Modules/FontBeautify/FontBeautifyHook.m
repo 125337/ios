@@ -58,6 +58,38 @@ static NSString *MioFontMagicError(NSData *head) {
     return @"文件内容不是有效的 TTF/OTF 字体（扩展名可能是假的）";
 }
 
+// 305=FontNameTaken：同名字体（同 PS 名）已被字体库其他文件注册——典型场景：同一
+// 字体既以"986.ttf"内部名导过、又以原始名再导一次。锤子式 Unregister→Register：
+// 反注册字体库全部文件 → 先注册本次文件 → 再注册其余（重名文件忽略错误），保证一致
+static BOOL MioReRegisterAllFonts(NSURL *mustURL) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [FontBeautifyConfig mioFontsDir];
+    NSArray *names = [fm contentsOfDirectoryAtPath:dir error:nil] ?: @[];
+    NSMutableArray *urls = [NSMutableArray array];
+    for (NSString *n in names) {
+        NSString *ext = n.pathExtension.lowercaseString;
+        if (![ext isEqualToString:@"ttf"] && ![ext isEqualToString:@"otf"] &&
+            ![ext isEqualToString:@"ttc"]) continue;
+        [urls addObject:[NSURL fileURLWithPath:[dir stringByAppendingPathComponent:n]]];
+    }
+    for (NSURL *u in urls) { // 全部反注册（未注册过的报错忽略）
+        CTFontManagerUnregisterFontsForURL((__bridge CFURLRef)u, kCTFontManagerScopeProcess, NULL);
+    }
+    // 本次文件先注册（占用字体名的主），其余文件随后，重名 305 忽略
+    CFErrorRef e = NULL;
+    CTFontManagerRegisterFontsForURL((__bridge CFURLRef)mustURL, kCTFontManagerScopeProcess, &e);
+    if (e) CFRelease(e);
+    for (NSURL *u in urls) {
+        if ([u isEqual:mustURL]) continue;
+        e = NULL;
+        CTFontManagerRegisterFontsForURL((__bridge CFURLRef)u, kCTFontManagerScopeProcess, &e);
+        if (e) CFRelease(e);
+    }
+    WPLog(@"FontBeautify", @"[IMPORT] 305 名字冲突，已反注册全部并重注册（%lu 文件）",
+          (unsigned long)urls.count);
+    return YES;
+}
+
 BOOL MioImportFontFromPath(NSString *srcPath,
                            NSString * _Nullable preferName,
                            NSString * _Nullable * _Nullable outFamily,
@@ -102,15 +134,20 @@ BOOL MioImportFontFromPath(NSString *srcPath,
         return NO;
     }
 
-    // 3) 进程级注册（错误码 105 = 已注册，忽略）
+    // 3) 进程级注册（105=已注册忽略；305=字体名被库内其他文件占用→全量重注册）
     CFErrorRef regErr = NULL;
     CTFontManagerRegisterFontsForURL((__bridge CFURLRef)dstURL, kCTFontManagerScopeProcess, &regErr);
     if (regErr) {
         CFIndex code = CFErrorGetCode(regErr);
         CFRelease(regErr);
         if (code != 105 /* kCTFontManagerErrorAlreadyRegistered */) {
-            if (errText) *errText = [NSString stringWithFormat:@"注册失败: 错误码 %ld", (long)code];
-            return NO;
+            BOOL recovered = (code == 305 /* kCTFontManagerErrorFontNameTaken */)
+                             ? MioReRegisterAllFonts(dstURL) : NO;
+            if (!recovered) {
+                [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil]; // 回滚拷贝
+                if (errText) *errText = [NSString stringWithFormat:@"注册失败: 错误码 %ld", (long)code];
+                return NO;
+            }
         }
     }
 
@@ -118,6 +155,7 @@ BOOL MioImportFontFromPath(NSString *srcPath,
     CFArrayRef descs = CTFontManagerCreateFontDescriptorsFromURL((__bridge CFURLRef)dstURL);
     if (!descs || CFArrayGetCount(descs) == 0) {
         if (descs) CFRelease(descs);
+        [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil]; // 回滚拷贝
         if (errText) *errText = [NSString stringWithFormat:@"%@ 中未找到字体描述符", fileName];
         return NO;
     }
@@ -126,13 +164,14 @@ BOOL MioImportFontFromPath(NSString *srcPath,
     NSString *psName = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontNameAttribute));
     CFRelease(descs);
     if (family.length == 0) {
+        [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil]; // 回滚拷贝
         if (errText) *errText = [NSString stringWithFormat:@"%@ 未读取到字族名", fileName];
         return NO;
     }
 
     if (outFamily) *outFamily = family;
     if (outPS) *outPS = psName ?: @"";
-    WPLog(@"FontBeautify", @"[IMPORT] %@ → family=%@ ps=%@", fileName, family, psName ?: @"");
+    WPLog(@"FontBeautify", @"[IMPORT] %@ → family=%@ ps=%@", dstName, family, psName ?: @"");
     return YES;
 }
 
