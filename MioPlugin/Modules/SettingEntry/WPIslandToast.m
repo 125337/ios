@@ -80,6 +80,20 @@ static const CGFloat kTopMargin  = 6.0;
 
 @end
 
+#pragma mark - 专属小窗（只有胶囊那么大，屏幕其余部分触摸天然落回微信窗口）
+
+// log 29 教训：挂在微信 keyWindow 上的视图，生死不由自己——被外力摘掉后画面
+// "闪没"而定时器照跑。改回专属窗根治；但窗体只做胶囊那一条（非全屏），
+// 不存在挡滑动问题；hitTest 返回 nil 是双保险
+@interface WPIslandWindow : UIWindow
+@end
+@implementation WPIslandWindow
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event { return nil; }
+@end
+
+// 常驻复用：一次创建，hidden 切换收/放，避免每次弹 toast 都建窗
+static WPIslandWindow *_toastWin = nil;
+
 #pragma mark - WPIslandToast
 
 @interface WPIslandToast ()
@@ -181,16 +195,25 @@ static WPIslandToast *_current = nil;
     CGRect collapsed = CGRectMake((screen.width - kCollapsedW) / 2.0, topInset,
                                   kCollapsedW, kCollapsedH);
 
-    // ---- 宿主：WCR 同款（showModernToast: @01010218 反编译实锤）----
-    // WCR 就是把 toast 毛玻璃 view 直接 addSubview 到 keyWindow，没有任何专属窗。
-    // 之前"闪没"的真凶是 stage 盖了全屏窗被微信浮层管理误伤；小胶囊只占顶部一条，
-    // 且 userInteractionEnabled=NO 触摸全穿透，滚动/点击完全不受影响
-    self.hostWindow = anchor;
+    // ---- 宿主：专属小窗（只盖顶部胶囊那一条）----
+    // 外力摘除免疫（闪没根治）+ 非全屏不挡滑动 + 高 level 压过微信浮层。
+    // 常驻复用，hidden 控制显隐
+    UIWindowScene *scene = anchor.windowScene;
+    if (!scene) return;
+    CGFloat winH = topInset + kExpandedH + 30.0; // 窗高盖住胶囊 + 阴影余量
+    if (!_toastWin || !_toastWin.windowScene) {
+        _toastWin = [[WPIslandWindow alloc] initWithWindowScene:scene];
+        _toastWin.windowLevel = UIWindowLevelAlert + 1000.0;
+        _toastWin.backgroundColor = UIColor.clearColor;
+        _toastWin.userInteractionEnabled = NO;
+    }
+    _toastWin.frame = CGRectMake(0, 0, screen.width, winH);
+    self.hostWindow = _toastWin;
 
     // stage：负责外阴影（capsule masksToBounds 会裁阴影，两者分离）
     UIView *stage = [[UIView alloc] initWithFrame:collapsed];
     stage.backgroundColor = UIColor.clearColor;
-    stage.userInteractionEnabled = NO; // 整个 stage 树对触摸透明，杜绝"刷不动屏幕"
+    stage.userInteractionEnabled = NO;
     stage.tag = 0x24f6da;              // WCR 同款防重 tag：万一有残留，下次 show 先摘掉
     stage.layer.shadowColor = UIColor.blackColor.CGColor;
     stage.layer.shadowOpacity = 0.45;
@@ -198,15 +221,13 @@ static WPIslandToast *_current = nil;
     stage.layer.shadowOffset = CGSizeMake(0, 8);
     self.stage = stage;
 
-    // 摘掉可能残留的旧 toast（WCR 同款 viewWithTag 清理）
-    [[anchor viewWithTag:0x24f6da] removeFromSuperview];
-
     WPIslandCapsuleView *capsule = [[WPIslandCapsuleView alloc] initWithFrame:stage.bounds];
     capsule.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     capsule.userInteractionEnabled = NO;
     self.capsule = capsule;
     [stage addSubview:capsule];
-    [anchor addSubview:stage]; // 直接挂微信 keyWindow（WCR 同款）
+    [_toastWin addSubview:stage];
+    _toastWin.hidden = NO;
 
     // ---- 图标（初始缩小+透明，弹出时弹簧浮现）----
     UILabel *icon = [[UILabel alloc] initWithFrame:CGRectMake((kCollapsedW - kIconSize) / 2.0,
@@ -332,8 +353,10 @@ static WPIslandToast *_current = nil;
                      animations:^{
         self.stage.frame = collapsed;
     } completion:^(BOOL finished) {
-        [self.stage removeFromSuperview]; // 挂在 keyWindow 上，摘掉即收
+        [self.stage removeFromSuperview];
         self.stage = nil;
+        // 窗里已经没有别的 toast 在用时才收窗（防止误伤刚弹出的新 toast）
+        if (_toastWin && _toastWin.subviews.count == 0) _toastWin.hidden = YES;
     }];
 
     [self springChangeCapsuleToSize:CGSizeMake(kCollapsedW, kCollapsedH)];
