@@ -9,7 +9,7 @@ static const CGFloat kMaxW       = 330.0;
 static const CGFloat kIconSize   = 22.0;
 static const CGFloat kGap        = 10.0;
 static const CGFloat kPadX       = 18.0;
-static const CGFloat kStaySec    = 2.4;
+static const CGFloat kStaySec    = 6.0;
 // 顶部间距不再写死：真机灵动岛/刘海会压住固定 11pt 的位置，改为动态取
 // safeAreaInsets.top（灵动岛机型 ≈54pt 自动避让，无刘海机型 ≈20/0 再加基础间距）
 static const CGFloat kTopMargin  = 6.0;
