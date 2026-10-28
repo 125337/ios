@@ -1,4 +1,5 @@
 #import "WPCommonUI.h"
+#import "WPIslandToast.h"
 #import <QuartzCore/QuartzCore.h>
 
 const CGFloat kPad = 15.0;    // 插件页面统一边距（写死，不读用户配置）
@@ -76,45 +77,12 @@ UIViewController *WPGetTopVCForPresentation(void) {
     return top;
 }
 
-#pragma mark - 轻量 toast
+#pragma mark - 轻量 toast（灵动岛胶囊样式，实现在 WPIslandToast）
 
 void WPShowToast(NSString *message) {
-    if (message.length == 0) return;
-    UIWindow *window = nil;
-    for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
-        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-        for (UIWindow *w in scene.windows) {
-            if (w.isKeyWindow) { window = w; break; }
-        }
-        if (window) break;
-    }
-    if (!window) window = [[UIApplication sharedApplication].windows firstObject];
-    if (!window) return;
-
-    UILabel *label = [[UILabel alloc] init];
-    label.text = message;
-    label.font = [UIFont systemFontOfSize:13];
-    label.textColor = UIColor.whiteColor;
-    label.textAlignment = NSTextAlignmentCenter;
-    label.numberOfLines = 0;
-    [label sizeToFit];
-
-    UIView *toast = [[UIView alloc] initWithFrame:CGRectMake((window.bounds.size.width - label.frame.size.width - 24) / 2,
-                                                             window.bounds.size.height * 0.45,
-                                                             label.frame.size.width + 24,
-                                                             label.frame.size.height + 16)];
-    toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.78];
-    toast.layer.cornerRadius = 8;
-    toast.layer.masksToBounds = YES;
-    label.frame = CGRectMake(12, 8, label.frame.size.width, label.frame.size.height);
-    [toast addSubview:label];
-    [window addSubview:toast];
-    toast.alpha = 0;
-    [UIView animateWithDuration:0.2 animations:^{ toast.alpha = 1; }];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:0.25 animations:^{ toast.alpha = 0; }
-                         completion:^(BOOL finished) { [toast removeFromSuperview]; }];
-    });
+    // 全插件统一提示：顶部胶囊弹出（图标 i / ✓ / ! / ✕ 四型，现有调用点默认 Info 型，
+    // 需要成败分色的调用点以后逐个换 [WPIslandToast showWithType:message:]）
+    [WPIslandToast showWithType:WPIslandToastTypeInfo message:message];
 }
 
 #pragma mark - 导航栏外观统一
