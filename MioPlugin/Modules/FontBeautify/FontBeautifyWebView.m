@@ -32,10 +32,20 @@ static NSString *MioFontBase64(void) {
     return g_b64Font;
 }
 
-// 锤子助手同款 JS（0x007a0918 内嵌格式串还原；另加 fonts.check 防同页重复注册）
+// 锤子助手同款 JS（0x007a0918 内嵌格式串还原；另加页面级标志防同页重复注册）
+// 字体族名统一用字体文件名（与配置 fontBeautifyFileName 同源，不再是写死的假名）：
+// 文件名是外部数据，拼进 JS/CSS 前必须转义反斜杠和单引号，防止字符串逃逸
+static NSString *MioJsEscape(NSString *s) {
+    return [[[s stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+             stringByReplacingOccurrencesOfString:@"'" withString:@"\\'"]
+            stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+}
+
 static NSString *MioFontJS(void) {
     NSString *b64 = MioFontBase64();
     if (!b64) return nil;
+    NSString *fam = MioJsEscape([FontBeautifyConfig shared].fontBeautifyFileName);
+    if (fam.length == 0) return nil;
     return [NSString stringWithFormat:
         @"function mio642buf(b64){var bs=window.atob(b64);var len=bs.length;"
         "var bytes=new Uint8Array(len);for(var i=0;i<len;i++){bytes[i]=bs.charCodeAt(i);}"
@@ -44,12 +54,12 @@ static NSString *MioFontJS(void) {
         // 不能用 document.fonts.check 判重：字体族未注册时 check() 返回 true
         // （规范语义"现有字体可渲染"），会把首次注册也短路掉。改用页面级标志。
         "if(window.__mioFontDone)return;window.__mioFontDone=1;"
-        "let f=new FontFace('MioCustomFont',mio642buf('%@'));"
+        "let f=new FontFace('%@',mio642buf('%@'));"
         "await f.load();document.fonts.add(f);"
         "let fs=document.createElement('style');"
-        "fs.innerHTML=\"*{font-family:'MioCustomFont' !important;}\";"
+        "fs.innerHTML=\"*{font-family:'%@' !important;}\";"
         "(document.head||document.documentElement).appendChild(fs);"
-        "}catch(e){}})()", b64];
+        "}catch(e){}})()", fam, b64, fam];
 }
 
 static void MioInjectIfEnabled(id webView) {
