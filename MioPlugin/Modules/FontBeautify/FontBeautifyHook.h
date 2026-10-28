@@ -20,4 +20,12 @@ UIFont * _Nullable MioFontForPreview(NSString *postScriptName, CGFloat size);
 // （weight 为 UIFontWeightRegular 时直接走 systemFontOfSize:）
 UIFont *MioTrueSystemFont(CGFloat size, CGFloat weight);
 
+// 共享导入核心：把字体文件导入字体库（魔数校验 → 拷入 Preferences/Mio/fonts →
+// 进程级注册 → 读字族名/PostScript 名）。成功返回 YES 并回填 family/ps；
+// 失败 *errText 给出原因（nullable 出参）。选择页"导入"与聊天长按"导入字体"菜单共用
+BOOL MioImportFontFromPath(NSString *srcPath,
+                           NSString * _Nullable * _Nullable outFamily,
+                           NSString * _Nullable * _Nullable outPS,
+                           NSString * _Nullable * _Nullable errText);
+
 NS_ASSUME_NONNULL_END

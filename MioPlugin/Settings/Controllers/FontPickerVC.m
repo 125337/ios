@@ -103,6 +103,11 @@ static NSString *MioFileSizeText(unsigned long long bytes) {
 
 @implementation FontPickerVC
 
+// 聊天长按导入后调用：失效静态缓存，下次进页 MioScanFonts 重扫
++ (void)invalidateFontCache {
+    MioInvalidateFontCache();
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"选择字体";
@@ -238,55 +243,13 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     [self importFontsFromURLs:urls];
 }
 
-// 单个文件的「拷贝 + 注册 + 读元数据」，成功回填 family/psName
+// 单个文件的「拷贝 + 注册 + 读元数据」——实现下沉到 FontBeautifyHook 的
+// MioImportFontFromPath（与聊天长按"导入字体"菜单共用，含魔数校验），本页只做转发
 - (BOOL)importOneFont:(NSURL *)srcURL
             outFamily:(NSString **)outFamily
                 outPS:(NSString **)outPS
               errText:(NSString **)errText {
-    NSString *dir = [FontBeautifyConfig mioFontsDir];
-    NSString *fileName = srcURL.lastPathComponent;
-    NSString *dstPath = [dir stringByAppendingPathComponent:fileName];
-    NSURL *dstURL = [NSURL fileURLWithPath:dstPath];
-
-    // 同名旧文件先删（覆盖导入）
-    [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil];
-    NSError *fsErr = nil;
-    if (![[NSFileManager defaultManager] copyItemAtURL:srcURL toURL:dstURL error:&fsErr]) {
-        *errText = [NSString stringWithFormat:@"拷贝 %@ 失败: %@", fileName, fsErr.localizedDescription];
-        return NO;
-    }
-
-    // 注册进进程字体表（已注册报错码 105，忽略）
-    CFErrorRef regErr = NULL;
-    CTFontManagerRegisterFontsForURL((__bridge CFURLRef)dstURL, kCTFontManagerScopeProcess, &regErr);
-    if (regErr) {
-        CFIndex code = CFErrorGetCode(regErr);
-        CFRelease(regErr);
-        if (code != 105 /* kCTFontManagerErrorAlreadyRegistered */) {
-            *errText = [NSString stringWithFormat:@"注册 %@ 失败: 错误码 %ld", fileName, (long)code];
-            return NO;
-        }
-    }
-
-    // 读字体内部元数据：字族名 + PostScript 名
-    CFArrayRef descs = CTFontManagerCreateFontDescriptorsFromURL((__bridge CFURLRef)dstURL);
-    if (!descs || CFArrayGetCount(descs) == 0) {
-        if (descs) CFRelease(descs);
-        *errText = [NSString stringWithFormat:@"%@ 中未找到字体描述符", fileName];
-        return NO;
-    }
-    CTFontDescriptorRef d0 = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descs, 0);
-    NSString *family = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontFamilyNameAttribute));
-    NSString *psName = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontNameAttribute));
-    CFRelease(descs);
-
-    if (family.length == 0) {
-        *errText = [NSString stringWithFormat:@"%@ 未读取到字族名", fileName];
-        return NO;
-    }
-    *outFamily = family;
-    *outPS = psName ?: @"";
-    return YES;
+    return MioImportFontFromPath(srcURL.path, outFamily, outPS, errText);
 }
 
 // 批量导入：拷入 Preferences/Mio/fonts → 进程级注册 → 失效缓存刷新列表（选择交给列表点选）

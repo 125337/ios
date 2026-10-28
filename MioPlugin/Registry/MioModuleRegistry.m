@@ -74,6 +74,7 @@
 #import "../Modules/MsgTail/MsgTailHook.h"
 #import "../Modules/SystemCamera/SystemCameraHook.h"
 #import "../Modules/FontBeautify/FontBeautifyHook.h"
+#import "../Modules/FontBeautify/FontImportHook.h"
 #import "../Settings/Controllers/FontBeautifyVC.h"
 
 // ────── 设置页 Controller 的 import ──────
@@ -363,7 +364,7 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"fontbeautify"
                                                     title:@"字体美化"
                                                configClass:[FontBeautifyConfig class]
-                                               hookClasses:@[[FontBeautifyHook class]]
+                                               hookClasses:@[[FontBeautifyHook class], [FontImportHook class]]
                                            controllerClass:[FontBeautifyVC class]
                                                   subtitle:@"全局字体替换（导入 ttf/otf）"
                                              sectionTitle:@"通用"],

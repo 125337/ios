@@ -6,6 +6,8 @@ NS_ASSUME_NONNULL_BEGIN
 // 右上"添加"弹系统文件选择器批量导入，自定义行左滑删除。
 // 点击行写回 FontBeautify 配置（只存文件名）并返回上一页。
 @interface FontPickerVC : UIViewController
+/// 失效字体静态缓存（聊天长按"导入字体"后调用，下次进页重扫）
++ (void)invalidateFontCache;
 @end
 
 NS_ASSUME_NONNULL_END

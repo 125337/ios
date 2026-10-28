@@ -41,6 +41,92 @@ static NSString * const kMioFontBypassFlag = @"mio_font_factory_bypass";
 static BOOL s_fontReady = NO;
 static NSInteger s_rebuildLogBudget = 5; // 限量诊断日志
 
+#pragma mark - 共享导入核心（选择页导入 / 聊天长按导入共用）
+
+// 魔数校验：不看扩展名看文件头 4 字节，改名的假字体挡在这里。
+// 返回错误文案，nil = 通过
+static NSString *MioFontMagicError(NSData *head) {
+    if (head.length < 4) return @"文件太小，不是字体文件";
+    const unsigned char *b = head.bytes;
+    BOOL sfnt  = (b[0] == 0x00 && b[1] == 0x01 && b[2] == 0x00 && b[3] == 0x00); // TTF
+    BOOL apple = memcmp(b, "true", 4) == 0;                                     // TTF(Apple)
+    BOOL ttc   = memcmp(b, "ttcf", 4) == 0;                                     // 字体集合
+    BOOL otf   = memcmp(b, "OTTO", 4) == 0;                                     // OTF(CFF)
+    BOOL woff  = memcmp(b, "wOFF", 4) == 0 || memcmp(b, "wOF2", 4) == 0;        // 网页字体
+    if (sfnt || apple || ttc || otf) return nil;
+    if (woff) return @"网页字体格式（WOFF）不支持导入，请先转换成 TTF/OTF";
+    return @"文件内容不是有效的 TTF/OTF 字体（扩展名可能是假的）";
+}
+
+BOOL MioImportFontFromPath(NSString *srcPath,
+                           NSString * _Nullable * _Nullable outFamily,
+                           NSString * _Nullable * _Nullable outPS,
+                           NSString * _Nullable * _Nullable errText) {
+    if (outFamily) *outFamily = nil;
+    if (outPS) *outPS = nil;
+    if (errText) *errText = nil;
+    NSString *fileName = srcPath.lastPathComponent;
+    if (fileName.length == 0 ||
+        ![[NSFileManager defaultManager] fileExistsAtPath:srcPath]) {
+        if (errText) *errText = @"字体文件不存在（可能尚未下载）";
+        return NO;
+    }
+
+    // 1) 魔数校验（只读头 4 字节，不整读大文件）
+    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:srcPath];
+    NSData *head = [fh readDataOfLength:4];
+    [fh closeFile];
+    NSString *magicErr = MioFontMagicError(head);
+    if (magicErr) {
+        if (errText) *errText = magicErr;
+        return NO;
+    }
+
+    // 2) 拷入字体库（同名旧文件覆盖导入）
+    NSString *dstPath = [[FontBeautifyConfig mioFontsDir]
+                         stringByAppendingPathComponent:fileName];
+    NSURL *dstURL = [NSURL fileURLWithPath:dstPath];
+    [[NSFileManager defaultManager] removeItemAtPath:dstPath error:nil];
+    NSError *fsErr = nil;
+    if (![[NSFileManager defaultManager] copyItemAtPath:srcPath toPath:dstPath error:&fsErr]) {
+        if (errText) *errText = [NSString stringWithFormat:@"拷贝失败: %@", fsErr.localizedDescription];
+        return NO;
+    }
+
+    // 3) 进程级注册（错误码 105 = 已注册，忽略）
+    CFErrorRef regErr = NULL;
+    CTFontManagerRegisterFontsForURL((__bridge CFURLRef)dstURL, kCTFontManagerScopeProcess, &regErr);
+    if (regErr) {
+        CFIndex code = CFErrorGetCode(regErr);
+        CFRelease(regErr);
+        if (code != 105 /* kCTFontManagerErrorAlreadyRegistered */) {
+            if (errText) *errText = [NSString stringWithFormat:@"注册失败: 错误码 %ld", (long)code];
+            return NO;
+        }
+    }
+
+    // 4) 读内部元数据（字族名 + PostScript 名）
+    CFArrayRef descs = CTFontManagerCreateFontDescriptorsFromURL((__bridge CFURLRef)dstURL);
+    if (!descs || CFArrayGetCount(descs) == 0) {
+        if (descs) CFRelease(descs);
+        if (errText) *errText = [NSString stringWithFormat:@"%@ 中未找到字体描述符", fileName];
+        return NO;
+    }
+    CTFontDescriptorRef d0 = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descs, 0);
+    NSString *family = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontFamilyNameAttribute));
+    NSString *psName = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontNameAttribute));
+    CFRelease(descs);
+    if (family.length == 0) {
+        if (errText) *errText = [NSString stringWithFormat:@"%@ 未读取到字族名", fileName];
+        return NO;
+    }
+
+    if (outFamily) *outFamily = family;
+    if (outPS) *outPS = psName ?: @"";
+    WPLog(@"FontBeautify", @"[IMPORT] %@ → family=%@ ps=%@", fileName, family, psName ?: @"");
+    return YES;
+}
+
 // 按配置把原始字体替换为自定义字体（锤子式报菜名）；任一条件不满足即原样返回
 static UIFont *MioRebuildFont(UIFont *orig, CGFloat size, CGFloat weight) {
     (void)weight; // 字重交给自定义字体自身，不透传微信的粗细请求
