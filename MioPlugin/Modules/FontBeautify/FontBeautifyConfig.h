@@ -23,6 +23,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 当前启用字体的完整路径：fontBeautifyFileName 非空且文件存在时返回路径，否则返回 nil
 - (NSString *)resolvedActiveFontPath;
 
+/// 字体文件字节备份进 NSUserDefaults（幸存区：重签覆盖安装清沙盒文件但不清 UserDefaults）。
+/// 沙盒文件丢失时由 restoreMissingFontFiles 自动恢复，实现"导入一次一直生效"
++ (void)backupFontFile:(NSString *)fileName;
+/// 删除字体时同步清掉对应备份
++ (void)removeFontBackup:(NSString *)fileName;
+/// 启动时调用：扫描所有备份，把沙盒里已丢失的字体文件恢复写回；返回恢复个数
++ (NSInteger)restoreMissingFontFiles;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -190,7 +190,14 @@ UIFont *MioTrueSystemFont(CGFloat size, CGFloat weight) {
         WPLog(@"FontBeautify", @"[Hook] ✓ UIFont::%s", list[i].tag);
     }
 
-    // 立即同步注册字体库（晚一毫秒都可能让死缓存成形）；3 秒后再兜底重扫一次
+    // 先从 UserDefaults 备份恢复丢失的字体文件（重签覆盖安装会清沙盒文件但不清
+    // UserDefaults，实测见 MioImageVault 头注释），再立即同步注册字体库
+    // （晚一毫秒都可能让死缓存成形）；3 秒后再兜底重扫一次
+    NSInteger restored = [FontBeautifyConfig restoreMissingFontFiles];
+    if (restored > 0) {
+        WPLog(@"FontBeautify", @"[Hook] 已从备份恢复 %ld 个字体文件", (long)restored);
+    }
+    WPLog(@"FontBeautify", @"[Hook] 容器路径 %@", NSHomeDirectory());
     MioRegisterAllImportedFonts();
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{

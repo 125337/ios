@@ -188,6 +188,7 @@ static NSString *MioFileSizeText(unsigned long long bytes) {
         WPShowToast([NSString stringWithFormat:@"删除失败：%@", err.localizedDescription ?: @"未知错误"]);
         return;
     }
+    [FontBeautifyConfig removeFontBackup:item.fileName]; // 同步清备份，避免下次启动被恢复回来
     if ([cfg.fontBeautifyFileName isEqualToString:item.fileName]) {
         cfg.fontBeautifyFileName = @"";
         cfg.fontBeautifyFamilyName = @"";
@@ -279,6 +280,9 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     NSString *family = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontFamilyNameAttribute));
     NSString *psName = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontNameAttribute));
     CFRelease(descs);
+
+    // 字节备份进 UserDefaults 幸存区（重签覆盖安装清沙盒文件后，启动时自动恢复）
+    [FontBeautifyConfig backupFontFile:fileName];
 
     if (family.length == 0) {
         *errText = [NSString stringWithFormat:@"%@ 未读取到字族名", fileName];
