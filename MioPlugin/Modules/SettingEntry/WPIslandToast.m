@@ -1,4 +1,5 @@
 #import "WPIslandToast.h"
+#import "../../Core/LogManager.h"
 
 // ---- 尺寸常量 ----
 static const CGFloat kCollapsedW = 118.0;
@@ -88,6 +89,7 @@ static const CGFloat kTopMargin  = 6.0;
 @property (nonatomic, strong) UILabel *iconLabel;       // 彩色圆形图标
 @property (nonatomic, strong) UILabel *msgLabel;
 @property (nonatomic, assign) BOOL isShowing;
+@property (nonatomic, assign) NSTimeInterval startedAt; // 弹出时刻（实测全程用）
 @end
 
 @implementation WPIslandToast
@@ -219,6 +221,8 @@ static WPIslandToast *_current = nil;
                                  targetW, kExpandedH);
 
     self.isShowing = YES;
+    self.startedAt = CACurrentMediaTime();
+    WPLog(@"UI", @"[Toast] ┌ 弹出：%@", message);
 
     // ---- 主弹簧：stage 从药丸展开为胶囊；内容在同一个动画块里摆到最终位置 ----
     [UIView animateWithDuration:0.52
@@ -276,6 +280,8 @@ static WPIslandToast *_current = nil;
 - (void)collapseAnimated:(BOOL)animated {
     if (!self.stage) return;
     self.isShowing = NO;
+    WPLog(@"UI", @"[Toast] └ 收起：全程 %.2f 秒（设计值 2.40 弹出 + 0.44 收尾）",
+          CACurrentMediaTime() - self.startedAt);
 
     if (!animated) {
         [self.stage removeFromSuperview];
