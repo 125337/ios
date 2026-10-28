@@ -13,15 +13,27 @@
 
 static IMP orig_AppFile_operationMenuItems = NULL;
 
-// 从 cell 取文件消息本地路径：m_viewModel.m_messageWrap → m_nsFilePath
-// （文件未下载时路径为空，交给 action 里 toast 提示）
+static NSInteger s_menuDiagBudget = 8; // 菜单诊断日志预算
+
+// 从 cell 取文件消息本地路径。属性名多候选：各家 cell 的 viewModel/wrap 命名不统一，
+// KVC 逐个试，取不到时由诊断日志暴露真实类名再补
 static NSString *MioFontImportFilePath(id cellView) {
     id wrap = nil;
-    @try { wrap = [[cellView valueForKey:@"m_viewModel"] valueForKey:@"m_messageWrap"]; }
-    @catch (NSException *e) {}
+    for (NSString *vmKey in @[@"m_viewModel", @"viewModel", @"m_messageViewModel"]) {
+        @try {
+            id vm = [cellView valueForKey:vmKey];
+            if (!vm) continue;
+            for (NSString *wrapKey in @[@"m_messageWrap", @"messageWrap"]) {
+                @try {
+                    id w = [vm valueForKey:wrapKey];
+                    if (w) { wrap = w; break; }
+                } @catch (NSException *e) {}
+            }
+            if (wrap) break;
+        } @catch (NSException *e) {}
+    }
     if (!wrap) {
-        @try { wrap = [cellView valueForKey:@"m_messageWrap"]; }
-        @catch (NSException *e) {}
+        @try { wrap = [cellView valueForKey:@"m_messageWrap"]; } @catch (NSException *e) {}
     }
     if (!wrap) return nil;
     for (NSString *key in @[@"m_nsFilePath", @"m_nsRealChatFilePath"]) {
@@ -50,6 +62,19 @@ static id hooked_AppFile_operationMenuItems(id self, SEL _cmd) {
     if (!items) items = [NSMutableArray array];
 
     NSString *path = MioFontImportFilePath(self);
+
+    // 诊断（限量）：菜单为何没挂上——cell 类名、解析出的路径、原始菜单项数
+    if (s_menuDiagBudget > 0) {
+        s_menuDiagBudget--;
+        id vm = nil;
+        @try { vm = [self valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
+        WPLog(@"FontImport", @"[MENU] cell=%@ path=%@ items=%lu vm=%@(%@)",
+              NSStringFromClass([self class]),
+              path ?: @"nil", (unsigned long)items.count,
+              vm ? @"有" : @"nil",
+              vm ? NSStringFromClass([vm class]) : @"-");
+    }
+
     if (!MioLooksLikeFontPath(path)) return items;
 
     Class mmItemClass = objc_getClass("MMMenuItem");
