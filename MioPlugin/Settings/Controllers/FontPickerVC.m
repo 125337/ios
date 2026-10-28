@@ -9,7 +9,7 @@
 
 // 字体选择页（WCR"选择字体"同款）：
 //   Section 0「默认」：系统默认字体（fontBeautifyFileName 为空时打勾）
-//   Section 1「自定义字体 (N)」：扫描 Library/MioFonts，每行「文件名 · 大小」+
+//   Section 1「自定义字体 (N)」：扫描 Library/Preferences/fonts，每行「文件名 · 大小」+
 //              预览文本用该字体渲染（PostScript 名从 CTFontManager 描述符读取）
 //   右上「导入」：系统文件选择器（WCR 同款 legacy initWithDocumentTypes:inMode:，
 //              绕过 SDK 头文件裁剪），批量导入 → 拷贝 → 进程级注册 → 刷新列表
@@ -33,7 +33,7 @@ static NSArray<MioFontItem *> *g_fontItems = nil; // 静态缓存：扫一次存
 
 static void MioInvalidateFontCache(void) { g_fontItems = nil; }
 
-// 扫描 MioFonts 目录构建列表（默认按文件名排序）；PostScript/字族名从字体描述符读取
+// 扫描 Preferences/fonts 目录构建列表（默认按文件名排序）；PostScript/字族名从字体描述符读取
 static NSArray<MioFontItem *> *MioScanFonts(void) {
     if (g_fontItems) return g_fontItems;
     NSString *dir = [FontBeautifyConfig mioFontsDir];
@@ -188,7 +188,6 @@ static NSString *MioFileSizeText(unsigned long long bytes) {
         WPShowToast([NSString stringWithFormat:@"删除失败：%@", err.localizedDescription ?: @"未知错误"]);
         return;
     }
-    [FontBeautifyConfig removeFontBackup:item.fileName]; // 同步清备份，避免下次启动被恢复回来
     if ([cfg.fontBeautifyFileName isEqualToString:item.fileName]) {
         cfg.fontBeautifyFileName = @"";
         cfg.fontBeautifyFamilyName = @"";
@@ -281,9 +280,6 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     NSString *psName = CFBridgingRelease(CTFontDescriptorCopyAttribute(d0, kCTFontNameAttribute));
     CFRelease(descs);
 
-    // 字节备份进 UserDefaults 幸存区（重签覆盖安装清沙盒文件后，启动时自动恢复）
-    [FontBeautifyConfig backupFontFile:fileName];
-
     if (family.length == 0) {
         *errText = [NSString stringWithFormat:@"%@ 未读取到字族名", fileName];
         return NO;
@@ -293,7 +289,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     return YES;
 }
 
-// 批量导入：拷入 MioFonts → 进程级注册 → 失效缓存刷新列表（选择交给列表点选）
+// 批量导入：拷入 Preferences/fonts → 进程级注册 → 失效缓存刷新列表（选择交给列表点选）
 - (void)importFontsFromURLs:(NSArray<NSURL *> *)urls {
     NSInteger okCount = 0;
     NSMutableArray<NSString *> *errs = [NSMutableArray array];

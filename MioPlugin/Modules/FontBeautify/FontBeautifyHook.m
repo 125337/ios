@@ -110,7 +110,7 @@ static id repl_fontWithName_size(id self, SEL _cmd, id name, CGFloat size) {
     return MioRebuildFont(orig, size, 0);
 }
 
-// 注册 MioFonts 目录下全部字体（进程级；目录由 FontBeautifyConfig mioFontsDir 按当前容器解析，
+// 注册 Preferences/fonts 目录下全部字体（进程级；目录由 FontBeautifyConfig mioFontsDir 按当前容器解析，
 // 配置只存文件名，容器迁移不失效。导入后新增文件靠 3 秒兜底重扫）
 // 必须在 hook 生效后尽快执行，s_fontReady 立起前重建函数不工作（防 UIKit 死缓存）
 static void MioRegisterAllImportedFonts(void) {
@@ -190,13 +190,8 @@ UIFont *MioTrueSystemFont(CGFloat size, CGFloat weight) {
         WPLog(@"FontBeautify", @"[Hook] ✓ UIFont::%s", list[i].tag);
     }
 
-    // 先从 UserDefaults 备份恢复丢失的字体文件（重签覆盖安装会清沙盒文件但不清
-    // UserDefaults，实测见 MioImageVault 头注释），再立即同步注册字体库
-    // （晚一毫秒都可能让死缓存成形）；3 秒后再兜底重扫一次
-    NSInteger restored = [FontBeautifyConfig restoreMissingFontFiles];
-    if (restored > 0) {
-        WPLog(@"FontBeautify", @"[Hook] 已从备份恢复 %ld 个字体文件", (long)restored);
-    }
+    // 立即同步注册字体库（晚一毫秒都可能让死缓存成形）；3 秒后再兜底重扫一次。
+    // 字体存 Library/Preferences/fonts，"部分还原"式安装会整体还原该目录，无需备份恢复
     WPLog(@"FontBeautify", @"[Hook] 容器路径 %@", NSHomeDirectory());
     MioRegisterAllImportedFonts();
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
