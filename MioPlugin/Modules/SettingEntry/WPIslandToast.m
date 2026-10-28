@@ -6,10 +6,8 @@ static const CGFloat kCollapsedW = 118.0;
 static const CGFloat kCollapsedH = 34.0;
 static const CGFloat kExpandedH  = 40.0;
 static const CGFloat kMaxW       = 330.0;
-static const CGFloat kIconSize   = 22.0;
-static const CGFloat kGap        = 10.0;
 static const CGFloat kPadX       = 18.0;
-static const CGFloat kStaySec    = 6.0;
+static const CGFloat kStaySec    = 2.5;
 // 顶部间距不再写死：真机灵动岛/刘海会压住固定 11pt 的位置，改为动态取
 // safeAreaInsets.top（灵动岛机型 ≈54pt 自动避让，无刘海机型 ≈20/0 再加基础间距）
 static const CGFloat kTopMargin  = 6.0;
@@ -100,7 +98,6 @@ static WPIslandWindow *_toastWin = nil;
 @property (nonatomic, strong) UIWindow *hostWindow;     // 锚点窗（微信 keyWindow，仅用于取尺寸）
 @property (nonatomic, strong) UIView *stage;            // 定位 + 外阴影（不裁剪）
 @property (nonatomic, strong) WPIslandCapsuleView *capsule;
-@property (nonatomic, strong) UILabel *iconLabel;       // 彩色圆形图标
 @property (nonatomic, strong) UILabel *msgLabel;
 @property (nonatomic, assign) BOOL isShowing;
 @property (nonatomic, assign) NSTimeInterval startedAt; // 弹出时刻（实测全程用）
@@ -172,14 +169,11 @@ static WPIslandToast *_current = nil;
     return UIApplication.sharedApplication.windows.firstObject;
 }
 
-#pragma mark - 内容布局（展开态：图标 + 间距 + 文字水平排列，垂直居中）
+#pragma mark - 内容布局（纯文字居中）
 
 - (void)layoutContentsForWidth:(CGFloat)width {
     CGSize s = self.capsule.bounds.size;
-    self.iconLabel.frame = CGRectMake(kPadX, (s.height - kIconSize) / 2.0, kIconSize, kIconSize);
-    CGFloat msgX = CGRectGetMaxX(self.iconLabel.frame) + kGap;
-    CGFloat msgW = MAX(0, width - msgX - kPadX);
-    self.msgLabel.frame = CGRectMake(msgX, 0, msgW, s.height);
+    self.msgLabel.frame = CGRectMake(kPadX, 0, MAX(0, width - kPadX * 2), s.height);
 }
 
 #pragma mark - Present
@@ -229,38 +223,23 @@ static WPIslandToast *_current = nil;
     [_toastWin addSubview:stage];
     _toastWin.hidden = NO;
 
-    // ---- 图标（初始缩小+透明，弹出时弹簧浮现）----
-    UILabel *icon = [[UILabel alloc] initWithFrame:CGRectMake((kCollapsedW - kIconSize) / 2.0,
-                                                              (kCollapsedH - kIconSize) / 2.0,
-                                                              kIconSize, kIconSize)];
-    icon.backgroundColor = [self iconColorForType:type];
-    icon.textColor = UIColor.whiteColor;
-    icon.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
-    icon.textAlignment = NSTextAlignmentCenter;
-    icon.text = [self glyphForType:type];
-    icon.layer.cornerRadius = kIconSize / 2.0;
-    icon.layer.masksToBounds = YES;
-    icon.alpha = 0;
-    icon.transform = CGAffineTransformMakeScale(0.6, 0.6);
-    self.iconLabel = icon;
-    [capsule addSubview:icon];
-
     // ---- 文案 ----
     UILabel *msg = [[UILabel alloc] init];
     msg.text = message;
     msg.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
     msg.textColor = UIColor.whiteColor;
+    msg.textAlignment = NSTextAlignmentCenter;
     msg.numberOfLines = 1;
     msg.lineBreakMode = NSLineBreakByTruncatingTail;
     msg.alpha = 0;
     self.msgLabel = msg;
     [capsule addSubview:msg];
 
-    // ---- 计算展开尺寸（文字实测宽度 + 图标 + 内边距，封顶 kMaxW）----
-    CGFloat maxTextW = kMaxW - kIconSize - kGap - kPadX * 2;
+    // ---- 计算展开尺寸（文字实测宽度 + 左右内边距，封顶 kMaxW）----
+    CGFloat maxTextW = kMaxW - kPadX * 2;
     CGSize textSize = [msg sizeThatFits:CGSizeMake(maxTextW, kExpandedH)];
     CGFloat textW = ceil(MIN(textSize.width, maxTextW));
-    CGFloat targetW = MIN(textW + kIconSize + kGap + kPadX * 2, kMaxW);
+    CGFloat targetW = MIN(textW + kPadX * 2, kMaxW);
     CGRect expanded = CGRectMake((screen.width - targetW) / 2.0, topInset,
                                  targetW, kExpandedH);
 
@@ -282,17 +261,6 @@ static WPIslandToast *_current = nil;
 
     // capsule 圆角随宽高同步（CASpringAnimation 保证圆角不脱节）
     [self springChangeCapsuleToSize:CGSizeMake(targetW, kExpandedH)];
-
-    // 图标延迟浮现
-    [UIView animateWithDuration:0.42
-                          delay:0.08
-         usingSpringWithDamping:0.6
-          initialSpringVelocity:0.5
-                        options:UIViewAnimationOptionCurveEaseOut
-                     animations:^{
-        icon.alpha = 1;
-        icon.transform = CGAffineTransformIdentity;
-    } completion:nil];
 
     // 文字延迟淡入
     [UIView animateWithDuration:0.3
@@ -343,7 +311,6 @@ static WPIslandToast *_current = nil;
 
     // 内容先淡出
     [UIView animateWithDuration:0.18 animations:^{
-        self.iconLabel.alpha = 0;
         self.msgLabel.alpha = 0;
     }];
 
@@ -387,26 +354,6 @@ static WPIslandToast *_current = nil;
     addSpring(@"bounds.size.width",  old.size.width,  size.width);
     addSpring(@"bounds.size.height", old.size.height, size.height);
     addSpring(@"cornerRadius", old.size.height / 2.0, size.height / 2.0);
-}
-
-- (UIColor *)iconColorForType:(WPIslandToastType)type {
-    switch (type) {
-        case WPIslandToastTypeSuccess: return [UIColor colorWithRed:0.20 green:0.78 blue:0.35 alpha:1];
-        case WPIslandToastTypeError:   return [UIColor colorWithRed:1.00 green:0.27 blue:0.23 alpha:1];
-        case WPIslandToastTypeWarning: return [UIColor colorWithRed:1.00 green:0.62 blue:0.04 alpha:1];
-        case WPIslandToastTypeInfo:
-        default:                       return [UIColor colorWithRed:0.04 green:0.52 blue:1.00 alpha:1];
-    }
-}
-
-- (NSString *)glyphForType:(WPIslandToastType)type {
-    switch (type) {
-        case WPIslandToastTypeSuccess: return @"✓";
-        case WPIslandToastTypeError:   return @"✕";
-        case WPIslandToastTypeWarning: return @"!";
-        case WPIslandToastTypeInfo:
-        default:                       return @"i";
-    }
 }
 
 @end
