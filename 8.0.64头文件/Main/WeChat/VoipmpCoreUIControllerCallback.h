@@ -1,0 +1,45 @@
+@interface VoipmpCoreUIControllerCallback : NSObject
+{
+    VoipmpCoreUIControllerDispatcherBridgeObjcImpl * dispatcher_bridge; // +0x8
+}
+- (id)initWithCpp:(VoipmpCoreUIControllerDispatcherBridgeObjcImpl *)arg1;
+- (void)onAudioRouteToComplete:(unsigned long long)arg1;
+- (void)onRecordUpdateToComplete:(unsigned long long)arg1;
+- (void)onUpdateAudioMenuComplete:(unsigned long long)arg1;
+- (void)onUpdateAddMemberIconComplete:(unsigned long long)arg1;
+- (void)onOnUpdateNetworkPoorComplete:(unsigned long long)arg1;
+- (void)onOnUpdateLongWaitingComplete:(unsigned long long)arg1;
+- (void)onOnMaxEnergyUserListUpdateToComplete:(unsigned long long)arg1;
+- (void)onOnSpeakerUserUpdateComplete:(unsigned long long)arg1;
+- (void)onOnNetWeakUserUpdateComplete:(unsigned long long)arg1;
+- (void)onOnTalkingInfoUpdateToComplete:(unsigned long long)arg1;
+- (void)onOnMemberInfoUpdateComplete:(unsigned long long)arg1;
+- (void)onOnRenderUIChangedComplete:(unsigned long long)arg1;
+- (void)onHideOpBtnComplete:(unsigned long long)arg1;
+- (void)onShowOpBtnComplete:(unsigned long long)arg1;
+- (void)onCanResponsePauseEventComplete:(unsigned long long)arg1;
+- (void)onOnInComingCallChangeToMainCallComplete:(unsigned long long)arg1;
+- (void)onOnConfEventComplete:(unsigned long long)arg1;
+- (void)onOnCameraUpdateToComplete:(unsigned long long)arg1;
+- (void)onOnRenderInfoUpdateToComplete:(unsigned long long)arg1;
+- (void)onCallEndComplete:(unsigned long long)arg1;
+- (void)onHideFullscreenComplete:(unsigned long long)arg1;
+- (void)onToastAddMemberFailedComplete:(unsigned long long)arg1;
+- (void)onToastMultiPathUseComplete:(unsigned long long)arg1;
+- (void)onToastMemberJoinTalkingComplete:(unsigned long long)arg1;
+- (void)onCancelInComingNotifyComplete:(unsigned long long)arg1;
+- (void)onShowRejectFloatCardComplete:(unsigned long long)arg1;
+- (void)onShowTalkingUnSafeComplete:(unsigned long long)arg1;
+- (void)onShowFinishCallFloatCardComplete:(unsigned long long)arg1;
+- (void)onShowNotFriendComplete:(unsigned long long)arg1;
+- (void)onLaunchPageComplete:(unsigned long long)arg1;
+- (void)onLaunchInComingCardComplete:(unsigned long long)arg1;
+- (void)onHideFloatCardComplete:(unsigned long long)arg1;
+- (void)onHideInComingCardComplete:(unsigned long long)arg1;
+- (void)onLaunchFloatPageComplete:(unsigned long long)arg1 ret:(BOOL)arg2;
+- (void)onLaunchContractPageComplete:(unsigned long long)arg1;
+- (void)onLaunchRingtoneHalfDialogComplete:(unsigned long long)arg1;
+- (void)onHideRingtoneHalfDialogComplete:(unsigned long long)arg1;
+- (void)onUpdateBannerInfoComplete:(unsigned long long)arg1;
+- (void)onAcceptToWaitingComplete:(unsigned long long)arg1;
+@end

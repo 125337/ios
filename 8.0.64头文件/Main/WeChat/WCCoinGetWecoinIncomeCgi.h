@@ -1,0 +1,2 @@
+@interface WCCoinGetWecoinIncomeCgi : WCBaseCgi
+@end

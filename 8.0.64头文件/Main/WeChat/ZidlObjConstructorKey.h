@@ -1,0 +1,2 @@
+@interface ZidlObjConstructorKey : NSObject
+@end

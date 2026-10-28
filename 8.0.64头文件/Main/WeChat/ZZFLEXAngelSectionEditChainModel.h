@@ -1,0 +1,27 @@
+@interface ZZFLEXAngelSectionEditChainModel : ZZFLEXAngelSectionBaseChainModel
+- (id)dataModelArray;
+- (id)dataModelForHeader;
+- (id)dataModelForFooter;
+- (long long)index;
+- (id /* block */)dataModelByViewTag;
+- (id /* block */)dataModelArrayByViewTag;
+- (long long)height;
+- (id /* block */)clear;
+- (id /* block */)clearItems;
+- (id /* block */)clearCells;
+- (id /* block */)deleteHeader;
+- (id /* block */)deleteFooter;
+- (id /* block */)deleteCellByTag;
+- (id /* block */)deleteAllCellsByTag;
+- (id /* block */)deleteCellAtIndex;
+- (id /* block */)deleteCellByDataModel;
+- (id /* block */)update;
+- (id /* block */)updateItems;
+- (id /* block */)updateCells;
+- (id /* block */)updateHeader;
+- (id /* block */)updateFooter;
+- (id /* block */)updateCellByTag;
+- (id /* block */)updateCellAtIndex;
+- (id /* block */)updateCellByDataModel;
+- (id /* block */)updateAllCellsByTag;
+@end

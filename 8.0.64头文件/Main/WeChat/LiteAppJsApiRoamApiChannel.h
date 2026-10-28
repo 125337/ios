@@ -1,0 +1,2 @@
+@interface LiteAppJsApiRoamApiChannel : LiteAppJsApi
+@end

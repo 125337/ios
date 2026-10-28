@@ -1,0 +1,2 @@
+@interface _TtC11SwiftyMidas44IndependentDeploymentMobilePurchaseSceneData : _TtC11SwiftyMidas32StandaradMobilePurchaseSceneData
+@end

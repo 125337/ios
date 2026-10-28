@@ -1,0 +1,2 @@
+@interface _TtC29shared_preferences_foundation20UserDefaultsApiSetup : _TtCs12_SwiftObject
+@end

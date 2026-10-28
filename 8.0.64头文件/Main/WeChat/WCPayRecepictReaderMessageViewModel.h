@@ -1,0 +1,26 @@
+@interface WCPayRecepictReaderMessageViewModel : ReaderMessageViewModel
++ (BOOL)canCreateMessageViewModelWithMessageWrap:(id)arg1;
++ (id)getMessageFTSText:(id)arg1;
+- (id)cellViewClassName;
+- (CGSize)measureContentViewSize:(CGSize)arg1;
+- (double)measureScheduleContentViewHeight:(id)arg1 originY:(double)arg2;
+- (BOOL)isDisableEditMode;
+- (BOOL)isShowReadAll;
+- (BOOL)isReaderWrapWeappJumpType;
+- (BOOL)isReaderWrapInvalidUrlJumpType;
+- (BOOL)isReaderWrapScheduleJumpType;
+- (BOOL)isNewPaymsgType;
+- (double)itemInsideWidth;
+- (double)readerViewWidth;
+- (double)readerItemLMargin;
+- (double)readerLineLMargin;
+- (CGSize)headerMenuSize;
+- (id)headerMenuImage;
+- (id)muteSloganStr;
+- (id)muteSloganFont;
+- (CGSize)muteSloganSize;
+- (BOOL)hasMoneyUnit:(id)arg1;
+- (double)messageNodeViewWidth;
+- (double)messageNodeViewHeight;
+- (id)makeSearchPreview:(id)arg1;
+@end

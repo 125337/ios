@@ -1,0 +1,35 @@
+@interface WCFinderMusicPlaylistTabPage : WCFinderStreamProfileViewPage <UICollectionViewDelegate, UICollectionViewDataSource, WCFinderProfilePlaylistCellDataSource, WCFinderStreamFooterViewActionDelegate, WCFinderStreamLayoutDelegate, WCFinderStreamProfileMusicPlaylistDelegate, WCFinderProfileMusicFullPostViewCellDelegate, WCFinderProfileMusicPostTabCellDelegate, WCFinderCarouselDatasource>
+- (id)init;
+- (id)loadView;
+- (void)dealloc;
+- (void)viewDidLoad;
+- (long long)numberOfSectionsInCollectionView:(id)arg1;
+- (long long)collectionView:(id)arg1 numberOfItemsInSection:(long long)arg2;
+- (id)collectionView:(id)arg1 cellForItemAtIndexPath:(id)arg2;
+- (BOOL)isMoreCellAtIndexPath:(id)arg1;
+- (id)collectionView:(id)arg1 viewForSupplementaryElementOfKind:(id)arg2 atIndexPath:(id)arg3;
+- (void)bindHeaderMoreSDKReport:(id)arg1 view:(id)arg2;
+- (void)collectionView:(id)arg1 didSelectItemAtIndexPath:(id)arg2;
+- (void)_onClickPlayList:(id)arg1;
+- (unsigned long long)collectionView:(id)arg1 layout:(id)arg2 columnCountAtSection:(unsigned long long)arg3;
+- (UIEdgeInsets)collectionView:(id)arg1 layout:(id)arg2 cellEdgeInsetAtSection:(unsigned long long)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 cellSpaceAtSection:(unsigned long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 headerHeightAtSection:(unsigned long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 footerHeightAtSection:(unsigned long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 cellHeightAtIndexPath:(id)arg3 withWidth:(double)arg4;
+- (long long)numberOfPlayListCell:(id)arg1;
+- (WCFinderProfilePlaylistItem)playListCell:(id)arg1 itemAtIndex:(long long)arg2;
+- (void)playListCell:(id)arg1 onClickCellAtIndex:(long long)arg2;
+- (void)onClickMoreCell:(id)arg1;
+- (void)onPlayListClickMore:(id)arg1;
+- (void)onPlayListBeginFetchData:(id)arg1;
+- (void)onPlayList:(id)arg1 onLoadSuccess:(BOOL)arg2;
+- (long long)numbersForCarousel:(id)arg1;
+- (void)onProfileMusicFullPostViewClicked:(id)arg1;
+- (void)onProfileMusicPostTabSelectPostMusic:(id)arg1;
+- (void)onProfileMusicPostTabSelectManageMusic:(id)arg1;
+- (void)onLaunchPostMusicLiteApp;
+- (void)onLaunchManageMusicLiteApp;
+- (void)onReceiveMusicEventRefreshList;
+- (id)viewForCarousel:(id)arg1 indexPath:(id)arg2 index:(long long)arg3;
+@end

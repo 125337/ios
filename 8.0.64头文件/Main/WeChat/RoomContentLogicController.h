@@ -1,0 +1,226 @@
+@interface RoomContentLogicController : BaseMsgContentLogicController <MMNewTipsMgrExt, ChatRoomUpgradeOpenIMLogicDelegate, ChatRoomToolViewControllerDelegate, IWCGroupUndoneExt, RoomDelMemControllDelegate, WCTopicSearchViewControllerDelegate, IRoomHistoryDownloadExt, ChatRoomInvitationMgrExt, WCFinderClubExt, chatRoomInfoDelegate, chatRoomSettingDelegate, IGroupMgrExt, IContactMgrExt, RoomContactSelectDelegate, IAutoSetRemarkExt, IMMQRCodeExt, TipsViewDelegate, ChatroomMemberRemoveViewControllerDelegate, ILinkEventExt, WCActionSheetDelegate, MMTipsViewControllerDelegate, ChatRoomInvitationDetailDelegate>
+{
+    BOOL m_bStartShowRoomContactSelector; // +0x108
+    ChatRoomInfoSettingMgr * m_ChatRoomInfoSettingMgr; // +0x110
+    BOOL m_bTipsShow; // +0x118
+    BOOL m_bPresentRoomContactSelector; // +0x119
+    BOOL m_forbidGetGroupMemberDetail; // +0x11a
+    ChatRoomUpgradeOpenIMLogic * m_chatRoomUpgradeOpenIMLogic; // +0x120
+    ChatRoomToolViewController * m_chatRoomToolViewController; // +0x128
+    RoomDelMemController * m_chatRoomDelMemController; // +0x130
+    RoomHistoryContext * m_historyContext; // +0x138
+    RoomReportController * m_reportController; // +0x140
+    BOOL m_waitingChatRoomInfo; // +0x148
+    BOOL m_hadAttachmentRedDot; // +0x149
+    CBaseContact * m_lastAtContact; // +0x150
+    NSString * m_lastAtNickName; // +0x158
+    NSString * m_lastAtHeadUrl; // +0x160
+    WCTopicSearchViewController * _topicSearchVC; // +0x168
+    ChatUnavailableTipsView * _chatroomUnavailableTipsView; // +0x170
+    MMInputToolView * _inputToolView; // +0x178
+}
+- (id)init;
+- (id)initWithLocalID:(unsigned int)arg1 CreateTime:(unsigned int)arg2 ContentViewDisshowStatus:(unsigned long long)arg3 searchKeywordList:(id)arg4 fromScene:(unsigned long long)arg5;
+- (void)onWillEnterRoom;
+- (void)setM_dicExtraInfo:(id)arg1;
+- (void)reportOpenIMChatRoom:(id)arg1;
+- (id)getGroupContact;
+- (id)GetMsg:(id)arg1 FromID:(unsigned int)arg2 Limit:(int)arg3 LeftCount:(unsigned int *)arg4;
+- (id)getMsgFromLocalId:(unsigned int)arg1 createTime:(unsigned int)arg2 sequence:(unsigned int)arg3 limit:(unsigned int)arg4;
+- (id)GetDownMsg:(id)arg1 FromID:(unsigned int)arg2 Limit:(int)arg3 LeftCount:(unsigned int *)arg4;
+- (id)getDownMsgFromLocalId:(unsigned int)arg1 createTime:(unsigned int)arg2 sequence:(unsigned int)arg3 limit:(unsigned int)arg4;
+- (void)ClearUnRead:(id)arg1 FromID:(unsigned int)arg2 ToID:(unsigned int)arg3;
+- (void)clearAllMsg;
+- (void)DelMsg:(id)arg1 MsgList:(id)arg2 DelAll:(BOOL)arg3;
+- (void)AddMsg:(id)arg1 MsgWrap:(id)arg2;
+- (void)ResendMsg:(id)arg1 MsgWrap:(id)arg2;
+- (id)getMsgSendOpEntry;
+- (BOOL)CanSendImageMsg:(id)arg1;
+- (BOOL)CanSendVoiceMsg;
+- (BOOL)CanLongPressHeadImage;
+- (BOOL)CanSendVoipMsg;
+- (void)CustomToolViewEX:(id)arg1 inputPresenter:(id)arg2;
+- (BOOL)shouldUseNewTipsNavBar;
+- (void)initChatroomUnavailableTipsView;
+- (BOOL)canReplyMsg;
+- (BOOL)shouldShowChatroomUnavailableTipsView;
+- (long long)chatroomUnavailableType;
+- (BOOL)IsShowAttachmentButtonRedDot;
+- (void)OnClickAttachmentButton:(BOOL)arg1;
+- (void)OnClickAttachmentButtonAction;
+- (id)getInputToolWeAppOpEntryAr;
+- (long long)getInputToolWeAppNotShowIndex;
+- (void)onInputToolWeAppButtonClickedWithItem:(id)arg1;
+- (void)onShowInputToolWeAppAr:(id)arg1;
+- (id)GetRightBarBtn;
+- (id)GetRightBarButtonImageName;
+- (id)GetRightBarButtonTitle;
+- (BOOL)isGroupMember;
+- (void)OpenContactInfo:(id)arg1;
+- (BOOL)isChatRoomDismissed;
+- (BOOL)isChatRoomBlocked;
+- (BOOL)isChatRoomMember;
+- (void)OpenDetailInfo;
+- (id)GetUsrTitle;
+- (id)GetChatRoomTitle;
+- (id)getMemeberCountLabel;
+- (id)getDefaultTitleTailSubViews;
+- (double)GetTitleLabelOffset;
+- (BOOL)shouldPreventViewcontrollerAutorotate;
+- (void)OnViewRoomAnnouncement;
+- (void)OnViewRoomAnnouncement:(int)arg1;
+- (void)OnClickSecurityTipsBar:(id)arg1;
+- (void)OnViewChatRoomInvitationList;
+- (void)OnCloseChatRoomInvitationTipsBar;
+- (void)onChatRoomInvitationUnReadCountChanged;
+- (void)updateChatRoomInvitationBanner;
+- (void)OnTagLink:(id)arg1 messageWrap:(id)arg2;
+- (void)enterChatRoomInfo:(id)arg1 scene:(int)arg2;
+- (void)OnViewChatRoomDesc;
+- (void)OnGetChatRoomInfo:(id)arg1 Info:(id)arg2 showBanner:(BOOL)arg3;
+- (void)onChatRoomToolButtonClick;
+- (void)onExitRoom;
+- (void)updateTipsNavBarReporter;
+- (void)onTopMsg:(id)arg1;
+- (void)onCancelTopMsg:(id)arg1;
+- (void)onSetRoomTopMsgWithUserName:(id)arg1 msgSvrID:(unsigned long long)arg2 bSuccess:(BOOL)arg3 errorMsg:(id)arg4;
+- (void)onUnSetRoomTopMsgWithUserName:(id)arg1 msgSvrID:(unsigned long long)arg2 bSuccess:(BOOL)arg3 errorMsg:(id)arg4;
+- (void)updateTopMessageInfo;
+- (void)OnClickTopMessageTipsBar:(id)arg1;
+- (void)OnClickCloseTopMessageTipsBar:(id)arg1;
+- (void)OnClickCancelTopMessageTipsBar:(id)arg1;
+- (void)cancelTopOfMsgSvrId:(long long)arg1;
+- (id)getFilteredTopMsgInfoList;
+- (void)OnMsgRevoked:(id)arg1 n64MsgId:(long long)arg2;
+- (void)OnGroupNoticeMsgRevoked:(id)arg1 n64MsgId:(long long)arg2 item:(id)arg3;
+- (void)OnRevokeMsg:(id)arg1 MsgWrap:(id)arg2 ResultCode:(unsigned int)arg3 ResultMsg:(id)arg4 EducationMsg:(id)arg5;
+- (void)onDeleteMsg:(id)arg1;
+- (void)onTopMsgMenuItemExposed:(id)arg1;
+- (void)onCancelTopMsgMenuItemExposed:(id)arg1;
+- (void)viewWillRotateToOrientation:(long long)arg1;
+- (id)getSubTitle;
+- (void)checkGetChatRoomInfo:(id)arg1;
+- (void)tryGetChatRoomMemberDetail:(id)arg1;
+- (void)updateFinderClubInfoIfNeeded;
+- (void)ViewDidAppear;
+- (void)setHasShowUnreadTip:(unsigned long long)arg1;
+- (void)onClickUnreadTip:(unsigned long long)arg1;
+- (void)onWillDisplayMsg:(id)arg1;
+- (void)DidAddMsg:(id)arg1;
+- (void)ViewDidInit;
+- (void)onPopFromNavigationController;
+- (void)onPerformAction:(id)arg1;
+- (void)ViewWillAppear;
+- (void)onEnterRoom;
+- (void)resetAttachmentButtonRedDotFlag;
+- (void)checkAddFriend;
+- (void)checkSecurityBannerShow;
+- (id)nameForHeadImageLongPressed:(id)arg1;
+- (void)AddAtUser:(id)arg1;
+- (void)onInputTextDeleteAll;
+- (void)clearAtMeCount;
+- (void)clearNewInvCount;
+- (void)clearNewInvApprove;
+- (void)clearAACount;
+- (void)clearTransferCount;
+- (void)clearUpdatableMsgNotify;
+- (void)clearGroupUndoneSessionFlag;
+- (void)clearChatRoomSpecialAttentionFlag;
+- (void)clearEcsGiftUnhandledFlag;
+- (BOOL)shouldHideToolViewWhenKeyboardHide;
+- (void)onChatroomMemberRemoveViewCancel;
+- (void)clickLinkToDealWithSysXml:(id)arg1 fromScene:(id)arg2;
+- (void)onClickJumpToSession:(id)arg1;
+- (void)onClickPatMessageLinkWithUrl:(id)arg1;
+- (id)getTargetProfileFromURL:(id)arg1;
+- (void)jumpToProfile:(id)arg1 fromPatMessage:(BOOL)arg2;
+- (void)jumpToSession:(id)arg1;
+- (void)approveMembersFromApproveScene:(id)arg1;
+- (void)chatRoomAdminFromAdminExplainScene:(id)arg1;
+- (id)getResultWithRegularInString:(id)arg1 WithPatterns:(id)arg2;
+- (void)onApproveInvitationSuccess:(id)arg1;
+- (void)sendInviteFromApproveToInviterScene:(id)arg1;
+- (void)OnInviteChatRoomMember:(id)arg1 Ret:(int)arg2 Error:(id)arg3 withUserData:(id)arg4;
+- (void)processNewXMLInInviteScene:(id)arg1;
+- (void)delChatRoomMemberFromInvitionScene:(id)arg1;
+- (void)delChatRoomMemberFromQRcodeScene:(id)arg1;
+- (void)removeChatRoomMember:(id)arg1 scene:(unsigned long long)arg2;
+- (void)revokeChatRoomQRCode:(id)arg1;
+- (void)checkAndBrowseRoomHistory:(id)arg1;
+- (BOOL)isFromChatBoxList;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)onClickDelete;
+- (void)realDoDelete;
+- (void)newMessageFromChatRoomInfo:(id)arg1;
+- (void)onModifyContact:(id)arg1;
+- (BOOL)CanRemoteRecord;
+- (BOOL)existEmptyMemberContact;
+- (void)ViewWillInit;
+- (BOOL)chatRoomNeedGetContact;
+- (void)showRoomContactSelectorViewController;
+- (BOOL)isLastCharacterAlphaNumeric:(id)arg1;
+- (void)onTextChange:(id)arg1 selectedRange:(_NSRange)arg2 markedRange:(_NSRange)arg3;
+- (void)didSelectContact:(id)arg1;
+- (void)didMultiSelectContact:(id)arg1;
+- (id)getAtUserContactDisplayName:(id)arg1;
+- (void)onCancelSelectContact;
+- (void)onRevokeChatroomQRCode:(id)arg1 success:(BOOL)arg2 errTip:(id)arg3;
+- (void)onSetStrangerRemark:(id)arg1;
+- (void)onTipsShowInfoChangeWithPathKey:(id)arg1;
+- (void)updateChatroomContact:(id)arg1;
+- (void)OnChangeGroup:(id)arg1;
+- (void)OnChangeMemberDisplayName:(id)arg1;
+- (void)OnChangeMemberShowDisplayName:(id)arg1;
+- (void)OnChangeMemberVerifyStatus:(id)arg1;
+- (void)OnChangeNotifyStatus:(id)arg1 withStatus:(BOOL)arg2;
+- (void)OnDelGroupMember:(id)arg1 withResult:(unsigned int)arg2 memberList:(id)arg3 errTip:(id)arg4;
+- (void)OnUpdateApproveMessage:(id)arg1 MessageWrap:(id)arg2;
+- (BOOL)isNeedCached;
+- (BOOL)mainSwitch_shouldHandleAppmsg;
+- (BOOL)inPageSwitch_shouldPreCreateAndUpdateAndTryReport;
+- (BOOL)shouldPreDownloadPageData;
+- (unsigned int)currPageAppmsgEnterType;
+- (unsigned int)currPageAppmsgReportScene;
+- (void)onWCGroupUpdateUndoneItem:(id)arg1;
+- (void)onWCGroupDisposeUndoneItem:(id)arg1;
+- (void)onWCGroupCompleteUndoneItem:(id)arg1 result:(BOOL)arg2;
+- (void)onWCGroupRevokeUndoneItem:(id)arg1 result:(BOOL)arg2;
+- (void)onWCGroupSetMessageUndone:(id)arg1 result:(BOOL)arg2;
+- (void)onWCGroupDeleteAll:(id)arg1;
+- (void)doClickGroupUndoneItem:(id)arg1 scene:(unsigned int)arg2;
+- (void)doClickGroupUndoneItem:(id)arg1 scene:(unsigned int)arg2 doCheck:(BOOL)arg3;
+- (void)doClickRoomTodoCustomLinkWithUrl:(id)arg1 chatname:(id)arg2;
+- (void)showSettingRoomTodoActionSheetWithMessage:(id)arg1 showEdu:(BOOL)arg2;
+- (void)showRevokeGroupUndoneActionSheetWithObj:(id)arg1;
+- (void)setMessageAsTodoEvent:(id)arg1;
+- (void)revokeGroupUndoneItem:(id)arg1;
+- (void)showFinderClubReddotIfNeeded:(id)arg1;
+- (void)showHistoryRecordExpiredTips:(id)arg1;
+- (void)showHistoryRecordDownloadFailTips:(id)arg1;
+- (void)showHistoryRevokeTips:(id)arg1;
+- (void)internalPushToHistoryRecord:(id)arg1;
+- (void)onChatroomFinderClubInfoUpdated:(id)arg1;
+- (void)OnRoomHistoryDownloadExipired:(id)arg1 DataId:(id)arg2;
+- (void)OnRoomHistoryDownloadFail:(id)arg1 DataId:(id)arg2;
+- (void)OnRoomHistoryDownloadOK:(id)arg1;
+- (BOOL)isEnableTopicSearchInteraction;
+- (BOOL)isEnableTopicSearchShare;
+- (void)onClickTopicSearchEntry;
+- (void)showTagHalfScreenQueryViewController:(id)arg1;
+- (void)onTopicSearchResultSended:(id)arg1;
+- (void)onTopicSearchQuerySelected:(id)arg1 context:(id)arg2;
+- (void)onTopicSearchCancel:(id)arg1;
+- (void)onGrowTextViewDidShowMenuControllerWithMenuItemArr:(id)arg1;
+- (void)onGrowTextViewMenuItemClicked:(unsigned long long)arg1 growTextView:(id)arg2;
+- (id)baseContactToForwardSearchResult;
+- (BOOL)supportWXKeyBoard;
+- (unsigned int)getBaseMsgContentViewScene;
+- (void)onScrollViewDidEndDragging:(id)arg1 willDecelerate:(BOOL)arg2;
+- (id)topicSearchVC;
+- (void)setTopicSearchVC:(id)arg1;
+- (id)chatroomUnavailableTipsView;
+- (void)setChatroomUnavailableTipsView:(id)arg1;
+- (id)inputToolView;
+- (void)setInputToolView:(id)arg1;
+- (void).cxx_destruct;
+@end

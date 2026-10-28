@@ -1,0 +1,2 @@
+@interface MMFinderLiveOnlineStateBar : MMLiveOnlineStateBar
+@end

@@ -1,0 +1,2 @@
+@interface PAGShapeLayer : PAGLayer
+@end

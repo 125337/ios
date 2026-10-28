@@ -1,0 +1,2 @@
+@interface WAWebActionSheetView : UIView
+@end

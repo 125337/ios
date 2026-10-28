@@ -1,0 +1,2 @@
+@interface MMFinderLiveFeedTransferOutData : MMFinderLiveFeedTransferData
+@end

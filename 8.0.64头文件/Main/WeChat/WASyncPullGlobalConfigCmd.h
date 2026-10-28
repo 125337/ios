@@ -1,0 +1,2 @@
+@interface WASyncPullGlobalConfigCmd : WASyncBaseCmd
+@end

@@ -1,0 +1,2 @@
+@interface MMLiveCustomRenderView : UIView
+@end

@@ -1,0 +1,2 @@
+@interface EmoticonMixedPreviewViemMoreData : NSObject
+@end

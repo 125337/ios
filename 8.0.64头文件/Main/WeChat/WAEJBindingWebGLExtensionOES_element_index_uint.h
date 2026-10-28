@@ -1,0 +1,2 @@
+@interface WAEJBindingWebGLExtensionOES_element_index_uint : WAEJBindingWebGLExtension
+@end

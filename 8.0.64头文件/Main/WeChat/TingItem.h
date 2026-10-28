@@ -1,0 +1,29 @@
+@interface TingItem : WXPBGeneratedMessage
++ (id)tingItemFromRaw:(id)arg1;
++ (id)parseFromWebItem:(id)arg1;
++ (void)initialize;
+- (BOOL)isPlaying;
+- (id)toShareItem;
+- (id)toChatMessageWithCoverImageData:(id)arg1;
+- (id)toWCUpLoadTaskWithCoverImageData:(id)arg1;
+- (id)toFavItemWithCoverImageData:(id)arg1;
+- (BOOL)isEqual:(id)arg1;
+- (BOOL)isSameListenItem:(id)arg1;
+- (id)debugDescription;
+- (BOOL)isSupportOpenAuthorPage;
+- (BOOL)isSupportOpenDetailPage;
+- (BOOL)isValid;
+- (id)iconUrl;
+- (id)iconRemoteOrLocalUrl;
+- (id)title;
+- (id)subtitle;
+- (id)authorName;
+- (id)audioUrl;
+- (id)webUrl;
+- (int)durationMs;
+- (id)uuid;
+- (void)updateWithListenItem:(id)arg1;
+- (void)switchToBackupItem;
+- (id)copy;
+- (id)webItem;
+@end

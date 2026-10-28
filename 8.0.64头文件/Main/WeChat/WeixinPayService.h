@@ -1,0 +1,218 @@
+@interface WeixinPayService : NSObject <PreviewContentLogicControllerDelegate, LiteAppDynamicModuleProtocol>
+{
+    UIViewController * _controller; // +0x8
+    LiteAppDynamicModuleCallback * _callback; // +0x10
+    NSObject * _hold; // +0x18
+    KindaCrtService * _crtService; // +0x20
+    WXPLiteAppNetworkService * _networkService; // +0x28
+    WXPLiteAppBankCardOcrService * _bankOcrService; // +0x30
+    WXPLiteAppRealnameService * _realNameService; // +0x38
+    WXPLiteAppBiometricVerifyService * _biometricVerifyService; // +0x40
+    WXPLiteAppLuckyMoneyPickEnvelopeService * _luckyMoneyPickEnvelopeService; // +0x48
+    WXPLiteAppNewyearHbService * _newyearHbService; // +0x50
+    MMKindaShakeManager * _shakeManager; // +0x58
+    KindaDeviceService * _deviceService; // +0x60
+    KindaFingerprintService * _fingerPrintService; // +0x68
+    KindaPlatformUIRouter * _platformUIRouter; // +0x70
+    YunShanFuPayService * _yunShanFuPayService; // +0x78
+    WXPLiteAppJumpRemindService * _jumpRemindService; // +0x80
+}
++ (id)liteapp_export_method_async_101;
++ (id)liteapp_export_method_async_102;
++ (id)liteapp_export_method_async_103;
++ (id)liteapp_export_method_async_104;
++ (id)liteapp_export_method_async_105;
++ (id)liteapp_export_method_async_106;
++ (id)liteapp_export_method_async_109;
++ (id)liteapp_export_method_async_110;
++ (id)liteapp_export_method_async_111;
++ (id)liteapp_export_method_async_112;
++ (id)liteapp_export_method_async_115;
++ (id)liteapp_export_method_async_118;
++ (id)liteapp_export_method_async_119;
++ (id)liteapp_export_method_async_withbuffer_120_1_NSString;
++ (id)liteapp_export_method_async_121;
++ (id)liteapp_export_method_async_122;
++ (id)liteapp_export_method_async_withbuffer_125_NSData;
++ (id)liteapp_export_method_async_withbuffer_126_1_WXPLiteAppNetworkResponse;
++ (id)liteapp_export_method_async_withbuffer_128_WXPLiteAppPayNetworkInfo;
++ (id)liteapp_export_method_async_130;
++ (id)liteapp_export_method_async_131;
++ (id)liteapp_export_method_async_132;
++ (id)liteapp_export_method_async_133;
++ (id)liteapp_export_method_async_134;
++ (id)liteapp_export_method_async_135;
++ (id)liteapp_export_method_async_136;
++ (id)liteapp_export_method_async_137;
++ (id)liteapp_export_method_async_139;
++ (id)liteapp_export_method_async_140;
++ (id)liteapp_export_method_async_141;
++ (id)liteapp_export_method_async_143;
++ (id)liteapp_export_method_async_144;
++ (id)liteapp_export_method_async_145;
++ (id)liteapp_export_method_async_146;
++ (id)liteapp_export_method_async_147;
++ (id)liteapp_export_method_async_148;
++ (id)liteapp_export_method_async_149;
++ (id)liteapp_export_method_async_150;
++ (id)liteapp_export_method_async_151;
++ (id)liteapp_export_method_async_154;
++ (id)liteapp_export_method_async_155;
++ (id)liteapp_export_method_async_156;
++ (id)liteapp_export_method_async_157;
++ (id)liteapp_export_method_async_158;
++ (id)liteapp_export_method_async_159;
++ (id)liteapp_export_method_async_162;
++ (id)liteapp_export_method_async_163;
++ (id)liteapp_export_method_async_164;
++ (id)liteapp_export_method_async_165;
++ (id)liteapp_export_method_async_166;
++ (id)liteapp_export_method_async_167;
++ (id)liteapp_export_method_async_168;
++ (id)liteapp_export_method_async_169;
++ (id)liteapp_export_method_async_170;
++ (id)liteapp_export_method_async_171;
++ (id)liteapp_export_method_async_172;
++ (id)liteapp_export_method_async_175;
++ (id)liteapp_export_method_async_withbuffer_178_1_NSDictionary;
++ (id)liteapp_export_method_async_withbuffer_179_1_NSDictionary;
++ (id)liteapp_export_method_async_180;
++ (id)liteapp_export_method_async_183;
++ (id)liteapp_export_method_async_184;
++ (id)liteapp_export_method_async_185;
++ (id)liteapp_export_method_async_186;
++ (id)liteapp_export_method_async_189;
++ (id)liteapp_export_method_async_190;
++ (id)liteapp_export_method_async_191;
++ (id)liteapp_export_method_async_192;
++ (id)liteapp_export_method_async_195;
++ (id)liteapp_export_method_async_198;
++ (id)liteapp_export_method_async_199;
++ (id)liteapp_export_method_async_202;
++ (id)liteapp_export_method_async_204;
++ (id)liteapp_export_method_async_206;
++ (id)liteapp_export_method_async_209;
++ (id)liteapp_export_method_async_210;
++ (id)liteapp_export_method_async_213;
++ (id)liteapp_export_method_async_214;
++ (id)liteapp_export_method_async_215;
++ (id)liteapp_export_method_async_216;
++ (id)liteapp_export_method_async_217;
++ (id)liteapp_export_method_async_218;
+- (void)notifyHoneyPayRefreshCardList;
+- (void)jumpRedPacketEnvelopePreview:(id)arg1;
+- (void)onPreviewContentLogicControllerBack;
+- (void)startContactSelect:(id)arg1;
+- (void)canMakeApplePayPayments;
+- (void)requestApplePayPayment:(id)arg1;
+- (void)finishApplePayPayment:(id)arg1;
+- (void)openOfflineForApplePay:(id)arg1;
+- (void)startKindaUseCase:(id)arg1;
+- (void)nativeRoute:(id)arg1;
+- (void)startNativeUseCase:(id)arg1;
+- (void)startRealNameVerify:(id)arg1;
+- (void)startMultiSelectContacts:(id)arg1;
+- (id)crtService;
+- (void)hasCrt;
+- (void)getCrtNo;
+- (void)crtSign:(id)arg1 data:(id)arg2;
+- (void)installDigitalCert:(id)arg1;
+- (void)deleteDigitalCert;
+- (id)networkService;
+- (void)getBaseRequest:(int)arg1;
+- (void)request:(id)arg1 data:(id)arg2;
+- (void)getNativeNetworkInfo;
+- (void)startBankCardScan:(id)arg1;
+- (void)startUnderAgeParentVerify:(id)arg1;
+- (void)notifyRealNameResult:(id)arg1;
+- (void)notifyRealNameCancel;
+- (void)supportBioType;
+- (void)bioAuthenticate:(id)arg1;
+- (void)cancelAuthenticate;
+- (void)getContactDisplayName:(id)arg1;
+- (void)updateBiometricVerificationState:(id)arg1;
+- (void)luckyMoneyPickEnvelope:(id)arg1;
+- (void)getNewYearPagPath:(id)arg1;
+- (void)previewStateNewYearHb:(id)arg1;
+- (void)getSecurityFlag;
+- (void)reportSecurityEvent:(id)arg1;
+- (void)notifyKinda:(id)arg1;
+- (void)openBiometricVerify:(id)arg1;
+- (id)shakeManager;
+- (void)startCheck;
+- (void)stopCheck;
+- (void)setOnShakeCallBackImpl;
+- (void)playShakeSound;
+- (void)playShakeMatch:(id)arg1;
+- (void)playVibration;
+- (id)deviceService;
+- (void)isRoot;
+- (void)isDeviceOpenBiometricVerification;
+- (void)isDeviceSupportFaceId;
+- (void)isDeviceSupportTouchId;
+- (void)isDeviceSupportFaceIdAndReg;
+- (void)isDeviceSupportTouchIdAndReg;
+- (void)getSoterCpuId;
+- (void)getSoterUid;
+- (void)isBiometricNeedChangeAuthKey;
+- (void)changeBiometricAuthKey:(id)arg1;
+- (void)isBioPayTypeEnabled:(int)arg1;
+- (void)reportCrossPlatformPay;
+- (void)callbackToNative:(id)arg1 data:(id)arg2;
+- (void)changeWalletAreaFromMainLandToHK:(id)arg1;
+- (void)cancelPayFromCashierChangeWalletArea;
+- (void)liteappAddPayCardDelegate:(id)arg1;
+- (void)liteAppAddCertificateCallback:(id)arg1;
+- (void)getDeviceInfoForYuanBaoAd;
+- (id)viewController;
+- (void)setViewController:(id)arg1;
+- (id)callback;
+- (void)setCallback:(id)arg1;
+- (void)encryptWith3Des:(id)arg1;
+- (id)platformUIRouter;
+- (void)gotoExternApp:(id)arg1 openApiParam:(id)arg2;
+- (void)jointpayGotoExternApp:(id)arg1 openApiParam:(id)arg2;
+- (void)openUrlScheme:(id)arg1;
+- (void)getContactInfoList:(id)arg1;
+- (void)getStrangerContactInfo:(id)arg1;
+- (void)isYunShanFuAppInstalled;
+- (void)isDcepAppInstalled;
+- (void)isSupportApplePay;
+- (void)isSupportNFC;
+- (void)startYunShanFuPay:(id)arg1;
+- (id)jumpRemindService;
+- (void)jumpRemind:(id)arg1;
+- (void)showPayLoading:(BOOL)arg1;
+- (void)closeTopThirdPartyView;
+- (void)getEncryptInfo:(id)arg1;
+- (void)isLocationAuthorized;
+- (void)handleAdFeedbackCloseWithAid:(id)arg1;
+- (void)handleAdOpenWithAid:(id)arg1;
+- (void)reportAdWithAidAndType:(id)arg1;
+- (void)getYuanBaoInstalledState;
+- (void)getYuanBaoIsForOldUser;
+- (void)getFontLevel;
+- (id)hold;
+- (void)setHold:(id)arg1;
+- (void)setCrtService:(id)arg1;
+- (void)setNetworkService:(id)arg1;
+- (id)bankOcrService;
+- (void)setBankOcrService:(id)arg1;
+- (id)realNameService;
+- (void)setRealNameService:(id)arg1;
+- (id)biometricVerifyService;
+- (void)setBiometricVerifyService:(id)arg1;
+- (id)luckyMoneyPickEnvelopeService;
+- (void)setLuckyMoneyPickEnvelopeService:(id)arg1;
+- (id)newyearHbService;
+- (void)setNewyearHbService:(id)arg1;
+- (void)setShakeManager:(id)arg1;
+- (void)setDeviceService:(id)arg1;
+- (id)fingerPrintService;
+- (void)setFingerPrintService:(id)arg1;
+- (void)setPlatformUIRouter:(id)arg1;
+- (id)yunShanFuPayService;
+- (void)setYunShanFuPayService:(id)arg1;
+- (void)setJumpRemindService:(id)arg1;
+- (void).cxx_destruct;
+@end

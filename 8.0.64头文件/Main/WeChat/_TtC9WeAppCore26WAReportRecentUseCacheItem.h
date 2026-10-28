@@ -1,0 +1,160 @@
+@interface _TtC9WeAppCore26WAReportRecentUseCacheItem : WAReportBaseItem
+{
+     cacheSizeIn3Days; // +0x8
+     cacheSizeIn7Days; // +0x10
+     cacheSizeIn14Days; // +0x18
+     cacheSizeIn30Days; // +0x20
+     cacheSizeIn60Days; // +0x28
+     cacheSizeIn180Days; // +0x30
+     totalSize; // +0x38
+     publicDataSize; // +0x40
+     weappCacheCountIn3Days; // +0x48
+     weappCacheSizeIn3Days; // +0x50
+     gameCacheCountIn3Days; // +0x58
+     gameCacheSizeIn3Days; // +0x60
+     simulatedNativeCacheCountIn3Days; // +0x68
+     simulatedNativeCacheSizeIn3Days; // +0x70
+     weappCacheCountIn7Days; // +0x78
+     weappCacheSizeIn7Days; // +0x80
+     gameCacheCountIn7Days; // +0x88
+     gameCacheSizeIn7Days; // +0x90
+     simulatedNativeCacheCountIn7Days; // +0x98
+     simulatedNativeCacheSizeIn7Days; // +0xa0
+     weappCacheCountIn14Days; // +0xa8
+     weappCacheSizeIn14Days; // +0xb0
+     gameCacheCountIn14Days; // +0xb8
+     gameCacheSizeIn14Days; // +0xc0
+     simulatedNativeCacheCountIn14Days; // +0xc8
+     simulatedNativeCacheSizeIn14Days; // +0xd0
+     weappCacheCountIn30Days; // +0xd8
+     weappCacheSizeIn30Days; // +0xe0
+     gameCacheCountIn30Days; // +0xe8
+     gameCacheSizeIn30Days; // +0xf0
+     simulatedNativeCacheCountIn30Days; // +0xf8
+     simulatedNativeCacheSizeIn30Days; // +0x100
+     weappCacheCountIn60Days; // +0x108
+     weappCacheSizeIn60Days; // +0x110
+     gameCacheCountIn60Days; // +0x118
+     gameCacheSizeIn60Days; // +0x120
+     simulatedNativeCacheCountIn60Days; // +0x128
+     simulatedNativeCacheSizeIn60Days; // +0x130
+     weappCacheCountIn180Days; // +0x138
+     weappCacheSizeIn180Days; // +0x140
+     gameCacheCountIn180Days; // +0x148
+     gameCacheSizeIn180Days; // +0x150
+     simulatedNativeCacheCountIn180Days; // +0x158
+     simulatedNativeCacheSizeIn180Days; // +0x160
+     pluginCodeCacheSize; // +0x168
+     cronetCacheSize; // +0x170
+     videoCacheSize; // +0x178
+     renderCacheSize; // +0x180
+     codeCacheSize; // +0x188
+     predownloadCacheSize; // +0x190
+     predownloadCacheCount; // +0x198
+}
+- (long long)cacheSizeIn3Days;
+- (void)setCacheSizeIn3Days:(long long)arg1;
+- (long long)cacheSizeIn7Days;
+- (void)setCacheSizeIn7Days:(long long)arg1;
+- (long long)cacheSizeIn14Days;
+- (void)setCacheSizeIn14Days:(long long)arg1;
+- (long long)cacheSizeIn30Days;
+- (void)setCacheSizeIn30Days:(long long)arg1;
+- (long long)cacheSizeIn60Days;
+- (void)setCacheSizeIn60Days:(long long)arg1;
+- (long long)cacheSizeIn180Days;
+- (void)setCacheSizeIn180Days:(long long)arg1;
+- (long long)totalSize;
+- (void)setTotalSize:(long long)arg1;
+- (long long)publicDataSize;
+- (void)setPublicDataSize:(long long)arg1;
+- (long long)weappCacheCountIn3Days;
+- (void)setWeappCacheCountIn3Days:(long long)arg1;
+- (long long)weappCacheSizeIn3Days;
+- (void)setWeappCacheSizeIn3Days:(long long)arg1;
+- (long long)gameCacheCountIn3Days;
+- (void)setGameCacheCountIn3Days:(long long)arg1;
+- (long long)gameCacheSizeIn3Days;
+- (void)setGameCacheSizeIn3Days:(long long)arg1;
+- (long long)simulatedNativeCacheCountIn3Days;
+- (void)setSimulatedNativeCacheCountIn3Days:(long long)arg1;
+- (long long)simulatedNativeCacheSizeIn3Days;
+- (void)setSimulatedNativeCacheSizeIn3Days:(long long)arg1;
+- (long long)weappCacheCountIn7Days;
+- (void)setWeappCacheCountIn7Days:(long long)arg1;
+- (long long)weappCacheSizeIn7Days;
+- (void)setWeappCacheSizeIn7Days:(long long)arg1;
+- (long long)gameCacheCountIn7Days;
+- (void)setGameCacheCountIn7Days:(long long)arg1;
+- (long long)gameCacheSizeIn7Days;
+- (void)setGameCacheSizeIn7Days:(long long)arg1;
+- (long long)simulatedNativeCacheCountIn7Days;
+- (void)setSimulatedNativeCacheCountIn7Days:(long long)arg1;
+- (long long)simulatedNativeCacheSizeIn7Days;
+- (void)setSimulatedNativeCacheSizeIn7Days:(long long)arg1;
+- (long long)weappCacheCountIn14Days;
+- (void)setWeappCacheCountIn14Days:(long long)arg1;
+- (long long)weappCacheSizeIn14Days;
+- (void)setWeappCacheSizeIn14Days:(long long)arg1;
+- (long long)gameCacheCountIn14Days;
+- (void)setGameCacheCountIn14Days:(long long)arg1;
+- (long long)gameCacheSizeIn14Days;
+- (void)setGameCacheSizeIn14Days:(long long)arg1;
+- (long long)simulatedNativeCacheCountIn14Days;
+- (void)setSimulatedNativeCacheCountIn14Days:(long long)arg1;
+- (long long)simulatedNativeCacheSizeIn14Days;
+- (void)setSimulatedNativeCacheSizeIn14Days:(long long)arg1;
+- (long long)weappCacheCountIn30Days;
+- (void)setWeappCacheCountIn30Days:(long long)arg1;
+- (long long)weappCacheSizeIn30Days;
+- (void)setWeappCacheSizeIn30Days:(long long)arg1;
+- (long long)gameCacheCountIn30Days;
+- (void)setGameCacheCountIn30Days:(long long)arg1;
+- (long long)gameCacheSizeIn30Days;
+- (void)setGameCacheSizeIn30Days:(long long)arg1;
+- (long long)simulatedNativeCacheCountIn30Days;
+- (void)setSimulatedNativeCacheCountIn30Days:(long long)arg1;
+- (long long)simulatedNativeCacheSizeIn30Days;
+- (void)setSimulatedNativeCacheSizeIn30Days:(long long)arg1;
+- (long long)weappCacheCountIn60Days;
+- (void)setWeappCacheCountIn60Days:(long long)arg1;
+- (long long)weappCacheSizeIn60Days;
+- (void)setWeappCacheSizeIn60Days:(long long)arg1;
+- (long long)gameCacheCountIn60Days;
+- (void)setGameCacheCountIn60Days:(long long)arg1;
+- (long long)gameCacheSizeIn60Days;
+- (void)setGameCacheSizeIn60Days:(long long)arg1;
+- (long long)simulatedNativeCacheCountIn60Days;
+- (void)setSimulatedNativeCacheCountIn60Days:(long long)arg1;
+- (long long)simulatedNativeCacheSizeIn60Days;
+- (void)setSimulatedNativeCacheSizeIn60Days:(long long)arg1;
+- (long long)weappCacheCountIn180Days;
+- (void)setWeappCacheCountIn180Days:(long long)arg1;
+- (long long)weappCacheSizeIn180Days;
+- (void)setWeappCacheSizeIn180Days:(long long)arg1;
+- (long long)gameCacheCountIn180Days;
+- (void)setGameCacheCountIn180Days:(long long)arg1;
+- (long long)gameCacheSizeIn180Days;
+- (void)setGameCacheSizeIn180Days:(long long)arg1;
+- (long long)simulatedNativeCacheCountIn180Days;
+- (void)setSimulatedNativeCacheCountIn180Days:(long long)arg1;
+- (long long)simulatedNativeCacheSizeIn180Days;
+- (void)setSimulatedNativeCacheSizeIn180Days:(long long)arg1;
+- (long long)pluginCodeCacheSize;
+- (void)setPluginCodeCacheSize:(long long)arg1;
+- (long long)cronetCacheSize;
+- (void)setCronetCacheSize:(long long)arg1;
+- (long long)videoCacheSize;
+- (void)setVideoCacheSize:(long long)arg1;
+- (long long)renderCacheSize;
+- (void)setRenderCacheSize:(long long)arg1;
+- (long long)codeCacheSize;
+- (void)setCodeCacheSize:(long long)arg1;
+- (long long)predownloadCacheSize;
+- (void)setPredownloadCacheSize:(long long)arg1;
+- (long long)predownloadCacheCount;
+- (void)setPredownloadCacheCount:(long long)arg1;
+- (int)reportID;
+- (id)reportString;
+- (id)init;
+@end

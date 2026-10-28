@@ -1,0 +1,2 @@
+@interface WXStateJumpInfo : NSObject
+@end

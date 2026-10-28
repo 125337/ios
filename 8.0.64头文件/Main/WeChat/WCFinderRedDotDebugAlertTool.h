@@ -1,0 +1,2 @@
+@interface WCFinderRedDotDebugAlertTool : NSObject
+@end

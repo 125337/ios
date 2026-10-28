@@ -3,15 +3,14 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
+#import "../../Core/WPChatMenuHelper.h"
 #import "../../Settings/Controllers/FontPickerVC.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
 
-// 聊天文件长按"导入字体"——Joker 同款机制：
-//   hook 消息 cell 的 operationMenuItems → 追加 MMMenuItem(initWithTitle:svgName:action:)，
-//   action 是注册到 cell 类上的 SEL。菜单项只在文件消息扩展名像字体时追加，
-//   真伪由导入时的魔数校验把关（扩展名可能是假的）
-
-static IMP orig_AppFile_operationMenuItems = NULL;
+// 聊天文件长按"导入字体"——菜单挂载统一走 WPChatMenuHelper（spec 注册制）：
+//   本文件只负责两件事：① shouldShow 门禁（扩展名像字体才显示菜单项，
+//   真伪由导入时的魔数校验把关）② 点击动作 mioFontImportAction（导入核心）。
+//   建 MMMenuItem、挂 SEL、沉底排序全部由 helper 统一处理
 
 static NSInteger s_menuDiagBudget = 8; // 菜单诊断日志预算
 
@@ -81,48 +80,6 @@ static BOOL MioLooksLikeFontPath(NSString *path) {
             [ext isEqualToString:@"woff2"]);
 }
 
-// 菜单组装 hook：返回数组尾部追加"导入字体"项
-static id hooked_AppFile_operationMenuItems(id self, SEL _cmd) {
-    NSMutableArray *items = nil;
-    if (orig_AppFile_operationMenuItems) {
-        items = ((id(*)(id, SEL))orig_AppFile_operationMenuItems)(self, _cmd);
-    }
-    if (!items) items = [NSMutableArray array];
-
-    NSString *taskName = nil;
-    NSString *path = MioFontImportFilePath(self, &taskName);
-    if (s_menuDiagBudget > 0) {
-        s_menuDiagBudget--;
-        id vm = nil;
-        @try { vm = [self valueForKey:@"m_viewModel"]; } @catch (NSException *e) {}
-        WPLog(@"FontImport", @"[MENU] cell=%@ path=%@ items=%lu vm=%@(%@)",
-              NSStringFromClass([self class]),
-              path ?: @"nil", (unsigned long)items.count,
-              vm ? @"有" : @"nil",
-              vm ? NSStringFromClass([vm class]) : @"-");
-    }
-
-    if (!MioLooksLikeFontPath(path)) return items;
-
-    Class mmItemClass = objc_getClass("MMMenuItem");
-    SEL initSel = NSSelectorFromString(@"initWithTitle:svgName:action:");
-    if (!mmItemClass || ![mmItemClass instancesRespondToSelector:initSel]) return items;
-
-    @try {
-        SEL actionSEL = sel_registerName("mioFontImportAction");
-        id mmItem = ((id(*)(id, SEL, id, id, SEL))objc_msgSend)(
-            [mmItemClass alloc], initSel, @"导入字体", @"expression", actionSEL);
-        if (mmItem) {
-            NSMutableArray *newItems = [items mutableCopy];
-            [newItems addObject:mmItem];
-            return newItems;
-        }
-    } @catch (NSException *e) {
-        WPLog(@"FontImport", @"[FontImport] menu item create: %@", e);
-    }
-    return items;
-}
-
 // 菜单点击：文件不存在提示先下载；否则走共享导入核心（魔数+拷贝+注册）。
 // preferName 传聊天原始文件名：微信附件落盘名是"消息本地ID.ttf"（986.ttf 实锤），
 // 用 task.name（如"松子琥珀.ttf"）落盘才能对上聊天里看到的名字
@@ -150,44 +107,27 @@ static void mioFontImportAction(id self, SEL _cmd) {
 
 + (void)install {
     WPLog(@"FontImport", @"[FontImportHook] install start");
-    Class cellCls = objc_getClass("AppFileMessageCellView");
-    if (!cellCls) {
-        WPLog(@"FontImport", @"[FontImportHook] ⚠️ AppFileMessageCellView NOT found");
-        return;
-    }
 
-    // 注册菜单 action（Joker 同款：SEL 动态挂到 cell 类上）
-    SEL actionSel = NSSelectorFromString(@"mioFontImportAction");
-    if (!class_addMethod(cellCls, actionSel, (IMP)mioFontImportAction, "v@:")) {
-        Method m = class_getInstanceMethod(cellCls, actionSel);
-        if (m) method_setImplementation(m, (IMP)mioFontImportAction);
-    }
-
-    // hook 菜单组装。operationMenuItems 可能实现在父类（消息 cell 家族共用），
-    // 先沿继承链找真实归属类再替换 IMP，避免误判成子类自有方法
-    SEL menuSel = NSSelectorFromString(@"operationMenuItems");
-    IMP origImp = class_getMethodImplementation(cellCls, menuSel);
-    Class owner = nil;
-    for (Class c = cellCls; c; c = class_getSuperclass(c)) {
-        unsigned int n = 0;
-        Method *ms = class_copyMethodList(c, &n);
-        BOOL has = NO;
-        for (unsigned int i = 0; i < n; i++) {
-            if (sel_isEqual(method_getName(ms[i]), menuSel)) { has = YES; break; }
+    // 菜单项改走统一注册制：建项、挂 SEL、沉底排序全部由 WPChatMenuHelper 处理
+    MioChatMenuSpec *spec = [MioChatMenuSpec new];
+    spec.title = @"导入字体";
+    spec.svgName = @"expression";
+    spec.action = NSSelectorFromString(@"mioFontImportAction");
+    spec.actionIMP = (IMP)mioFontImportAction;
+    spec.shouldShow = ^BOOL(id cellView) {
+        NSString *taskName = nil;
+        NSString *path = MioFontImportFilePath(cellView, &taskName);
+        if (s_menuDiagBudget > 0) {
+            s_menuDiagBudget--;
+            WPLog(@"FontImport", @"[MENU] cell=%@ path=%@",
+                  NSStringFromClass([cellView class]), path ?: @"nil");
         }
-        free(ms);
-        if (has && class_getMethodImplementation(c, menuSel) == origImp) { owner = c; break; }
-    }
-    Method menuMethod = owner ? class_getInstanceMethod(owner, menuSel) : NULL;
-    if (menuMethod) {
-        orig_AppFile_operationMenuItems = method_getImplementation(menuMethod);
-        method_setImplementation(menuMethod, (IMP)hooked_AppFile_operationMenuItems);
-        WPLog(@"FontImport", @"[FontImportHook] ✓ %@::operationMenuItems",
-              NSStringFromClass(owner ?: cellCls));
-    } else {
-        WPLog(@"FontImport", @"[FontImportHook] ⚠️ operationMenuItems 未找到（owner=%@）",
-              owner ? NSStringFromClass(owner) : @"nil");
-    }
+        return MioLooksLikeFontPath(path);
+    };
+    [WPChatMenuHelper registerSpec:spec];
+
+    // 沉底 hook 幂等，这里顺手安装（helper 只装一次）
+    [WPChatMenuHelper install];
 
     WPLog(@"FontImport", @"[FontImportHook] install complete");
 }

@@ -1,0 +1,28 @@
+@interface MMDiskUsageUtil : NSObject
++ (BOOL)isSupportStorageLoadingOptimization;
++ (BOOL)isProgressOptimizationEnabled;
++ (BOOL)GetFolderName:(id)arg1 andFileName:(id)arg2 withPath:(const char *)arg3;
++ (BOOL)GetFileStat:(id)arg1 fileSize:(unsigned long long *)arg2 logicFileSize:(unsigned long long *)arg3 accessTime:(long long *)arg4 motifyTime:(long long *)arg5 changeTime:(long long *)arg6 birthTime:(long long *)arg7 inode:(unsigned long long *)arg8 nlink_t:(unsigned short *)arg9;
++ (id)DeleteBizFile:(id)arg1;
++ (id)DeleteBizUnknowFile:(id)arg1;
++ (id)DeleteBizDir:(id)arg1;
++ (id)DeleteBizUnknowDir:(id)arg1;
++ (id)moveFileToTmpTrash:(id)arg1 description:(id)arg2;
++ (id)moveFolderToTmpTrash:(id)arg1 description:(id)arg2;
++ (int)randomInt;
++ (id)pathOfTrashFile;
++ (id)pathOfTrashFolder;
++ (id)pathOfTrash;
++ (void)recreatePathOfTrash;
++ (BOOL)createDir:(id)arg1;
++ (BOOL)pathExist:(id)arg1;
++ (BOOL)removePath:(id)arg1;
++ (BOOL)movePath:(id)arg1 to:(id)arg2;
++ (id)decimalStringWithNumber:(id)arg1;
++ (id)stringWithSecondsSince1970:(unsigned long long)arg1;
++ (unsigned long long)secondsSince1970;
++ (id)LoadDataFromFile:(id)arg1 forClass:(Class)arg2;
++ (BOOL)SaveDataToFile:(id)arg1 withObject:(id)arg2 isPrintDescription:(BOOL)arg3;
++ (id)GetCurUserNameMD5;
++ (BOOL)RemoveUnneedDiskScanTrash;
+@end

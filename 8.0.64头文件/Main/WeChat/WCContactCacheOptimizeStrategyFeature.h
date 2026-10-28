@@ -1,0 +1,2 @@
+@interface WCContactCacheOptimizeStrategyFeature : WCContactCacheOptimizeFeature
+@end

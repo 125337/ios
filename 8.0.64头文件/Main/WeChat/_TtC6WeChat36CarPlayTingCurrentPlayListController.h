@@ -1,0 +1,2 @@
+@interface _TtC6WeChat36CarPlayTingCurrentPlayListController : _TtC6WeChat29CarPlayTingItemListController
+@end

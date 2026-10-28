@@ -1,0 +1,2 @@
+@interface IntelligenGridImageView : UIView
+@end

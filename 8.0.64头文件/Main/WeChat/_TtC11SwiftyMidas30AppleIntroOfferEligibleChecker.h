@@ -1,0 +1,2 @@
+@interface _TtC11SwiftyMidas30AppleIntroOfferEligibleChecker : _TtCs12_SwiftObject
+@end

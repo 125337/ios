@@ -1,0 +1,2 @@
+@interface TPReportParamsStepFirstRendered : TPReportParamsStep
+@end

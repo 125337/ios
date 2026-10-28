@@ -1,0 +1,35 @@
+@interface NSError (Extend)
++ (id)fbErrorForFailedLoginWithCode:(long long)arg1;
++ (id)fbErrorForFailedLoginWithCode:(long long)arg1 innerError:(id)arg2;
++ (id)fbErrorForSystemPasswordChange:(id)arg1;
++ (id)fbErrorFromReturnURLParameters:(id)arg1;
++ (id)fbErrorFromServerError:(id)arg1;
++ (id)fbErrorWithSystemAccountStoreDeniedError:(id)arg1 isCancellation:(BOOL *)arg2;
++ (id)fbErrorWithCode:(long long)arg1 message:(id)arg2;
++ (id)fbErrorWithDomain:(id)arg1 code:(long long)arg2 message:(id)arg3;
++ (id)fbErrorWithCode:(long long)arg1 message:(id)arg2 underlyingError:(id)arg3;
++ (id)fbErrorWithDomain:(id)arg1 code:(long long)arg2 message:(id)arg3 underlyingError:(id)arg4;
++ (id)fbErrorWithCode:(long long)arg1 userInfo:(id)arg2 message:(id)arg3 underlyingError:(id)arg4;
++ (id)fbErrorWithDomain:(id)arg1 code:(long long)arg2 userInfo:(id)arg3 message:(id)arg4 underlyingError:(id)arg5;
++ (id)fbInvalidArgumentErrorWithName:(id)arg1 value:(id)arg2 message:(id)arg3;
++ (id)fbInvalidArgumentErrorWithDomain:(id)arg1 name:(id)arg2 value:(id)arg3 message:(id)arg4;
++ (id)fbInvalidArgumentErrorWithName:(id)arg1 value:(id)arg2 message:(id)arg3 underlyingError:(id)arg4;
++ (id)fbInvalidArgumentErrorWithDomain:(id)arg1 name:(id)arg2 value:(id)arg3 message:(id)arg4 underlyingError:(id)arg5;
++ (id)fbInvalidCollectionErrorWithName:(id)arg1 collection:(id)arg2 item:(id)arg3 message:(id)arg4;
++ (id)fbInvalidCollectionErrorWithName:(id)arg1 collection:(id)arg2 item:(id)arg3 message:(id)arg4 underlyingError:(id)arg5;
++ (id)fbRequiredArgumentErrorWithName:(id)arg1 message:(id)arg2;
++ (id)fbRequiredArgumentErrorWithDomain:(id)arg1 name:(id)arg2 message:(id)arg3;
++ (id)fbRequiredArgumentErrorWithName:(id)arg1 message:(id)arg2 underlyingError:(id)arg3;
++ (id)fbUnknownErrorWithMessage:(id)arg1;
++ (id)videoRingErrorWithCode:(long long)arg1 message:(id)arg2;
++ (id)textStateErrorWithCode:(long long)arg1 message:(id)arg2;
+- (BOOL)isNetworkError;
+- (long long)vc_internalErrorCode;
+- (id)vc_errorMediaFilePath;
+- (id)vc_errorMediaFilePHLocalIdentifier;
+- (BOOL)mj_isCancelled;
+- (void)setWcErrorType:(long long)arg1;
+- (long long)wcErrorType;
+- (void)setWcErrorHandled:(BOOL)arg1;
+- (BOOL)wcErrorHandled;
+@end

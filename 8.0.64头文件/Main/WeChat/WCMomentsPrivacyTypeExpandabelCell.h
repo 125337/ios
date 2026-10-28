@@ -1,0 +1,2 @@
+@interface WCMomentsPrivacyTypeExpandabelCell : MMCheckExpandStyleTableViewCell
+@end

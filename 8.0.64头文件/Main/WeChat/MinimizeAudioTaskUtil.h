@@ -1,0 +1,2 @@
+@interface MinimizeAudioTaskUtil : NSObject
+@end

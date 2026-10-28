@@ -1,0 +1,2 @@
+@interface WCCanvasComponentFloatConversionBarInfo : WCCanvasComponentFloatActionBaseInfo
+@end

@@ -1,0 +1,2 @@
+@interface MMFinderLiveGameNewFansPromoteTips : MMNormalTipsView
+@end

@@ -1,0 +1,2 @@
+@interface WASyncPreGetlaunchCmd : WASyncBaseCmd
+@end

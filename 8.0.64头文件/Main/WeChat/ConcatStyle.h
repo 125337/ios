@@ -1,0 +1,2 @@
+@interface ConcatStyle : TextStyle
+@end

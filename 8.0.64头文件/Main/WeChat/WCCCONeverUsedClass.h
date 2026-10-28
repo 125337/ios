@@ -1,0 +1,2 @@
+@interface WCCCONeverUsedClass : NSObject
+@end

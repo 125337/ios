@@ -1,0 +1,34 @@
+@interface SolitaireConfigUtil : NSObject
++ (id)getConfig;
++ (BOOL)isSolitaireOpenEntry;
++ (BOOL)isSolitaireOpenAnalysis;
++ (BOOL)isOpenSolitaireAttachmentEntry;
++ (BOOL)isOpenKeywordDetection;
++ (BOOL)isOpenMsgKeywordDetection;
++ (BOOL)isOpenDeleteSameTitle;
++ (BOOL)isOpenDetectEditOther;
++ (int)getSolitaireItemMaxWordCount;
++ (int)getSolitaireTitleMaxWordCount;
++ (long long)getSolitaireContentMaxCount;
++ (id)getAppCallKeywordRegex;
++ (id)getSolitaireContentRegex;
++ (id)getSolitaireContentSeparateRegex;
++ (id)getSolitaireNumRegex;
++ (id)getSolitaireExampleRegex;
++ (id)getSolitaireKeywordCNRegex;
++ (id)getSolitaireKeywordENRegex;
++ (id)getSolitaireOccupyKeywordRegex;
++ (long long)getSolitaireActiveMaxDuration;
++ (long long)getSolitaireActiveMaxCount;
++ (long long)getSolitaireMatchMaxDuration;
++ (long long)getSolitaireMatchMaxCount;
++ (long long)getSolitaireFirstMatchLimit;
++ (long long)getSolitaireBecomeActiveCount;
++ (BOOL)isJustSeparateContentToTwoForOnelineEdit;
++ (BOOL)isCloseKeywordCallTips;
++ (BOOL)isCloseAddSolitairePrefix;
++ (BOOL)isCloseOnelineRecognize;
++ (BOOL)isCloseTextFold;
++ (BOOL)isForceUseCTagWithEmoji;
++ (BOOL)isForbidUseOriginTitle;
+@end

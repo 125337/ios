@@ -1,0 +1,35 @@
+@interface UIView (WXMASAdditions)
+- (id)mas_makeConstraints:(id /* block */)arg1;
+- (id)mas_updateConstraints:(id /* block */)arg1;
+- (id)mas_remakeConstraints:(id /* block */)arg1;
+- (id)mas_left;
+- (id)mas_top;
+- (id)mas_right;
+- (id)mas_bottom;
+- (id)mas_leading;
+- (id)mas_trailing;
+- (id)mas_width;
+- (id)mas_height;
+- (id)mas_centerX;
+- (id)mas_centerY;
+- (id)mas_baseline;
+- (id /* block */)mas_attribute;
+- (id)mas_firstBaseline;
+- (id)mas_lastBaseline;
+- (id)mas_leftMargin;
+- (id)mas_rightMargin;
+- (id)mas_topMargin;
+- (id)mas_bottomMargin;
+- (id)mas_leadingMargin;
+- (id)mas_trailingMargin;
+- (id)mas_centerXWithinMargins;
+- (id)mas_centerYWithinMargins;
+- (id)mas_safeAreaLayoutGuide;
+- (id)mas_safeAreaLayoutGuideTop;
+- (id)mas_safeAreaLayoutGuideBottom;
+- (id)mas_safeAreaLayoutGuideLeft;
+- (id)mas_safeAreaLayoutGuideRight;
+- (id)mas_key;
+- (void)setMas_key:(id)arg1;
+- (id)mas_closestCommonSuperview:(id)arg1;
+@end

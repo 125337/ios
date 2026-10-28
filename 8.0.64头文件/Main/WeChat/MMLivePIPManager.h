@@ -1,0 +1,2 @@
+@interface MMLivePIPManager : NSObject
+@end

@@ -1,0 +1,34 @@
+@interface WCFinderAffRedDotBridge : WCFinderRedDotCommonImpl <WCFinderRedDotInterfaceProtocol>
+- (id)init;
+- (void)resetDataSourceByFinderUsername:(id)arg1;
+- (id)currentUseFinderUsername;
+- (void)setCurrentUseFinderUsername:(id)arg1;
+- (void)resetToDefaultUsername;
+- (void)handleFinderUsernameChangeLogic;
+- (id)nativeCurrentUseFinderUsername;
+- (void)addNewRedDotCtrlInfo:(id)arg1;
+- (BOOL)shouldShowRedDotAtPath:(id)arg1;
+- (BOOL)disposeRedDotAtPath:(id)arg1;
+- (BOOL)disposeRedDotAtPath:(id)arg1 subReasonType:(unsigned long long)arg2;
+- (void)disposeRedDotIgnoreClearTypeAtPath:(id)arg1;
+- (void)clearSameTypeCtrlInfoType:(unsigned long long)arg1;
+- (BOOL)updateWXRedDotInfo:(id)arg1;
+- (id)ctrlInfoWithType:(unsigned long long)arg1;
+- (id)ctrlInfoWithTipsUuid:(id)arg1;
+- (unsigned long long)showInfoTypeAtPath:(id)arg1;
+- (id)currentShowInfoAtPath:(id)arg1;
+- (unsigned long long)ctrlInfoTypeAtPath:(id)arg1;
+- (id)currentCtrlInfoAtPath:(id)arg1;
+- (id)currentCtrlInfoAtPath:(id)arg1 ignoreNMFrequency:(BOOL)arg2;
+- (void)clearSameRevokeIdCtrlInfo:(id)arg1;
+- (BOOL)revokeRedDotPathInfo:(id)arg1 isOnlyWhiteList:(BOOL)arg2 whiteListTips:(id)arg3;
+- (void)redDotInfoInvalidCheck;
+- (void)revokeRedDotByViewFeedsIndex:(long long)arg1 commentScene:(int)arg2;
+- (id)getRedDotCtrlInfoWithRevokeId:(id)arg1;
+- (void)saveSelfUuidCtrlInfosDic;
+- (void)disposeGroupTipsWithGroupId:(id)arg1;
+- (id)getAllRedDotCtrlInfoAtPath:(id)arg1;
+- (void)disposeRedDotCtrlInfoByTipsUuid:(id)arg1;
+- (void)disposeRedDotCtrlInfoByTipsUuid:(id)arg1 subReasonType:(unsigned long long)arg2;
+- (void)syncCtrlInfoBack:(id)arg1;
+@end

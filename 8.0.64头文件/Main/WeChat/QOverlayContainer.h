@@ -1,0 +1,118 @@
+@interface QOverlayContainer : NSObject
+{
+    QMediator * _mediator; // +0x8
+    QMapContext * _mapContext; // +0x10
+    QMapView * _mapView; // +0x18
+    QTextManager * _textManager; // +0x20
+    TBOrderedSafeDictionary * _viewContainer; // +0x28
+    TBOrderedSafeDictionary * _calloutViewContainer; // +0x30
+    NSMutableArray * _markerShowingCustomCalloutViewContainer; // +0x38
+}
+- (id)handlerForQMarkerView:(id)arg1;
+- (void)notifyAnnotationView:(id)arg1 didChangeDragState:(int)arg2 fromOldState:(int)arg3;
+- (void)addMarkerView:(id)arg1;
+- (void)removeMarkerView:(id)arg1;
+- (void)updateMarkerViewAlpha:(id)arg1;
+- (void)updateMarkerViewScale:(id)arg1;
+- (void)updateMarkerViewRotation:(id)arg1;
+- (void)updateMarkerViewHideStatus:(id)arg1;
+- (void)updateMarkerViewImage:(id)arg1;
+- (void)updateMarkerViewAnchorPoint:(id)arg1;
+- (void)updateMarkerViewAvoidPOI:(id)arg1;
+- (void)updateMarkerViewAvoidMarkers:(id)arg1;
+- (void)updateMarkerViewCollision:(id)arg1;
+- (void)updateMarkerViewCoordinate:(id)arg1;
+- (void)updateQMarkerViewCustomCalloutViewPosition;
+- (void)bindMainMarkerRelation:(id)arg1 subMarker:(id)arg2 bySync:(BOOL)arg3;
+- (id)generateMarkerPayload:(id)arg1;
+- (void)proccesMarkerIamge:(id)arg1;
+- (id)getImageKeyFromImage:(id)arg1;
+- (id)getImageInstructionKeyFromImageKey:(id)arg1;
+- (BOOL)markerViewAoidPOI:(id)arg1;
+- (BOOL)markerViewAoidMarker:(id)arg1;
+- (void)addQMarkerCalloutView:(id)arg1;
+- (void)removeMarkerCalloutView:(id)arg1;
+- (id)generateCalloutMarkerPayload:(id)arg1;
+- (CGPoint)getCalloutAnchor:(id)arg1;
+- (void)proccesQMarkerCalloutViewIamge:(id)arg1;
+- (void)sethiddenForQMarkerCalloutView:(id)arg1 tohidden:(BOOL)arg2;
+- (id)handlerForQMarkerCalloutView:(id)arg1;
+- (void)updateCalloutViewImage:(id)arg1;
+- (void)updateCalloutViewCoordinate:(id)arg1;
+- (void)updateCalloutViewCollision:(id)arg1;
+- (void)updateCalloutViewAnchor:(id)arg1;
+- (BOOL)calloutViewAoidPOI:(id)arg1;
+- (BOOL)calloutViewAoidMarker:(id)arg1;
+- (void)updateCalloutViewDisplayLevel:(id)arg1;
+- (void)mapContextDidMapStatusChangedAfterDraw:(id)arg1;
+- (id)init;
+- (void)dealloc;
+- (void)setMapContext:(id)arg1;
+- (void)setupTextSystem;
+- (void)update:(double)arg1;
+- (id)searchClickedOverlay:(int)arg1;
+- (void)updateOverlayZIndex:(int)arg1 overlayView:(id)arg2;
+- (void)updateAllOverlays;
+- (void)updateOverlayIfIndoor:(id)arg1;
+- (void)addOverlayView:(id)arg1;
+- (void)addPolylineView:(id)arg1;
+- (void)addPolygonView:(id)arg1;
+- (void)addCircleView:(id)arg1;
+- (void)addArcView:(id)arg1;
+- (void)setHiddenForOverlayView:(id)arg1 hidden:(BOOL)arg2;
+- (void)setOverlayScaleRange:(id)arg1 minScale:(int)arg2 maxScale:(int)arg3;
+- (void)removeOverlayView:(id)arg1;
+- (void)refreshOverlayView:(id)arg1;
+- (id)viewForOverlay:(id)arg1;
+- (id)overlays;
+- (id)callouts;
+- (void)updateDisplayLevel:(id)arg1;
+- (void)updateAlpha:(id)arg1;
+- (void)updateInteractive:(id)arg1;
+- (void)updateCollideLabel:(id)arg1;
+- (id)searchClickedCallout:(int)arg1;
+- (void)updatePolyLineViewPoints:(id)arg1;
+- (void)updatePolylineViewSegStyle:(id)arg1;
+- (void)updatePolylineViewRGBAColorStyle:(id)arg1;
+- (void)updatePolylineViewSegColor:(id)arg1;
+- (void)updatePolylineView:(id)arg1 changeStyleFromStartToCurrentPoint:(CLLocationCoordinate2D)arg2 searchFrom:(int)arg3 toColor:(BOOL)arg4;
+- (void)updatePolylineView:(id)arg1 turnArrowIndex:(int)arg2;
+- (void)updatePolylineView:(id)arg1 turnArrowColor:(id)arg2 borderColor:(id)arg3;
+- (void)updatePolylineGradientStyle:(id)arg1;
+- (void)updatePolylineArrowSpacing:(id)arg1;
+- (void)updatePolylineCollideLabel:(id)arg1;
+- (void)updateArcViewRGBAColorStyle:(id)arg1;
+- (void)updatePolygonViewStrokeStyle:(id)arg1;
+- (void)updatePolygonStrokePoints:(id)arg1;
+- (void)updatePolygonViewFillStyle:(id)arg1;
+- (void)updateCircleView:(id)arg1;
+- (id)checkClickInfoAtMapPoint:(struct)arg1;
+- (id)payloadForPolyline:(id)arg1;
+- (id)payloadForPolygon:(id)arg1;
+- (id)payloadForCircle:(id)arg1;
+- (id)handlerForPolylineView:(id)arg1;
+- (id)handlerForPolygonView:(id)arg1;
+- (id)handlerForCircleView:(id)arg1;
+- (id)strokePayloadForPolygonView:(id)arg1;
+- (id)getPolylineViewForPolygon:(id)arg1;
+- (id)getTexturePolylineViewForPolygon:(id)arg1;
+- (id)generatePolyline:(id)arg1;
+- (void)setUpPolygonStrokelineProperty:(id)arg1 polygonView:(id)arg2;
+- (id)circleImageForPolygonStroke:(id)arg1;
+- (id)createPolylineViewFromArcView:(id)arg1;
+- (void)setNeedsDisplay;
+- (id)mediator;
+- (void)setMediator:(id)arg1;
+- (id)mapContext;
+- (id)mapView;
+- (void)setMapView:(id)arg1;
+- (id)textManager;
+- (void)setTextManager:(id)arg1;
+- (id)viewContainer;
+- (void)setViewContainer:(id)arg1;
+- (id)calloutViewContainer;
+- (void)setCalloutViewContainer:(id)arg1;
+- (id)markerShowingCustomCalloutViewContainer;
+- (void)setMarkerShowingCustomCalloutViewContainer:(id)arg1;
+- (void).cxx_destruct;
+@end

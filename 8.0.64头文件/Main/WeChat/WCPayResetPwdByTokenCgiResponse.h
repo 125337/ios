@@ -1,0 +1,2 @@
+@interface WCPayResetPwdByTokenCgiResponse : NSObject
+@end

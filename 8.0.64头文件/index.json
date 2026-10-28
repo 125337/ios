@@ -1,0 +1,181 @@
+{
+  "input" : "com.tencent.xin_8.0.64.ipa",
+  "limitations" : "从 Objective-C 元数据恢复声明，不包含方法实现。独立 protocol 声明和纯 Swift 类型暂未导出；加密镜像会跳过。",
+  "backend" : "REipa 0.1.0 · native in-process",
+  "headers" : 39760,
+  "bytes" : 36595086,
+  "created" : 1793220291.8502059,
+  "binaries" : [
+    {
+      "binary" : "Main\/WeChat",
+      "status" : "success",
+      "classes" : 39100,
+      "categories" : 550,
+      "headers" : 39650,
+      "protocols" : 0,
+      "renamed_headers" : [
+        {
+          "original" : "NSString+Compare.h",
+          "exported" : "NSString+Compare-2.h"
+        },
+        {
+          "original" : "UIView+ZZSeparator.h",
+          "exported" : "UIView+ZZSeparator-2.h"
+        },
+        {
+          "original" : "UIDevice+AdapterApi.h",
+          "exported" : "UIDevice+AdapterApi-2.h"
+        },
+        {
+          "original" : "NSDictionary+NSDictionary_SafeJSON.h",
+          "exported" : "NSDictionary+NSDictionary_SafeJSON-2.h"
+        },
+        {
+          "original" : "NSArray+NSArray_SafeJSON.h",
+          "exported" : "NSArray+NSArray_SafeJSON-2.h"
+        }
+      ]
+    },
+    {
+      "binary" : "Frameworks\/libswift_Concurrency.dylib",
+      "status" : "success",
+      "classes" : 4,
+      "categories" : 0,
+      "headers" : 4,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/ilink_network.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/TPFFmpeg.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/NewMessageRingUtil.framework",
+      "status" : "success",
+      "classes" : 1,
+      "categories" : 0,
+      "headers" : 1,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/SoundTouch.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/openssl.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/MMRouter.framework",
+      "status" : "success",
+      "classes" : 3,
+      "categories" : 1,
+      "headers" : 4,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/mmcronet.framework",
+      "status" : "success",
+      "classes" : 12,
+      "categories" : 1,
+      "headers" : 13,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/owl.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/TPThirdParties.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/andromeda.framework",
+      "status" : "success",
+      "classes" : 2,
+      "categories" : 0,
+      "headers" : 2,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/matrixreport.framework",
+      "status" : "success",
+      "classes" : 1,
+      "categories" : 0,
+      "headers" : 1,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/Lottie.framework",
+      "status" : "success",
+      "classes" : 67,
+      "categories" : 1,
+      "headers" : 68,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/ProtobufLite.framework",
+      "status" : "success",
+      "classes" : 6,
+      "categories" : 0,
+      "headers" : 6,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/App.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/JavaScriptCore2.framework",
+      "status" : "success",
+      "classes" : 10,
+      "categories" : 1,
+      "headers" : 11,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    }
+  ]
+}

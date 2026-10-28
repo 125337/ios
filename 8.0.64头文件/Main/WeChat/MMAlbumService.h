@@ -1,0 +1,37 @@
+@interface MMAlbumService : MMRootService <MMServiceProtocol>
+- (BOOL)isAlbumAcessGranted;
+- (void)writeImageDataToSavedPhotosAlbum:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)writeImageToSavedPhotosAlbum:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)writeImageToSavedArrPhotosAlbum:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)saveVideoToAlbumWithPath:(id)arg1;
+- (void)saveVideoToAlbumAndShowTipsWithPath:(id)arg1;
+- (void)saveVideoToAlbumAndShowTipsWithPath:(id)arg1 successBlock:(id /* block */)arg2;
+- (void)saveVideoToAlbumAndShowTipsWithPath:(id)arg1 successBlock:(id /* block */)arg2 failureBlock:(id /* block */)arg3;
+- (void)saveVideoToAlbumWithPath:(id)arg1 isShowTips:(BOOL)arg2 successBlock:(id /* block */)arg3 failureBlock:(id /* block */)arg4;
+- (BOOL)tryReadImageFileDataAndSave:(id)arg1 placeholder:(id)arg2 completionBlock:(id /* block */)arg3;
+- (void)saveImageToAlbumWithPath:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)saveVideoToAlbumWithPath:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)exportRawVideoFile:(id)arg1 complete:(id /* block */)arg2;
+- (void)internalSaveVideoToAlbumWithPath:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)saveImageToAlbumAndShowTipsWithPath:(id)arg1;
+- (void)saveImageToAlbumAndShowTipsWithPath:(id)arg1 successBlock:(id /* block */)arg2;
+- (void)saveImageToAlbumAndShowTipsWithImage:(id)arg1;
+- (void)saveImageToAlbumAndShowTipsWithImage:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)saveImageToAlbumAndShowTipsWithArrImage:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)saveImageToAlbumAndShowTipsWithImage:(id)arg1 successBlock:(id /* block */)arg2;
+- (void)saveImageDataToAlbumWithImageData:(id)arg1;
+- (void)saveImageDataToAlbumAndShowTipsWithImageData:(id)arg1;
+- (void)saveImageDataToAlbumAndShowTipsWithImageData:(id)arg1 successBlock:(id /* block */)arg2;
+- (void)saveImageDataToAlbumWithImageData:(id)arg1 isShowTips:(BOOL)arg2 successBlock:(id /* block */)arg3;
+- (void)saveLivePhotoToAlbumWithImagePath:(id)arg1 videoPath:(id)arg2 stillImageTimeMs:(long long)arg3;
+- (void)saveLivePhotoToAlbumAndShowTipsWithImagePath:(id)arg1 videoPath:(id)arg2 stillImageTimeMs:(long long)arg3;
+- (void)saveLivePhotoToAlbumAndShowTipsWithImage:(id)arg1 videoPath:(id)arg2 stillImageTimeMs:(long long)arg3;
+- (void)saveLivePhotoToAlbumAndShowTipsWithImage:(id)arg1 videoPath:(id)arg2 stillImageTimeMs:(long long)arg3 successBlock:(id /* block */)arg4 failureBlock:(id /* block */)arg5;
+- (void)saveLivePhotoToAlbumWithImagePath:(id)arg1 videoPath:(id)arg2 stillImageTimeMs:(long long)arg3 isShowTips:(BOOL)arg4 successBlock:(id /* block */)arg5 failureBlock:(id /* block */)arg6;
+- (void)internalSaveLivePhotoToAlbumWithImagePath:(id)arg1 videoPath:(id)arg2 completionBlock:(id /* block */)arg3;
+- (void)showToast:(id)arg1 isSuccess:(BOOL)arg2;
+- (void)findOrCreateAlbumWithName:(id)arg1 completion:(id /* block */)arg2;
+- (void)internalSaveImages:(id)arg1 toAlbumNamed:(id)arg2 completionBlock:(id /* block */)arg3;
+- (void)internalSaveImagePath:(id)arg1 toAlbumNamed:(id)arg2 completionBlock:(id /* block */)arg3;
+- (void)internalSaveImageData:(id)arg1 toAlbumNamed:(id)arg2 completionBlock:(id /* block */)arg3;
+@end

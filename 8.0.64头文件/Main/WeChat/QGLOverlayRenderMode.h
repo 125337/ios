@@ -1,0 +1,2 @@
+@interface QGLOverlayRenderMode : NSObject
+@end

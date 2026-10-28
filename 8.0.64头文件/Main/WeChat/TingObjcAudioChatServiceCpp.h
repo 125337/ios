@@ -1,0 +1,24 @@
+@interface TingObjcAudioChatServiceCpp : TingAudioModuleListenerCpp <TingObjcAudioChatService>
+- (BOOL)addListener:(id)arg1;
+- (void)removeListener:(id)arg1;
+- (void)stop;
+- (void)start:(id)arg1;
+- (int)getStatus;
+- (void)preload;
+- (void)startVoiceRecord;
+- (void)startVoiceRecordWithContext:(id)arg1;
+- (void)startNewConverstation:(id)arg1;
+- (void)stopVoiceRecord;
+- (void)cancelVoiceRecord;
+- (void)resetSession;
+- (void)setBizContext:(id)arg1;
+- (id)getBizContext;
+- (BOOL)didStartRecording;
+- (id)exportHistoryDebugInfo;
+- (id)getDisplayText;
+- (void)executeTasks;
+- (void)skipUnplayableTasks;
+- (void)onASRResult:(id)arg1 listenId:(id)arg2 chatRequestKey:(id)arg3 isSuccess:(BOOL)arg4 errorCode:(int)arg5 errorMessage:(id)arg6;
+- (void)onASRDetectUserSpoken;
+- (void)onVADEnd;
+@end

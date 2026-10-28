@@ -1,0 +1,2 @@
+@interface MMLocationUISearchBar : MMUISearchBar
+@end

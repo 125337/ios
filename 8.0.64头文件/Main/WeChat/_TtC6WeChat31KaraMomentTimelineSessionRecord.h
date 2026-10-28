@@ -1,0 +1,30 @@
+@interface _TtC6WeChat31KaraMomentTimelineSessionRecord : _TtC6WeChat17KaraHistoryRecord <WCTTableCoding, KaraHistoryRecordIdentifiable>
++ (const void *)objectRelationalMapping;
++ (const void *)allProperties;
++ (id)allBridgeProperties;
++ (id)__wcdbtyper;
++ (const void *)dateThatHappened;
++ (const void *)__wcdb_synthesize_30:(void *)arg1;
++ (id)swift_dateThatHappened;
++ (const void *)dateThatRecalled;
++ (const void *)__wcdb_synthesize_31:(void *)arg1;
++ (id)swift_dateThatRecalled;
++ (const void *)hourOfTheDay;
++ (const void *)__wcdb_synthesize_32:(void *)arg1;
++ (id)swift_hourOfTheDay;
++ (const void *)dayOfTheWeek;
++ (const void *)__wcdb_synthesize_33:(void *)arg1;
++ (id)swift_dayOfTheWeek;
++ (void)__wcdb_column_constraint_34:(void *)arg1;
++ (void)__wcdb_column_constraint_35:(void *)arg1;
++ (void)__wcdb_column_constraint_36:(void *)arg1;
++ (void)__wcdb_index_37:(void *)arg1;
++ (void)__wcdb_index_38:(void *)arg1;
++ (void)__wcdb_index_39:(void *)arg1;
++ (Expression)identified:(id)arg1;
+- (id)dateThatEntered;
+- (void)setDateThatEntered:(id)arg1;
+- (id)dateThatLeaved;
+- (void)setDateThatLeaved:(id)arg1;
+- (id)init;
+@end

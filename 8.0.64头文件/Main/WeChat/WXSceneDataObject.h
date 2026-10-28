@@ -1,0 +1,2 @@
+@interface WXSceneDataObject : NSObject
+@end

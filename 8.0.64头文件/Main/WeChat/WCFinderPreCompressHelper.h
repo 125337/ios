@@ -1,0 +1,2 @@
+@interface WCFinderPreCompressHelper : NSObject
+@end

@@ -1,0 +1,3 @@
+@interface FinderLiveAppMsgPlatformReminderNotificationJumpInfo_FinderLiveFunctionMenuWordingInfo : WXPBGeneratedMessage
++ (void)initialize;
+@end

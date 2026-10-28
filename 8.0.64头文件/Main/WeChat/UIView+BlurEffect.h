@@ -1,0 +1,36 @@
+@interface UIView (BlurEffect)
++ (void)stopSubviewScroplling:(id)arg1;
++ (id)getSnapshotImageForViewNew:(id)arg1;
++ (id)getSnapshotImageForView:(id)arg1;
++ (id)getSnapshotImageForView:(id)arg1 ignoreLandscape:(BOOL)arg2;
++ (id)getSnapshotImageForView:(id)arg1 usingIos7Api:(BOOL)arg2 ignoreLandscape:(BOOL)arg3;
++ (id)getSnapshotImageForView:(id)arg1 ignoreLandscape:(BOOL)arg2 opaque:(BOOL)arg3 forceUpdate:(BOOL)arg4;
++ (id)getSnapshotImageForView:(id)arg1 usingIos7Api:(BOOL)arg2 ignoreLandscape:(BOOL)arg3 opaque:(BOOL)arg4 scale:(double)arg5;
++ (id)getSnapshotImageForView:(id)arg1 usingIos7Api:(BOOL)arg2 ignoreLandscape:(BOOL)arg3 opaque:(BOOL)arg4 scale:(double)arg5 forceUpdate:(BOOL)arg6;
++ (id)imageFromView:(id)arg1 rect:(CGRect)arg2;
++ (BOOL)canGetSnapshotdAfterUpdatesInProtection;
+- (BOOL)addStaticBlurEffect:(unsigned int)arg1 ForView:(id)arg2 atPoint:(CGPoint)arg3;
+- (id)screenshotWithRect:(CGRect)arg1;
+- (BOOL)addStaticBlurEffect:(id)arg1 ForView:(id)arg2 atPoint:(CGPoint)arg3 radius:(double)arg4;
+- (BOOL)addStaticBlurEffect:(id)arg1 ForView:(id)arg2 atPoint:(CGPoint)arg3 radius:(double)arg4 saturation:(double)arg5;
+- (BOOL)addStaticBlurEffect:(id)arg1 ForView:(id)arg2 atPoint:(CGPoint)arg3 radius:(double)arg4 saturation:(double)arg5 scale:(double)arg6;
+- (BOOL)addStaticBlurEffect:(id)arg1 ForView:(id)arg2 atPoint:(CGPoint)arg3 radius:(double)arg4 saturation:(double)arg5 scale:(double)arg6 drawBaseImage:(BOOL)arg7;
+- (BOOL)addStaticBlurEffect:(id)arg1 ForImage:(id)arg2 atPoint:(CGPoint)arg3 radius:(double)arg4 saturation:(double)arg5 scale:(double)arg6 drawBaseImage:(BOOL)arg7;
+- (void)removeStaticBlurEffect;
+- (BOOL)addBlurEffectWithColor:(id)arg1;
+- (void)addBlurEffect:(unsigned int)arg1;
+- (void)addBlurEffect:(unsigned int)arg1 withTintColor:(id)arg2;
+- (void)addDynamicBlurEffect:(long long)arg1 darkEffect:(long long)arg2 lightBarStyle:(long long)arg3 darkBarStyle:(long long)arg4 tintColor:(id)arg5;
+- (id)calculateEffectAndColorForFinalColor:(id)arg1 outEffect:(unsigned int *)arg2;
+- (void)addBlurToolBar:(long long)arg1;
+- (void)removeBlurEffect;
+- (void)setBlurEffectHidden:(BOOL)arg1;
+- (void)setBlurEffectAlpha:(double)arg1;
+- (BOOL)hasVisibleBlurEffect;
+- (BOOL)hasBlurEffect;
+- (BOOL)addVisualEfView:(long long)arg1;
+- (void)removeVisualEfView;
+- (id)currentBlurViewTintColor;
+- (long long)uiBlurEffectStyleFrom:(unsigned int)arg1 isLightMode:(BOOL)arg2;
+- (long long)uiBarStyle:(unsigned int)arg1 isLightMode:(BOOL)arg2;
+@end

@@ -1,0 +1,33 @@
+@interface IamBizAudioPlayListManager : NSObject
+{
+    TaskIdConvertor task_id_convertor; // +0x8
+    shared_ptr<biz::IamBizAudioPlayListManagerCppCover> cpp_cover; // +0x80
+    weak_ptr<biz::IamBizAudioPlayListManagerDispatcher> cpp_dispatcher; // +0x90
+}
++ (id)shareInstance;
++ (id)buildZidlObjForHolder:(const void *)arg1 svrIdentity:(const void *)arg2 refCntManager:(void *)arg3;
+- (shared_ptr<biz::IamBizAudioPlayListManagerDispatcher>)getDispatcher;
+- (void)setDispatcher:(const void *)arg1;
+- (id)initForZidlPrivate;
+- (id)zidlObjToHolder;
+- (void)getSpecialPlayListAsync:(int)arg1 completion:(id /* block */)arg2;
+- (void)getSpecialPlayListAsync:(int)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)subscribeSpecialPlayListChangedEvent:(id)arg1 on:(id)arg2 eventBlock:(id /* block */)arg3;
+- (void)subscribeSpecialPlayListChangedEvent:(id)arg1 eventBlock:(id /* block */)arg2;
+- (void)unsubscribeSpecialPlayListChangedEvent:(id)arg1;
+- (void)getPlayingPlayListAsync:(id /* block */)arg1;
+- (void)getPlayingPlayListAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)playPlayListAsync:(id)arg1 index:(int)arg2 completion:(id /* block */)arg3;
+- (void)playPlayListAsync:(id)arg1 index:(int)arg2 on:(id)arg3 completion:(id /* block */)arg4;
+- (void)addToPlayLaterAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)addToPlayLaterAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)updatePlayerState:(BOOL)arg1;
+- (void)markManualChangingIndex;
+- (void)getAudioRecommendEnabledAsync:(id /* block */)arg1;
+- (void)getAudioRecommendEnabledAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)setAudioRecommendEnabledAsync:(BOOL)arg1 completion:(id /* block */)arg2;
+- (void)setAudioRecommendEnabledAsync:(BOOL)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)dealloc;
+- (void).cxx_destruct;
+- (id).cxx_construct;
+@end

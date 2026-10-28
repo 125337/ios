@@ -1,0 +1,160 @@
+@interface BSTimelineFlutterPlugin : NSObject <BrandTimelineNotifyLogicDelegate, BSTimelineMsgMgrExt, IContactMgrExt, BrandFinderLiveMgrExt, BrandFinderLiveMgrBatchExt, MMLiveTaskMgrExt, BrandFlowListViewControllerDelegate, contactInfoDelegate, IBrandEcsSessionViewControllerDelegate, ForwardMessageLogicDelegate, LocationRetrieveDelegate, BizBaseApi, BrandServiceApi, MMFlutterPlugin, EcsNativeApi>
+{
+    BOOL _canShowPersonalCenter; // +0x8
+    BSTLExptConfig * _exptConfig; // +0x10
+    BizEnterStatusInfo * _enterInfo; // +0x18
+    MMFlutterViewController * _viewController; // +0x20
+    NSMutableSet * _setFastLoadTemplateType; // +0x28
+    BrandTimelineNotifyLogic * _notifyTipsLogic; // +0x30
+    BizBaseCallbackApi * _flutterApiCallback; // +0x38
+    BrandServiceCallbackApi * _brandServiceApiCallback; // +0x40
+    ForwardMessageLogicController * _forwardMsgLogic; // +0x48
+    LocationRetriever * _locationRetriever; // +0x50
+    id /* block */ _locationCompletion; // +0x58
+}
+- (id)init;
+- (void)onAttachedToEngine:(id)arg1;
+- (void)dealloc;
+- (void)onMoveToTop;
+- (void)onViewWillBePushed;
+- (void)onViewDidBePoped;
+- (void)onScreenShot;
+- (void)gotoOldListSessionId:(long long)arg1 source:(long long)arg2 error:(id *)arg3;
+- (void)__commonGoSessionList;
+- (void)gotoProfileInfo:(id)arg1 error:(id *)arg2;
+- (void)gotoFinderProfileJumpInfo:(id)arg1 error:(id *)arg2;
+- (void)gotoFinderPaywallJumpInfo:(id)arg1 error:(id *)arg2;
+- (void)launchMiniProgramBundle:(id)arg1 error:(id *)arg2;
+- (void)gotoFinderJumpInfo:(id)arg1 error:(id *)arg2;
+- (void)openUrlArticleInfo:(id)arg1 error:(id *)arg2;
+- (void)addToPreloadUrl:(id)arg1 itemShowType:(long long)arg2 openScene:(long long)arg3 brandUserName:(id)arg4 error:(id *)arg5;
+- (void)openPersonalCenter:(id)arg1 source:(id)arg2;
+- (void)openOldSessionList:(id)arg1 source:(id)arg2;
+- (void)getMassSendDataLastOrderId:(long long)arg1 initData:(BOOL)arg2 resetData:(BOOL)arg3 completion:(id /* block */)arg4;
+- (id)isPaidUrl:(id)arg1 error:(id *)arg2;
+- (void)setPayStatusUrl:(id)arg1 isPaid:(BOOL)arg2 error:(id *)arg3;
+- (void)onClickNotifyTipsWithError:(id *)arg1;
+- (id)getNotifyTipsInfoWithError:(id *)arg1;
+- (void)doSearchWithError:(id *)arg1;
+- (void)resetRedDotWithError:(id *)arg1;
+- (id)getUnReadCountWithError:(id *)arg1;
+- (void)onExposedMsgId:(long long)arg1 userName:(id)arg2 isValidExposed:(BOOL)arg3 publishEnterSession:(BOOL)arg4 error:(id *)arg5;
+- (id)getContactInfoUserName:(id)arg1 error:(id *)arg2;
+- (id)__getOftenReadAccountInfoUserName:(id)arg1 error:(id *)arg2;
+- (void)getOftenReadAccountInfoUserName:(id)arg1 completion:(id /* block */)arg2;
+- (void)getOftenReadAccountInfoBatchUserNames:(id)arg1 completion:(id /* block */)arg2;
+- (void)markOftenReadAccountExpiredIfNeedUsername:(id)arg1 error:(id *)arg2;
+- (id)getBizEnterStatusInfoWithError:(id *)arg1;
+- (id)getBizImgCacheDirectoryWithError:(id *)arg1;
+- (id)getBizImgPreviewDirectoryWithError:(id *)arg1;
+- (id)getCdnUrlListWithError:(id *)arg1;
+- (void)enterSessionUserName:(id)arg1 error:(id *)arg2;
+- (id)deleteByTalkerUserName:(id)arg1 error:(id *)arg2;
+- (id)deleteByMsgIdMsgId:(long long)arg1 error:(id *)arg2;
+- (id)onExpandMsgId:(long long)arg1 error:(id *)arg2;
+- (void)gotoBizTestUIWithError:(id *)arg1;
+- (void)onMinimizeArticleInfo:(id)arg1 error:(id *)arg2;
+- (void)createMagicAdBrandServiceScene:(long long)arg1 error:(id *)arg2;
+- (void)createMagicBrandServiceScene:(long long)arg1 error:(id *)arg2;
+- (void)getContactInfoBatchUserNames:(id)arg1 completion:(id /* block */)arg2;
+- (id)isFinderContactFollowFinderUsername:(id)arg1 error:(id *)arg2;
+- (id)genRecFinderCardDataFromPigeonInfo:(id)arg1;
+- (void)launchBizFinderFeedInfo:(id)arg1 error:(id *)arg2;
+- (void)onMinimizeFinderInfo:(id)arg1 error:(id *)arg2;
+- (void)openFinderContactInfo:(id)arg1 error:(id *)arg2;
+- (void)unfollowFinderContactInfo:(id)arg1 error:(id *)arg2;
+- (void)getBizFinderLivesInfoBizFinderLiveRedDot:(BOOL)arg1 completion:(id /* block */)arg2;
+- (void)saveFinderLivesInfoBatchInfos:(id)arg1 completion:(id /* block */)arg2;
+- (void)updateBizFinderLivesInfoUsernameList:(id)arg1 completion:(id /* block */)arg2;
+- (void)loadLocalOftenReadInfoWithCompletion:(id /* block */)arg1;
+- (void)saveLocalOftenReadInfoInfoBuffer:(id)arg1 completion:(id /* block */)arg2;
+- (void)getRecycleCardListMsgId:(long long)arg1 completion:(id /* block */)arg2;
+- (void)notifyRecycleCardResultRetBuffer:(id)arg1 completion:(id /* block */)arg2;
+- (id)getContactByUsername:(id)arg1;
+- (id)genContactInfoFromContact:(id)arg1;
+- (id)__getCurNotifyTipsInfo;
+- (void)onNotifyMsgCountChange:(unsigned int)arg1;
+- (void)onDeleteRecCanvasCard:(id)arg1;
+- (void)onNativeBizCreationInfoChanged:(id)arg1;
+- (void)onInsertMockCanvasModelToRecAtIndex:(long long)arg1 model:(id)arg2;
+- (void)onServiceNotificationUnreadCountChange;
+- (void)onServiceSessionChanged:(id)arg1;
+- (void)onNotifyFlutterDeleteUserName:(id)arg1;
+- (void)onDeleteContact:(id)arg1;
+- (void)onModifyContact:(id)arg1;
+- (void)onGetBrandSubscribeLiveInfo:(id)arg1;
+- (void)onGetCacheBrandSubscribeLiveInfo:(id)arg1;
+- (void)onClearDataForExitLiveWithLiveTask:(id)arg1;
+- (void)onBatchBrandLivingStatusChange:(id)arg1;
+- (void)onLiveTaskUpdateStatus:(id)arg1;
+- (void)followBizContactInfo:(id)arg1 completion:(id /* block */)arg2;
+- (void)deleteAllMsgByContact:(id)arg1;
+- (id)isLiveBarItemExposuredUserName:(id)arg1 finderId:(id)arg2 error:(id *)arg3;
+- (void)markLiveBarItemExposuredUserName:(id)arg1 finderId:(id)arg2 error:(id *)arg3;
+- (void)onClickSearchBarWithError:(id *)arg1;
+- (void)_commonDoSearch;
+- (void)requestFinderLiveStatsFinder_export_id:(id)arg1 pullScene:(long long)arg2 completion:(id /* block */)arg3;
+- (void)getNetWorkInfoWithCompletion:(id /* block */)arg1;
+- (id)getNativeBizCreationInfoWithError:(id *)arg1;
+- (void)gotoTingWithUrlsUrls:(id)arg1 sessionId:(long long)arg2 source:(long long)arg3 error:(id *)arg4;
+- (void)openFlowListParams:(id)arg1 error:(id *)arg2;
+- (void)preloadFinderDataItemsFinderExportIdList:(id)arg1 completion:(id /* block */)arg2;
+- (void)tryPreloadFinderVideoExportId:(id)arg1 nonceId:(id)arg2 objectId:(id)arg3 completion:(id /* block */)arg4;
+- (void)onBrandFlowListCellExposeWithModel:(id)arg1;
+- (id)getCurrentViewController;
+- (void)OnForwardMessageSend:(id)arg1;
+- (void)OnForwardMessageCancel:(id)arg1;
+- (void)OnForwardMessageException:(id)arg1;
+- (void)gotoChattingUIJumpInfo:(id)arg1 error:(id *)arg2;
+- (void)quickShareEcsProductCommentDetailItem:(id)arg1 toUser:(id)arg2 error:(id *)arg3;
+- (void)shareEcsProductCommentDetailItem:(id)arg1 error:(id *)arg2;
+- (void)_shareEcsProductCommentDetailItem:(id)arg1 toContact:(id)arg2;
+- (void)getRecentBrandServiceInfoLimit:(long long)arg1 completion:(id /* block */)arg2;
+- (void)gotoMyFollowBrandServiceListSource:(long long)arg1 error:(id *)arg2;
+- (void)gotoMyNotiListSource:(long long)arg1 error:(id *)arg2;
+- (void)fetchBEcsStrategyWithError:(id *)arg1;
+- (void)getFinderLiveInfoExportIdList:(id)arg1 forceUpdate:(BOOL)arg2 completion:(id /* block */)arg3;
+- (void)openNotiPage;
+- (void)gotoChattingWithLocalIdUserName:(id)arg1 nativeLocalId:(long long)arg2 svrMsgId:(long long)arg3 isPrivateMsg:(BOOL)arg4 completion:(id /* block */)arg5;
+- (void)handleNoActionOrNoHandleWithNativeLocalId:(long long)arg1 isPrivateMsg:(BOOL)arg2 userName:(id)arg3;
+- (id)getDigestContentLocalId:(long long)arg1 error:(id *)arg2;
+- (void)handlePreloadEcsJumpInfoEcsJumpInfoData:(id)arg1 error:(id *)arg2;
+- (void)handleOpenEcsJumpInfoEcsJumpInfoData:(id)arg1 error:(id *)arg2;
+- (void)handleOpenEcsJumpInfoWithExtraDataEcsJumpInfoData:(id)arg1 extraData:(id)arg2 error:(id *)arg3;
+- (void)handlePreloadLivesDataData:(id)arg1 error:(id *)arg2;
+- (void)updateNotifyMsgDigestKeepTime:(long long)arg1 nativeLocalIdList:(id)arg2 error:(id *)arg3;
+- (void)openPublishPageJumpParams:(id)arg1 error:(id *)arg2;
+- (void)getBSPOIInfoWithCompletion:(id /* block */)arg1;
+- (id)isOpenSceneLocationWithError:(id *)arg1;
+- (id)isOpenSystemLocationWithError:(id *)arg1;
+- (void)requestLocationAuthWithCompletion:(id /* block */)arg1;
+- (void)onRetrieveLocationOK:(id)arg1;
+- (void)userLocationCompletion:(id)arg1;
+- (void)cleanLocationRetriever;
+- (void)onRetrieveLocationError:(int)arg1;
+- (void)onRetrieveLocationTimeOut:(id)arg1;
+- (void)onRetrieveLocationCallbackTimeOut:(id)arg1;
+- (id)exptConfig;
+- (void)setExptConfig:(id)arg1;
+- (id)enterInfo;
+- (void)setEnterInfo:(id)arg1;
+- (BOOL)canShowPersonalCenter;
+- (void)setCanShowPersonalCenter:(BOOL)arg1;
+- (id)viewController;
+- (void)setViewController:(id)arg1;
+- (id)setFastLoadTemplateType;
+- (void)setSetFastLoadTemplateType:(id)arg1;
+- (id)notifyTipsLogic;
+- (void)setNotifyTipsLogic:(id)arg1;
+- (id)flutterApiCallback;
+- (void)setFlutterApiCallback:(id)arg1;
+- (id)brandServiceApiCallback;
+- (void)setBrandServiceApiCallback:(id)arg1;
+- (id)forwardMsgLogic;
+- (void)setForwardMsgLogic:(id)arg1;
+- (id)locationRetriever;
+- (void)setLocationRetriever:(id)arg1;
+- (id /* block */)locationCompletion;
+- (void)setLocationCompletion:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end

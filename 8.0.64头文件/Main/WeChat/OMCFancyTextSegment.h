@@ -1,0 +1,34 @@
+@interface OMCFancyTextSegment : OMCElementSegment <OMCEditingStateAdjustable, OMCTextToSpeechAdjustable>
+- (id)materialID;
+- (id)title;
+- (id)displayingTitle;
+- (id)placeholder;
+- (id)subtitle;
+- (id)displayingSubtitle;
+- (id)titleFontName;
+- (id)subtitleFontName;
+- (id)titleFontNameInMaterial;
+- (id)subtitleFontNameInMaterial;
+- (id)colorStyleID;
+- (BOOL)hasTitle;
+- (BOOL)hasSubtitle;
+- (BOOL)updateTitle:(id)arg1;
+- (BOOL)updateSubtitle:(id)arg1;
+- (BOOL)updateStyleWithMaterialID:(id)arg1;
+- (BOOL)updateTitleFontName:(id)arg1;
+- (BOOL)updateSubtitleFontName:(id)arg1;
+- (BOOL)updateColorStyleWithID:(id)arg1;
+- (void)enterEditingState;
+- (void)leaveEditingState;
+- (BOOL)isEditingState;
+- (id)audioFilePath;
+- (id)roleID;
+- (id)roleName;
+- (id)speechText;
+- (void)resetRole;
+- (void)updateRoleID:(id)arg1 roleName:(id)arg2;
+- (BOOL)buildSpeechWithFilePath:(id)arg1;
+- (BOOL)replaceSpeechWithFilePath:(id)arg1;
+- (void)clearSpeech;
+- (SharedPtr<XMSFancyTextSegment>)backingFancyTextSegment;
+@end

@@ -1,0 +1,342 @@
+@interface WCPayFacingReceiveQRCodeViewController : WCPayBaseViewController <WCPayQRCoverPageViewDelegate, WCPayWebImageViewDelegate, IdleTimerUtilExt, WCPayNoticeBannerDelegate, WCPayQrcodeUsageHalfPage, WCPaySaveQrcodeSuccessHalfPageDelegate, MMCommonActionSheetPickerDelegate, ILinkEventExt, WCActionSheetDelegate, WCPayFacingQRCodeImageViewDelegate>
+{
+    UIButton * m_footerButton; // +0x98
+    id <WCPayFacingReceiveQRCodeViewControllerDelegate> m_delegate; // +0xa0
+    double _oldBrightness; // +0xa8
+    UIView * m_oTotalMoneyView; // +0xb0
+    NSMutableArray * m_arrPayerInfoView; // +0xb8
+    NSMutableArray * m_arrAnimationedMessageStruct; // +0xc0
+    RichTextView * balanceRichTextView; // +0xc8
+    UIView * m_oTotalMoneyBottomLine; // +0xd0
+    NSMutableArray * m_arrPayerBottomLine; // +0xd8
+    BOOL bDidBePoed; // +0xe0
+    BOOL qrcodeIsAnimated; // +0xe1
+    UIButton * toBalanceBtn; // +0xe8
+    UIColor * originalBarTintColor; // +0xf0
+    double bannerHeight; // +0xf8
+    BOOL _ignoreScreenShotTips; // +0x100
+    BOOL _isShowingActionSheet; // +0x101
+    BOOL _bNeedRemoveReddotFromOtherView; // +0x102
+    BOOL _bHasUsageHalfPageShown; // +0x103
+    BOOL _bIsHalfPageShown; // +0x104
+    UIImageView * _m_bizImageQRCodeView; // +0x108
+    MMUIView * _m_bizHeadImageView; // +0x110
+    DataMatrix * _m_bizQrMatrix; // +0x118
+    QREncoder * _m_bizEncoder; // +0x120
+    WCUIAlertView * _screenShotAlert; // +0x128
+    WCPayBannerNotice * _m_bannerNotice; // +0x130
+    UIImageView * _detailReddotImgView; // +0x138
+    MMUILabel * _detailSubLabel; // +0x140
+    WCPayQRCoverPageView * _coverPageView; // +0x148
+    MMPanelView * _saveQRCodePanelView; // +0x150
+    WCPayQrcodeUsageHalfPage * _usageHalfPage; // +0x158
+    UIView * _tableHeaderView; // +0x160
+    UIView * _userCodeView; // +0x168
+    WCPayFacingQRCodeImageView * _userCodeContentView; // +0x170
+    double _userCodeMainContentHeight; // +0x178
+    UIImageView * _userCodeFoldIcon; // +0x180
+    UIButton * _userCodeFoldBtn; // +0x188
+    UIView * _userCodeActionBarView; // +0x190
+    UIView * _userCodeContentMaskView; // +0x198
+    UIView * _userCodeAnimateContentView; // +0x1a0
+    WCPayFacingReceiveErrorTipsView * _userCodeErrorView; // +0x1a8
+    WCPayFacingReceiveErrorTipsView * _mchCodeErrorView; // +0x1b0
+    UIView * _bottomEntranceView; // +0x1b8
+    UIButton * _bottomEntranceClickBtn; // +0x1c0
+    UIView * _mchCodeView; // +0x1c8
+    WCPayFacingQRCodeImageView * _mchCodeContentView; // +0x1d0
+    double _mchCodeMainContentHeight; // +0x1d8
+    UIView * _mchCodeApplyReddot; // +0x1e0
+    UIView * _mchActionBarNew; // +0x1e8
+    WCPayQRCoverPageView * _mchCoverPageView; // +0x1f0
+    WCPayWebImageView * _mchHeadImgView; // +0x1f8
+    UIImageView * _mchQRCodeImgView; // +0x200
+    UIImageView * _mchCodeFoldIcon; // +0x208
+    UIButton * _mchCodeFoldBtn; // +0x210
+    UIView * _mchCodeActionBarView; // +0x218
+    UIView * _mchCodeContentMaskView; // +0x220
+    UIView * _mchCodeAnimateContentView; // +0x228
+    UIView * _mchHeadImgContainerView; // +0x230
+    UIView * _mchTotalMoneyView; // +0x238
+    UIView * _mchTotalMoneyBottomLine; // +0x240
+    NSMutableArray * _mchArrPayerInfoView; // +0x248
+    NSMutableArray * _mchArrPayerBottomLine; // +0x250
+    NSMutableArray * _mchArrAnimationedMessageStruct; // +0x258
+    DataMatrix * _mchQrMatrix; // +0x260
+    QREncoder * _mchEncoder; // +0x268
+    WCPayQRCoverPageView * _mchApplyCoverPageView; // +0x270
+    MMUIButton * _mchCodeNameBtn; // +0x278
+    UILabel * _mchCodeNameLabel; // +0x280
+    UIImageView * _tagIconImageView; // +0x288
+    unsigned long long _selectedMchShopId; // +0x290
+    MMCommonActionSheetPicker * _mchShopPicker; // +0x298
+    long long _backEntranceValue; // +0x2a0
+}
+- (id)init;
+- (void)dealloc;
+- (long long)overrideUserInterfaceStyle;
+- (id)navigationBarBackgroundColor;
+- (void)setDelegate:(id)arg1;
+- (void)viewDidLoad;
+- (void)refreshViewWithData:(id)arg1;
+- (void)initNavigationBar;
+- (void)viewDidBePushed:(BOOL)arg1;
+- (void)viewDidBePoped:(BOOL)arg1;
+- (void)viewDidBePresented:(BOOL)arg1;
+- (void)viewDidBeDismissed:(BOOL)arg1;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (void)viewWillPopOrDismiss:(BOOL)arg1;
+- (void)reloadTableView;
+- (void)checkSpeechStatus;
+- (void)setupContentView;
+- (void)setupUserCodeContainerView;
+- (void)setupMchCodeContainerView;
+- (id)setupUserCodeActionBarView;
+- (void)setupUserQRCodePanelViewWithStartY:(double)arg1 hasActionBarView:(BOOL)arg2;
+- (void)setupUserQRCodePanelHeaderContent:(BOOL)arg1;
+- (void)setupUserQRCodeContent;
+- (void)setupUserCodeTextEntryViewAndBottomView;
+- (void)setupUserCodeMoneyReceiveListView;
+- (void)updateUserCodeCoverPageView:(CGRect)arg1 bottomCorner:(BOOL)arg2 baseView:(id)arg3;
+- (void)setupMchQRCodeApplyCell;
+- (void)setupMchQRCodeContentView;
+- (id)setupMchCodeActionBarView;
+- (void)setupMchQRCodePanelViewWithStartY:(double)arg1;
+- (void)setupMchQRCodeApplyMaskContent;
+- (void)setupMchQRCodePanelHeaderContent;
+- (void)setupMchQRCodeContent;
+- (void)setupMchCodeTextEntryViewAndBottomView;
+- (void)setupMchCodeMoneyReceiveListView;
+- (void)updateMchCodeCoverPageView:(CGRect)arg1 bottomCorner:(BOOL)arg2 baseView:(id)arg3;
+- (id)genUserQRCodeImageView;
+- (id)genMchQRCodeImageView;
+- (id)genUserCodeSetMoneyTextView:(double)arg1;
+- (id)genMchCodeSetMoneyTextView:(double)arg1;
+- (id)genSaveQRCodeTextView:(double)arg1;
+- (id)genSettingTextView:(double)arg1;
+- (id)genVertialSepLinkView;
+- (id)genBizF2FHeadImageViewWithImageSize:(CGSize)arg1 delegate:(id)arg2;
+- (id)genUserCodeDetailEnteranceViewWithNeedBottomCorner:(BOOL)arg1;
+- (id)genMchCodeDetailEnteranceViewWithNeedBottomCorner:(BOOL)arg1;
+- (id)genTopCornerShapeLayerWithBarView:(id)arg1;
+- (BOOL)isShowMaskMchEntranceType;
+- (void)OnLeftBarButtonDone;
+- (void)onRightBarButtonClick;
+- (void)onLinkClicked:(id)arg1 withRect:(CGRect)arg2;
+- (void)onClickSetFixMoney;
+- (void)handlePersonalCodeSetMoney;
+- (void)handleMchCodeSetMoney;
+- (id)getSetReceiptItemTextForMch;
+- (id)getCurrentJumpInfo;
+- (void)handleSetAmount;
+- (void)handleSetPaymentItem;
+- (BOOL)isShowReceiptSettingSheet;
+- (BOOL)isShowPersonalReceiptSettingSheet;
+- (void)onClickToReceiveDetailButton;
+- (void)showActionList;
+- (void)showActionSheetWithSetting:(BOOL)arg1;
+- (void)showMchCodeActionSheet;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (id)getLocalSaveAlbumImageViewV2;
+- (void)doApplyQRCodeSuccess:(id)arg1;
+- (void)showWithQRActionInfo:(id)arg1 saveNotifyType:(int)arg2;
+- (void)showHalfPage:(id)arg1 saveNotifyType:(int)arg2;
+- (void)onHalfPageClickClose:(id)arg1;
+- (void)showCoverPage:(id)arg1 saveNotifyType:(int)arg2;
+- (void)showLongPressView:(id)arg1 saveNotifyType:(int)arg2;
+- (void)onClickQRButtonInfo:(id)arg1 saveNotifyType:(int)arg2 actionType:(unsigned long long)arg3;
+- (void)saveImageToAlbum;
+- (void)handleBusinessQRCodeSaveSuccess;
+- (void)showSaveSuccessHalfPage;
+- (void)navigateToBusinessAccountQRCodePage;
+- (void)navigateToPersonalAccountQRCodePage;
+- (void)clickApplyMchCodeCell;
+- (void)userCodeFoldBtnClick;
+- (void)mchCodeFoldBtnClick;
+- (void)userChangeShowingCodeType;
+- (void)updateActionBarViewState;
+- (void)onMchCodeNameClicked:(id)arg1;
+- (void)OnWCPayFacingQRCodeImageViewLongPress:(id)arg1;
+- (void)saveQRCodeImageButtonPress;
+- (void)requestApplyQrcode;
+- (void)requestSaveQrcode;
+- (void)doSaveQRCodeSuccess;
+- (void)doSaveMchQRCodeSuccess;
+- (void)saveQRCodeImageButtonPressOversea;
+- (void)saveQRCodeWithReport;
+- (void)RemoveMessageStructAndShowedMoney:(id)arg1;
+- (void)EndReceivedMoneyAnimation:(id)arg1;
+- (void)ShowReceivedMoneyAnimation:(id)arg1;
+- (void)insertNewView:(id)arg1;
+- (void)ShowPayerStartedPayMoneyAnimation:(id)arg1 OnlyChangedOldCell:(BOOL)arg2;
+- (void)ShowMchPayerStartedPayMoneyAnimation:(id)arg1 OnlyChangedOldCell:(BOOL)arg2;
+- (void)banner:(id)arg1 clickWithUrl:(id)arg2;
+- (id)getNoticeBanner;
+- (void)onIdleTimerUtilVoipQuit;
+- (void)userDidTakeScreenshot:(id)arg1;
+- (void)showSetPushSoundResultSuccess:(BOOL)arg1 soundStatus:(BOOL)arg2;
+- (void)showOpenSystemPushSoundTips;
+- (void)reportApplyWithScene:(unsigned long long)arg1;
+- (void)reportQrcodeSaveWithActionType:(unsigned long long)arg1 showType:(int)arg2 buttonType:(int)arg3;
+- (void)reportUserAction:(int)arg1;
+- (id)getDisplayNameInfo;
+- (id)getDisplayTruthNameInfo;
+- (id)imageFromView:(id)arg1;
+- (id)headerImageWithPayIcon:(BOOL)arg1;
+- (id)mchHeaderImageWithPayIcon;
+- (id)mchHeaderImageWithPayIconForLocalSave;
+- (int)getUserQrcodeLevel;
+- (int)getMchQrcodeLevel;
+- (void)reportLocation;
+- (BOOL)isDomestic;
+- (void)qrcodeSaveNotify:(unsigned int)arg1;
+- (id)genRichTextViewLinkContent:(id)arg1 content:(id)arg2;
+- (BOOL)isOverseaFacingReceive;
+- (BOOL)isShowingUserFacingReceiveCode;
+- (BOOL)isShowingFixMoneyFacingReceive;
+- (BOOL)isUserCodeFixMoneyFacingReceive;
+- (BOOL)isMchCodeFixMoneyFacingReceive;
+- (id)getUserCodeUrl;
+- (id)getMchCodeUrl;
+- (id)getCurrentShowingQRCodeUrl;
+- (id)getMchShopInfoByShopId:(unsigned long long)arg1;
+- (unsigned long long)getSelectedShopId;
+- (id)getTagIcon;
+- (id)getMMCommonPickerViewData;
+- (void)onLoadWCPayWebImageOK:(id)arg1;
+- (void)onWCPayQRCoverPageView:(id)arg1 clickWithButtonInfo:(id)arg2;
+- (void)overseaLongPressEvents;
+- (void)overseaScreenShotEvents;
+- (void)onClickUsageHalfPageCancelButton:(id)arg1;
+- (void)onClickUsageHalfPageConfirmButton:(id)arg1;
+- (void)onClickSaveQrcodeSuccessCancelButton:(id)arg1;
+- (void)onClickSaveQrcodeSuccessConfirmButton:(id)arg1;
+- (void)showShortTermQrCodeLoadingView:(long long)arg1 withForceLoading:(BOOL)arg2;
+- (void)showShortTermQrCodeErrorView:(long long)arg1 withErrorMsg:(id)arg2;
+- (void)hideShortTermQrCodeView:(long long)arg1;
+- (long long)getErrorViewState:(long long)arg1;
+- (BOOL)hasMchQrcode;
+- (void)refreshBottomEntrance;
+- (void)ClickBottomEntrance;
+- (void)commonPickerCancel:(id)arg1;
+- (void)commonPickerConfirm:(id)arg1 selectedRows:(id)arg2;
+- (void)clearFixedQRCodeDesc;
+- (BOOL)didSelectedMchShopIdInResponseList;
+- (void)setSelectedMchShopId:(unsigned long long)arg1;
+- (BOOL)ignoreScreenShotTips;
+- (void)setIgnoreScreenShotTips:(BOOL)arg1;
+- (BOOL)isShowingActionSheet;
+- (void)setIsShowingActionSheet:(BOOL)arg1;
+- (id)m_bizImageQRCodeView;
+- (void)setM_bizImageQRCodeView:(id)arg1;
+- (id)m_bizHeadImageView;
+- (void)setM_bizHeadImageView:(id)arg1;
+- (id)m_bizQrMatrix;
+- (void)setM_bizQrMatrix:(id)arg1;
+- (id)m_bizEncoder;
+- (void)setM_bizEncoder:(id)arg1;
+- (id)screenShotAlert;
+- (void)setScreenShotAlert:(id)arg1;
+- (id)m_bannerNotice;
+- (void)setM_bannerNotice:(id)arg1;
+- (id)detailReddotImgView;
+- (void)setDetailReddotImgView:(id)arg1;
+- (id)detailSubLabel;
+- (void)setDetailSubLabel:(id)arg1;
+- (BOOL)bNeedRemoveReddotFromOtherView;
+- (void)setBNeedRemoveReddotFromOtherView:(BOOL)arg1;
+- (id)coverPageView;
+- (void)setCoverPageView:(id)arg1;
+- (id)saveQRCodePanelView;
+- (void)setSaveQRCodePanelView:(id)arg1;
+- (id)usageHalfPage;
+- (void)setUsageHalfPage:(id)arg1;
+- (BOOL)bHasUsageHalfPageShown;
+- (void)setBHasUsageHalfPageShown:(BOOL)arg1;
+- (BOOL)bIsHalfPageShown;
+- (void)setBIsHalfPageShown:(BOOL)arg1;
+- (id)tableHeaderView;
+- (void)setTableHeaderView:(id)arg1;
+- (id)userCodeView;
+- (void)setUserCodeView:(id)arg1;
+- (id)userCodeContentView;
+- (void)setUserCodeContentView:(id)arg1;
+- (double)userCodeMainContentHeight;
+- (void)setUserCodeMainContentHeight:(double)arg1;
+- (id)userCodeFoldIcon;
+- (void)setUserCodeFoldIcon:(id)arg1;
+- (id)userCodeFoldBtn;
+- (void)setUserCodeFoldBtn:(id)arg1;
+- (id)userCodeActionBarView;
+- (void)setUserCodeActionBarView:(id)arg1;
+- (id)userCodeContentMaskView;
+- (void)setUserCodeContentMaskView:(id)arg1;
+- (id)userCodeAnimateContentView;
+- (void)setUserCodeAnimateContentView:(id)arg1;
+- (id)userCodeErrorView;
+- (void)setUserCodeErrorView:(id)arg1;
+- (id)mchCodeErrorView;
+- (void)setMchCodeErrorView:(id)arg1;
+- (id)bottomEntranceView;
+- (void)setBottomEntranceView:(id)arg1;
+- (id)bottomEntranceClickBtn;
+- (void)setBottomEntranceClickBtn:(id)arg1;
+- (id)mchCodeView;
+- (void)setMchCodeView:(id)arg1;
+- (id)mchCodeContentView;
+- (void)setMchCodeContentView:(id)arg1;
+- (double)mchCodeMainContentHeight;
+- (void)setMchCodeMainContentHeight:(double)arg1;
+- (id)mchCodeApplyReddot;
+- (void)setMchCodeApplyReddot:(id)arg1;
+- (id)mchActionBarNew;
+- (void)setMchActionBarNew:(id)arg1;
+- (id)mchCoverPageView;
+- (void)setMchCoverPageView:(id)arg1;
+- (id)mchHeadImgView;
+- (void)setMchHeadImgView:(id)arg1;
+- (id)mchQRCodeImgView;
+- (void)setMchQRCodeImgView:(id)arg1;
+- (id)mchCodeFoldIcon;
+- (void)setMchCodeFoldIcon:(id)arg1;
+- (id)mchCodeFoldBtn;
+- (void)setMchCodeFoldBtn:(id)arg1;
+- (id)mchCodeActionBarView;
+- (void)setMchCodeActionBarView:(id)arg1;
+- (id)mchCodeContentMaskView;
+- (void)setMchCodeContentMaskView:(id)arg1;
+- (id)mchCodeAnimateContentView;
+- (void)setMchCodeAnimateContentView:(id)arg1;
+- (id)mchHeadImgContainerView;
+- (void)setMchHeadImgContainerView:(id)arg1;
+- (id)mchTotalMoneyView;
+- (void)setMchTotalMoneyView:(id)arg1;
+- (id)mchTotalMoneyBottomLine;
+- (void)setMchTotalMoneyBottomLine:(id)arg1;
+- (id)mchArrPayerInfoView;
+- (void)setMchArrPayerInfoView:(id)arg1;
+- (id)mchArrPayerBottomLine;
+- (void)setMchArrPayerBottomLine:(id)arg1;
+- (id)mchArrAnimationedMessageStruct;
+- (void)setMchArrAnimationedMessageStruct:(id)arg1;
+- (id)mchQrMatrix;
+- (void)setMchQrMatrix:(id)arg1;
+- (id)mchEncoder;
+- (void)setMchEncoder:(id)arg1;
+- (id)mchApplyCoverPageView;
+- (void)setMchApplyCoverPageView:(id)arg1;
+- (id)mchCodeNameBtn;
+- (void)setMchCodeNameBtn:(id)arg1;
+- (id)mchCodeNameLabel;
+- (void)setMchCodeNameLabel:(id)arg1;
+- (id)tagIconImageView;
+- (void)setTagIconImageView:(id)arg1;
+- (unsigned long long)selectedMchShopId;
+- (id)mchShopPicker;
+- (void)setMchShopPicker:(id)arg1;
+- (long long)backEntranceValue;
+- (void)setBackEntranceValue:(long long)arg1;
+- (void).cxx_destruct;
+@end

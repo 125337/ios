@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_removeGameHTMLWebView : WAJSEventHandler_removeHTMLWebView
+@end

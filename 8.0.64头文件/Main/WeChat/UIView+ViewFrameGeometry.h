@@ -1,0 +1,38 @@
+@interface UIView (ViewFrameGeometry)
+- (void)setWcOrigin:(CGPoint)arg1;
+- (CGPoint)wcOrigin;
+- (CGSize)size;
+- (void)setSize:(CGSize)arg1;
+- (CGPoint)bottomRight;
+- (CGPoint)bottomLeft;
+- (CGPoint)topRight;
+- (double)x;
+- (void)setX:(double)arg1;
+- (double)y;
+- (void)setY:(double)arg1;
+- (double)centerX;
+- (void)setCenterX:(double)arg1;
+- (double)centerY;
+- (void)setCenterY:(double)arg1;
+- (void)setPixelAlignedCenter:(CGPoint)arg1;
+- (double)height;
+- (void)setHeight:(double)arg1;
+- (double)width;
+- (void)setWidth:(double)arg1;
+- (double)top;
+- (void)setTop:(double)arg1;
+- (double)left;
+- (void)setLeft:(double)arg1;
+- (double)bottom;
+- (void)setBottom:(double)arg1;
+- (double)right;
+- (void)setRight:(double)arg1;
+- (UIEdgeInsets)realSafeAreaInsets;
+- (void)setX:(double)arg1 andY:(double)arg2;
+- (void)moveBy:(CGPoint)arg1;
+- (void)scaleBy:(double)arg1;
+- (void)fitInSize:(CGSize)arg1;
+- (void)fitTheSubviews;
+- (void)ceilAllSubviews;
+- (void)frameIntegral;
+@end

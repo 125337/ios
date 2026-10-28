@@ -1,0 +1,2 @@
+@interface WCMomentsShareScopeSectionModel : WCBaseSectionModel
+@end

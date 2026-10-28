@@ -1,0 +1,30 @@
+@interface WCPayCreditPayControlDetailLogic : WCPayControlLogic <WCPayCreditPayCardDetailInfoViewControllerDelegate, WCPayPayPwdViewControllerDelegate, WCPayCreditPayFinishCreateViewControllerDelegate>
+- (id)initWithData:(id)arg1;
+- (void)startLogic;
+- (void)jumpToNewMessage:(id)arg1;
+- (void)openBranderProfile;
+- (id)getServiceContant;
+- (void)WCPayCreditPayCardDetailInfoViewControllerBack;
+- (void)WCPayCreditPayCardDetailInfoViewControllerContactBrandChat;
+- (void)WCPayCreditPayCardDetailInfoViewControllerContactBrandProfile;
+- (void)WCPayCreditPayCardDetailInfoViewControllerHelpGuider;
+- (void)WCPayCreditPayCardDetailInfoViewControllerShowCreditRights;
+- (void)WCPayCreditPayCardDetailInfoViewControllerRepayment;
+- (void)WCPayCreditPayCardDetailInfoViewControllerShowCreditDetail;
+- (void)gotoWebViewController:(id)arg1;
+- (void)WCPayCreditPayCardDetailInfoViewControllerSetMainBankCard:(id)arg1;
+- (void)WCPayCreditPayCardDetailInfoViewControllerUnbindCard:(id)arg1;
+- (void)WCPayCreditPayCardDetailInfoViewControllerViewBill;
+- (void)WCPayCreditPayCardDetailInfoViewControllerIncreaseLimit;
+- (void)WCPayCreditPayFinishCreateViewControllerBack;
+- (void)WCPayCreditPayFinishCreateViewControllerGoToGetMoreLimit;
+- (void)WCPayCreditPayCardDetailInfoViewControllerViewWillAppear;
+- (void)PayPwdBack;
+- (void)PayPwdRightActionBack;
+- (void)VerifyPayPwdNext:(id)arg1;
+- (void)OnQueryWXCreditCardInfo:(id)arg1 Error:(id)arg2;
+- (void)OnPayPasswordError:(id)arg1 ErrorCount:(int)arg2 LockTotalCount:(unsigned int)arg3;
+- (void)OnVerifyPayPassword:(id)arg1;
+- (void)OnSetMainCard:(id)arg1 Error:(id)arg2;
+- (void)OnGetBindQueryInfo:(id)arg1 Error:(id)arg2;
+@end

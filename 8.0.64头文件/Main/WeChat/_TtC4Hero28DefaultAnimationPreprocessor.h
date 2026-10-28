@@ -1,0 +1,2 @@
+@interface _TtC4Hero28DefaultAnimationPreprocessor : _TtC4Hero16BasePreprocessor
+@end

@@ -1,0 +1,23 @@
+@interface OMCCaptionSegment : OMCElementSegment <OMCEditingStateAdjustable>
+- (id)materialID;
+- (id)colorStyleID;
+- (id)mainCaptionFontName;
+- (id)mainCaptionFontNameInMaterial;
+- (id)secondaryCaptionFontName;
+- (id)secondaryCaptionFontNameInMaterial;
+- (BOOL)updateStyleWithMaterialID:(id)arg1;
+- (BOOL)updateColorStyleWithID:(id)arg1;
+- (BOOL)updateMainCaptionFontName:(id)arg1;
+- (BOOL)updateSecondaryCaptionFontName:(id)arg1;
+- (BOOL)updateAllCaptionsFontName:(id)arg1;
+- (void)enterEditingState;
+- (void)leaveEditingState;
+- (BOOL)isEditingState;
+- (id)mainCaptionLanguage;
+- (void)setMainCaptionLanguage:(id)arg1;
+- (id)secondaryCaptionLanguage;
+- (void)setSecondaryCaptionLanguage:(id)arg1;
+- (id)getCaptionItemsWithLanguage:(id)arg1;
+- (BOOL)updateCaptionItems:(id)arg1 withLanguage:(id)arg2;
+- (SharedPtr<XMSCaptionSegment>)backingCaptionSegment;
+@end

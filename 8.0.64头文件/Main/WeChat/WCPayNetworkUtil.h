@@ -1,0 +1,33 @@
+@interface WCPayNetworkUtil : NSObject
++ (id)AddLocationToDic:(id)arg1;
++ (id)GenTenPayUrlArgumentFromDic:(id)arg1;
++ (id)queryBufferWithDic:(id)arg1;
++ (id)innerBufferWithDic:(id)arg1;
++ (id)addEncryptInfoToDic:(id)arg1;
++ (BOOL)isCgiNoInSignBlackList:(unsigned int)arg1;
++ (void)fillTenpayRequestWithSignAndCrtNo:(id)arg1 CgiNo:(unsigned int)arg2;
++ (void)reportSignError:(int)arg1;
++ (BOOL)ABTestOpenPayCgiSeperateOpen;
++ (id)authenArray;
++ (id)verifyArray;
++ (id)verifyRegArray;
++ (id)qrcodeUseBindQueryArray;
++ (id)payOrderQueryArray;
++ (unsigned int)CgiCmdForAuthenWithReqKey:(id)arg1;
++ (unsigned int)CgiCmdForVerifyWithReqKey:(id)arg1;
++ (unsigned int)CgiCmdForVerifyRegWithReqKey:(id)arg1;
++ (unsigned int)CgiCmdForQrcodeUseBindQueryWithReqKey:(id)arg1;
++ (unsigned int)CgiCmdForPayOrderQueryWithReqKey:(id)arg1;
++ (id)queryParamDictFromParamString:(id)arg1 WithKey:(id)arg2;
++ (unsigned int)MMFuncForGenPrePayWithParamString:(id)arg1;
++ (unsigned int)MMFuncForPayAuthAppWithPrepayId:(id)arg1;
++ (unsigned int)MMFuncForPayAuthNativeWithUrl:(id)arg1;
++ (BOOL)isAuthenCMD:(unsigned int)arg1;
++ (BOOL)isVerifyCMD:(unsigned int)arg1;
++ (BOOL)isVerifyRegCMD:(unsigned int)arg1;
++ (BOOL)isQRCodeUseBindQueryCMD:(unsigned int)arg1;
++ (BOOL)isPayOrderQueryCMD:(unsigned int)arg1;
++ (BOOL)isSnsPayment:(id)arg1;
++ (BOOL)isGetPaidOrderDetail:(unsigned int)arg1;
++ (unsigned char)routeInfoFromReqKey:(id)arg1;
+@end

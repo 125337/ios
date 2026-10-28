@@ -1,0 +1,6 @@
+@interface WAJSEventHandler_startBluetoothDevicesDiscovery : WAJSEventHandler_BaseEvent <IWAJSContextBlueToothProtocol>
+- (void)handleJSEvent:(id)arg1;
+- (void)onBluetoothStartScan:(int)arg1 errMsg:(id)arg2 appid:(id)arg3;
+- (void)dealloc;
+- (id)bleInstance;
+@end

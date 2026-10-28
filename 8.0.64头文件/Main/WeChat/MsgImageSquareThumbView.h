@@ -1,0 +1,120 @@
+@interface MsgImageSquareThumbView : MMUIButton <YYAsyncLayerDelegate, SimpleImgInfoDelegate>
+{
+    SimpleImgInfo * m_imgInfo; // +0x8
+    NSString * m_imageLocalPath; // +0x10
+    NSString * m_imageSquarePath; // +0x18
+    id m_target; // +0x20
+    SEL m_shouldSelectSEL; // +0x28
+    BOOL m_selectable; // +0x30
+    BOOL m_isSelected; // +0x31
+    BOOL m_isDisabled; // +0x32
+    BOOL m_isExpired; // +0x33
+    BOOL m_isLoading; // +0x34
+    BOOL m_showMaskWhenDisabled; // +0x35
+    BOOL m_bUseWebImg; // +0x36
+    BOOL m_isFromFav; // +0x37
+    double m_downloadPercent; // +0x38
+    double m_circlePercent; // +0x40
+    UIView * m_iconView; // +0x48
+    UILabel * m_titleLabel; // +0x50
+    UILabel * m_timeLabel; // +0x58
+    UILabel * m_sizeLabel; // +0x60
+    UIView * m_timeBkgView; // +0x68
+    UIView * m_markSelectedView; // +0x70
+    UIImageView * m_markSelectedImageView; // +0x78
+    UIView * m_disabledMaskView; // +0x80
+    UIImageView * m_markExpiredImageView; // +0x88
+    CMessageWrap * m_msgWrap; // +0x90
+    UILabel * m_percentLabel; // +0x98
+    UIProgressView * m_percentProgress; // +0xa0
+    MMUIActivityIndicatorView * m_downloadingFlower; // +0xa8
+    AppFileNodeProgressView * m_circleProgress; // +0xb0
+    YYImage * m_image; // +0xb8
+    MMWebImageView * m_webImgView; // +0xc0
+}
++ (Class)layerClass;
++ (id)getColorForIconName:(id)arg1;
++ (BOOL)isLongImage:(id)arg1;
++ (void)compressMsgImgTOSquareImg:(id)arg1;
++ (id)compressImage:(id)arg1;
++ (CGSize)calcCompressImageSize:(id)arg1;
+- (id)newAsyncDisplayTask;
+- (void)setImage:(id)arg1 forState:(unsigned long long)arg2;
+- (void)dealloc;
+- (id)initWithImgInfo:(id)arg1 AndChatName:(id)arg2 msgWrap:(id)arg3 selectable:(BOOL)arg4;
+- (id)initWithImgInfo:(id)arg1 AndChatName:(id)arg2 msgWrap:(id)arg3 selectable:(BOOL)arg4 thumbSize:(CGSize)arg5;
+- (CGRect)calcSelectIconFrame;
+- (void)setM_selectable:(BOOL)arg1;
+- (void)setM_isSelected:(BOOL)arg1;
+- (void)setM_isDisabled:(BOOL)arg1;
+- (void)setM_downloadPercent:(double)arg1;
+- (void)setM_circlePercent:(double)arg1;
+- (void)setM_isExpired:(BOOL)arg1;
+- (void)setM_isLoading:(BOOL)arg1;
+- (id)accessibilityLabel;
+- (void)setTimeLabel:(unsigned long long)arg1;
+- (void)startLoadSquareImageIfExist;
+- (void)startLoadImageSuqareImgDir;
+- (void)updateImagePath:(id)arg1;
+- (void)startLoadImageWithGCD;
+- (id)currentImage;
+- (id)getWebImgView;
+- (id)getIconView;
+- (void)updateSelectViewAnimated:(BOOL)arg1;
+- (void)startPopUpAnimation:(id)arg1 originScale:(double)arg2;
+- (void)toggleSelection;
+- (void)setTarget:(id)arg1 forSelectAction:(SEL)arg2;
+- (id)accessibilityHint;
+- (BOOL)accessibilityPerformMagicTap;
+- (unsigned long long)accessibilityTraits;
+- (id)m_imgInfo;
+- (void)setM_imgInfo:(id)arg1;
+- (id)m_imageLocalPath;
+- (void)setM_imageLocalPath:(id)arg1;
+- (BOOL)m_selectable;
+- (BOOL)m_isSelected;
+- (BOOL)m_isDisabled;
+- (BOOL)m_isExpired;
+- (BOOL)m_isLoading;
+- (double)m_downloadPercent;
+- (double)m_circlePercent;
+- (BOOL)m_showMaskWhenDisabled;
+- (void)setM_showMaskWhenDisabled:(BOOL)arg1;
+- (id)m_iconView;
+- (void)setM_iconView:(id)arg1;
+- (id)m_titleLabel;
+- (void)setM_titleLabel:(id)arg1;
+- (id)m_timeLabel;
+- (void)setM_timeLabel:(id)arg1;
+- (id)m_sizeLabel;
+- (void)setM_sizeLabel:(id)arg1;
+- (id)m_timeBkgView;
+- (void)setM_timeBkgView:(id)arg1;
+- (id)m_markSelectedView;
+- (void)setM_markSelectedView:(id)arg1;
+- (id)m_markSelectedImageView;
+- (void)setM_markSelectedImageView:(id)arg1;
+- (id)m_disabledMaskView;
+- (void)setM_disabledMaskView:(id)arg1;
+- (id)m_markExpiredImageView;
+- (void)setM_markExpiredImageView:(id)arg1;
+- (id)m_msgWrap;
+- (void)setM_msgWrap:(id)arg1;
+- (id)m_percentLabel;
+- (void)setM_percentLabel:(id)arg1;
+- (id)m_percentProgress;
+- (void)setM_percentProgress:(id)arg1;
+- (id)m_downloadingFlower;
+- (void)setM_downloadingFlower:(id)arg1;
+- (id)m_circleProgress;
+- (void)setM_circleProgress:(id)arg1;
+- (id)m_image;
+- (void)setM_image:(id)arg1;
+- (id)m_webImgView;
+- (void)setM_webImgView:(id)arg1;
+- (BOOL)m_bUseWebImg;
+- (void)setM_bUseWebImg:(BOOL)arg1;
+- (BOOL)m_isFromFav;
+- (void)setM_isFromFav:(BOOL)arg1;
+- (void).cxx_destruct;
+@end

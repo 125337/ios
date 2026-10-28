@@ -1,0 +1,2 @@
+@interface TPMediaAssetObjectParam : NSObject
+@end

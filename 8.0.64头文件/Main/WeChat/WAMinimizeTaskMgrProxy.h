@@ -1,0 +1,30 @@
+@interface WAMinimizeTaskMgrProxy : NSObject <IWAMinimizeTaskMgrService>
++ (BOOL)shouldShowMinimizeEntryReddot:(id)arg1;
++ (void)markMinimizeEntryExp:(id)arg1;
++ (void)markMinimizeEntryClick:(id)arg1;
++ (void)markMinimizeEduExp:(id)arg1;
++ (BOOL)canShowMinimizeOperation;
++ (BOOL)checkTaskMaxCountOrShowTipsBeforeAdd:(id)arg1 pendingTaskContext:(id)arg2;
++ (BOOL)checkMultiContentTaskMaxCount:(id)arg1 taskBizKey:(id)arg2 confirmBlock:(id /* block */)arg3;
++ (id)getTask:(id)arg1 TaskBizKey:(id)arg2;
++ (BOOL)tryAddTaskAndMinimize:(id)arg1 NotiDelegate:(id)arg2;
++ (BOOL)updateTask:(id)arg1 WithTaskData:(id)arg2;
++ (BOOL)removeTask:(id)arg1 TaskBizKey:(id)arg2;
++ (BOOL)maximizeTask:(id)arg1 TaskBizKey:(id)arg2;
++ (BOOL)isTaskInForground:(id)arg1 TaskBizKey:(id)arg2;
++ (void)onMinimizeAnimationBegin:(id)arg1 TaskBizKey:(id)arg2 FromFrame:(CGRect)arg3 toFrame:(CGRect)arg4 duration:(double)arg5;
++ (void)onMinimizeAnimationEnd:(id)arg1 TaskBizKey:(id)arg2;
++ (void)performMinimizeAnimation:(id)arg1 TaskBizKey:(id)arg2;
++ (void)beginPopBackGesture:(id)arg1 TaskBizKey:(id)arg2;
++ (void)performMinimizeAnimation:(id)arg1 TaskBizKey:(id)arg2 taskStateType:(unsigned int)arg3;
++ (void)onMinimizeAnimationBegin:(id)arg1 TaskBizKey:(id)arg2 TaskStateType:(unsigned int)arg3 FromFrame:(CGRect)arg4 toFrame:(CGRect)arg5 duration:(double)arg6;
++ (void)onMinimizeAnimationEnd:(id)arg1 TaskBizKey:(id)arg2 TaskStateType:(unsigned int)arg3;
++ (BOOL)updatePopBackGesture:(id)arg1 TaskBizKey:(id)arg2 Progress:(double)arg3 TouchPoint:(CGPoint)arg4 ShouldCancel:(BOOL *)arg5;
++ (void)endPopBackGesture:(id)arg1 taskBizKey:(id)arg2 isComplete:(BOOL)arg3 pendingTaskContext:(id)arg4;
++ (id)getMinimizationTransitionDelegate;
++ (BOOL)hasTask:(id)arg1 TaskBizKey:(id)arg2 taskStateType:(unsigned int)arg3;
++ (BOOL)updateTaskSnapshot:(id)arg1 WithTaskData:(id)arg2;
++ (id)taskSnapShotImageWithTaskData:(id)arg1;
++ (BOOL)hasOutterContainerTask;
++ (void)addMinimizeTaskAnimationForActionSheetWithTaskData:(id)arg1 animationViewImage:(id)arg2 fromViewFrame:(CGRect)arg3 completion:(id /* block */)arg4;
+@end

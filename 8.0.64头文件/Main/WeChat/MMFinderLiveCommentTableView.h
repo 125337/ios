@@ -1,0 +1,2 @@
+@interface MMFinderLiveCommentTableView : MMTableView
+@end

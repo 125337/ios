@@ -1,0 +1,31 @@
+@interface TingMusicChatServiceCpp : UnitRCObjcBaseProxyClass <TingMusicChatService>
+- (id)getAvailableRoles;
+- (void)setRole:(id)arg1;
+- (id)getCurrentRole;
+- (id)getAudioChatService;
+- (void)setAssistantActive:(BOOL)arg1;
+- (BOOL)getAssistantActive;
+- (void)playNext;
+- (void)playOpening;
+- (void)playOpeningWithContext:(id)arg1;
+- (void)onServiceChanged:(id)arg1;
+- (void)onPlayingItemUpdate:(id)arg1;
+- (void)onTingPlayerStateChanged:(id)arg1 state:(int)arg2 event:(int)arg3 eventContext:(id)arg4;
+- (void)onPlayModeChanged;
+- (void)onPlayingIndexChanged:(int)arg1 source:(id)arg2 context:(id)arg3 reason:(int)arg4;
+- (void)onTingPlayTaskPlayingContextUpdated:(id)arg1;
+- (void)onTingPlayTaskStateChanged:(id)arg1 state:(int)arg2 event:(int)arg3 eventContext:(id)arg4;
+- (void)onCurrentPlayingListSourceWillChange:(id)arg1 nextSource:(id)arg2;
+- (void)onPlayTaskInfoEvent:(id)arg1 event:(int)arg2 info:(id)arg3;
+- (void)onPlayEvent:(id)arg1 event:(int)arg2 msg:(id)arg3;
+- (void)onPlayInfoEvent:(id)arg1 event:(int)arg2 msg:(id)arg3;
+- (void)onProgressChanged:(long long)arg1 displayTimeMs:(long long)arg2 duration:(long long)arg3;
+- (void)onPlayingTaskChanged:(id)arg1;
+- (BOOL)couldAutoNextTape;
+- (BOOL)couldPlayNextTape;
+- (BOOL)hasNextTape;
+- (void)onResposne:(id)arg1 errorCode:(long long)arg2 extraData:(id)arg3;
+- (void)onStatusChanged:(id)arg1 status:(int)arg2;
+- (void)onLevelMeterChange:(id)arg1 peakPower:(float)arg2;
+- (void)onBizEvent:(int)arg1 extraData:(id)arg2;
+@end

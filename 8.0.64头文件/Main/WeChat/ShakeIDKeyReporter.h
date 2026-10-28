@@ -1,0 +1,2 @@
+@interface ShakeIDKeyReporter : NSObject
+@end

@@ -1,0 +1,2 @@
+@interface WCAdvertiseHighlightTagNumberDataModel : WCAdvertiseLikeNumberDataModel
+@end

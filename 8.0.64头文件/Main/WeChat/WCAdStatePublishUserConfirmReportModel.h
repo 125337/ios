@@ -1,0 +1,2 @@
+@interface WCAdStatePublishUserConfirmReportModel : WCAdChannelReportExtendInfoModel
+@end

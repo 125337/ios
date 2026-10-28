@@ -1,0 +1,2 @@
+@interface SettingViewProvider : NSObject
+@end

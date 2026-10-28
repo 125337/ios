@@ -1,0 +1,22 @@
+@interface UIView (FinderJumpInfo) <WCFinderJumpInfoViewProtocol>
+- (void)notifyToShow;
+- (void)changeToShow:(BOOL)arg1;
+- (void)_updateWithJumpInfo:(id)arg1 showPosition:(int)arg2;
+- (void)_startFinderFeedExposeAction;
+- (void)_endFinderFeedExposeAction;
+- (void)showJumpInfoViewForCompletePlayIfNeeded;
+- (void)setTimer:(id)arg1;
+- (id)timer;
+- (void)setJumpInfoViewDelegate:(id)arg1;
+- (id)jumpInfoViewDelegate;
+- (void)setJumpInfo:(id)arg1;
+- (id)jumpInfo;
+- (void)setShowPosition:(int)arg1;
+- (int)showPosition;
+- (void)setStyle:(id)arg1;
+- (id)style;
+- (void)setFeedExposeTime:(unsigned long long)arg1;
+- (unsigned long long)feedExposeTime;
+- (void)setViewExposeTime:(unsigned long long)arg1;
+- (unsigned long long)viewExposeTime;
+@end

@@ -1,0 +1,2 @@
+@interface WCFinderInteractiveFavoriteTypePickerView : UIView
+@end

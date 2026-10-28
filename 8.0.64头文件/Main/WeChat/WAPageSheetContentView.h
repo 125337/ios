@@ -1,0 +1,2 @@
+@interface WAPageSheetContentView : UIView
+@end

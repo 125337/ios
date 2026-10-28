@@ -1,0 +1,59 @@
+@interface _TtC6WeChat31KaraPrivateMessageHistoryRecord : _TtC6WeChat17KaraHistoryRecord <WCTTableCoding, KaraHistoryRecordIdentifiable>
+{
+     identifier; // +0x0
+     isWeComContact; // +0x0
+}
++ (const void *)objectRelationalMapping;
++ (const void *)allProperties;
++ (id)allBridgeProperties;
++ (id)__wcdbtyper;
++ (const void *)dateThatHappened;
++ (const void *)__wcdb_synthesize_1:(void *)arg1;
++ (id)swift_dateThatHappened;
++ (const void *)dateThatRecalled;
++ (const void *)__wcdb_synthesize_2:(void *)arg1;
++ (id)swift_dateThatRecalled;
++ (const void *)hourOfTheDay;
++ (const void *)__wcdb_synthesize_3:(void *)arg1;
++ (id)swift_hourOfTheDay;
++ (const void *)dayOfTheWeek;
++ (const void *)__wcdb_synthesize_4:(void *)arg1;
++ (id)swift_dayOfTheWeek;
++ (void)__wcdb_column_constraint_5:(void *)arg1;
++ (void)__wcdb_column_constraint_6:(void *)arg1;
++ (void)__wcdb_column_constraint_7:(void *)arg1;
++ (void)__wcdb_index_8:(void *)arg1;
++ (void)__wcdb_index_9:(void *)arg1;
++ (void)__wcdb_index_10:(void *)arg1;
++ (const void *)svrid;
++ (const void *)__wcdb_synthesize_11:(void *)arg1;
++ (id)swift_svrid;
++ (const void *)session;
++ (const void *)__wcdb_synthesize_12:(void *)arg1;
++ (id)swift_session;
++ (const void *)localID;
++ (const void *)__wcdb_synthesize_13:(void *)arg1;
++ (id)swift_localID;
++ (const void *)isWeComContact;
++ (const void *)__wcdb_synthesize_14:(void *)arg1;
++ (id)swift_isWeComContact;
++ (void)__wcdb_table_constraint_15:(void *)arg1;
++ (void)__wcdb_table_constraint_16:(void *)arg1;
++ (void)__wcdb_table_constraint_17:(void *)arg1;
++ (void)__wcdb_column_constraint_18:(void *)arg1;
++ (void)__wcdb_column_constraint_19:(void *)arg1;
++ (void)__wcdb_column_constraint_20:(void *)arg1;
++ (void)__wcdb_index_21:(void *)arg1;
++ (void)__wcdb_index_22:(void *)arg1;
++ (Expression)identified:(id)arg1;
+- (id)svrid;
+- (void)setSvrid:(id)arg1;
+- (id)session;
+- (void)setSession:(id)arg1;
+- (id)localID;
+- (void)setLocalID:(id)arg1;
+- (BOOL)isWeComContact;
+- (void)setIsWeComContact:(BOOL)arg1;
+- (id)init;
+- (void).cxx_destruct;
+@end

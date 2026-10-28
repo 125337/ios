@@ -1,0 +1,2 @@
+@interface GameCenterMsgUtil : MMObject
+@end

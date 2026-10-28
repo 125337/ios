@@ -1,0 +1,2 @@
+@interface WCAdvertiseFinderTopicParamsModel : NSObject
+@end

@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_private_setNavigationBarRightButton : WAJSEventHandler_setNavigationBarRightButton
+@end

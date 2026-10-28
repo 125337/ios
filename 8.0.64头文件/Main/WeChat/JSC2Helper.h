@@ -1,0 +1,33 @@
+@interface JSC2Helper : NSObject
++ (BOOL)osVersionInWhiteList:(id)arg1;
++ (BOOL)osVersionInBlackList:(id)arg1;
++ (BOOL)systemCanHook;
++ (BOOL)abtestCanHook;
++ (BOOL)abtestCanEnableByteCode;
++ (BOOL)canGlobalHook;
++ (BOOL)enableFastGC;
++ (void)enableXPC;
++ (BOOL)shouldOSLogTrace;
++ (BOOL)shouldOSLogStore;
++ (void)enableOSLogTrace;
++ (BOOL)enableOSLogRedirect;
++ (BOOL)enableOSLogTraceHook;
++ (BOOL)enableWebKitLogStore;
++ (void)setupOSLogStore;
++ (BOOL)fetchOSLogWithDate:(id)arg1 subsystem:(id)arg2 limit:(long long)arg3 includingXPC:(BOOL)arg4;
++ (void)predicate4Format:(id)arg1 argumentArray:(id)arg2;
++ (void)extraPredicate4Format:(id)arg1 argumentArray:(id)arg2;
++ (BOOL)fetchOSLogWithDate:(id)arg1 subsystems:(id)arg2 limit:(long long)arg3 includingXPC:(BOOL)arg4;
++ (void)setupOptions;
++ (void)commonSetup;
++ (void)enableLogEvaluateDetail;
++ (BOOL)hasJSCRun;
++ (BOOL)isErrorOrRunning;
++ (int)errCode;
++ (void)startHook;
++ (void)startHook2;
++ (void)hook;
++ (void)hook2;
++ (void)checkClasses;
++ (void)enableCEvaluateJSScriptIfNeeded;
+@end

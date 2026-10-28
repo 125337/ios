@@ -1,0 +1,36 @@
+@interface MMMusicPostVideoCollectionCell : UICollectionViewCell
+{
+    MMMusicFinderVideoCellModel * _dataModel; // +0x8
+    MMWebImageView * _coverImageView; // +0x10
+    CAGradientLayer * _timeLayer; // +0x18
+    MMUILabel * _timeLabel; // +0x20
+    MMAssetSelectCheckButton * m_selectCheckButton; // +0x28
+    unsigned long long _scene; // +0x30
+    id <MMMusicPostVideoCollectionCellDelegate> _delegate; // +0x38
+    UIView * _selectCoverView; // +0x40
+    UIEdgeInsets _checkButtonHitTetsSlop; // +0x48
+}
++ (id)reuseKeyStr;
+- (id)initWithFrame:(CGRect)arg1;
+- (void)initView;
+- (void)updateModel:(id)arg1 canMultiSelect:(BOOL)arg2 minDuration:(double)arg3 isSelected:(BOOL)arg4;
+- (void)updateCanMultiSelect:(BOOL)arg1;
+- (void)updateMinDuration:(double)arg1;
+- (void)updateIsSelectedStatus:(BOOL)arg1;
+- (id)hitTest:(CGPoint)arg1 withEvent:(id)arg2;
+- (void)layoutSubviews;
+- (id)getImage;
+- (void)udpateCheckBtnSelection:(BOOL)arg1;
+- (void)onSelectBtnClicked;
+- (BOOL)isAccessibilityElement;
+- (id)accessibilityLabel;
+- (unsigned long long)scene;
+- (void)setScene:(unsigned long long)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)selectCoverView;
+- (void)setSelectCoverView:(id)arg1;
+- (UIEdgeInsets)checkButtonHitTetsSlop;
+- (void)setCheckButtonHitTetsSlop:(UIEdgeInsets)arg1;
+- (void).cxx_destruct;
+@end

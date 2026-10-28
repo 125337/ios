@@ -1,0 +1,2 @@
+@interface EcsCoreEcsOpenContextBasePlatformInfo_UrCpp : UnitRCObjcBaseProxyClass <EcsCoreEcsOpenContextBasePlatformInfo_Ur>
+@end

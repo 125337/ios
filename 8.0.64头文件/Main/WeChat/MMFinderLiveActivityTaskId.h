@@ -1,0 +1,2 @@
+@interface MMFinderLiveActivityTaskId : MMFinderLiveTaskId
+@end

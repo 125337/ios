@@ -1,0 +1,2 @@
+@interface WCFinderHotwordConfiguration : WCHotwordConfiguration
+@end

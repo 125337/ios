@@ -1,0 +1,2 @@
+@interface FavFileTransferTask : FileTransferTask
+@end

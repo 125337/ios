@@ -1,0 +1,34 @@
+@interface NSString (NSString_MMExtend)
++ (id)stringWithUInt64:(unsigned long long)arg1;
++ (BOOL)isString:(id)arg1 equalToString:(id)arg2;
++ (BOOL)isString:(id)arg1 equalToString:(id)arg2 nilEqualsToEmpty:(BOOL)arg3;
++ (id)safeStringWithUTF8String:(const char *)arg1;
++ (id)filterInvalidUTF8CharFrom:(id)arg1;
++ (id)generatePrivacyString:(id)arg1;
++ (id)generatePrivacyStringFromArray:(id)arg1;
++ (id)generatePrivacyEmail:(id)arg1;
++ (id)getShowMediumDetailStringBySize:(unsigned long long)arg1;
++ (id)getShowDetailStringBySize:(unsigned long long)arg1;
++ (id)getShowStringBySize:(unsigned long long)arg1;
++ (id)getShowStringForAlertBySize:(unsigned long long)arg1;
+- (unsigned long long)unsignLongLongValue;
+- (unsigned long long)uint64Value;
+- (BOOL)isCaseInsensitiveEqualToString:(id)arg1;
+- (BOOL)hasCaseInsensitivePrefix:(id)arg1 subString:(id *)arg2;
+- (id)stringByTrimmingLeadingCharactersInSet:(id)arg1;
+- (id)stringByTrimmingTrailingCharactersInSet:(id)arg1;
+- (id)stringByTrimming;
+- (id)stringByTrimmingLeft;
+- (id)stringByTrimmingRight;
+- (id)stringByEscapingAllLineBreak;
+- (long long)compareWithUInt64:(id)arg1;
+- (BOOL)containsSubstring:(id)arg1;
+- (BOOL)containsSubstring:(id)arg1 option:(unsigned long long)arg2;
+- (id)replacingWithPattern:(id)arg1 withTemplate:(id)arg2 error:(id *)arg3;
+- (BOOL)isLastCharacterAlphaNumeric;
+- (id)safeSubstringFromIndex:(long long)arg1;
+- (id)safeSubstringToIndex:(long long)arg1;
+- (id)safeSubstringWithRange:(_NSRange)arg1;
+- (id)stringByReplacingCharactersInSet:(id)arg1 withString:(id)arg2;
+- (id)stringByTrimingContinueCharactersInSet:(id)arg1;
+@end

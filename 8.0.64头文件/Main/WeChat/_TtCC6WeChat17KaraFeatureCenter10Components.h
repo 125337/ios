@@ -1,0 +1,2 @@
+@interface _TtCC6WeChat17KaraFeatureCenter10Components : _TtCs12_SwiftObject
+@end

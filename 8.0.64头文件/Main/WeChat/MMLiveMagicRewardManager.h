@@ -1,0 +1,2 @@
+@interface MMLiveMagicRewardManager : NSObject
+@end

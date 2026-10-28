@@ -1,0 +1,25 @@
+@interface TingFuncDeclareCpp : UnitRCObjcBaseProxyClass <TingFuncDeclare>
+- (id)TingReportContext_2_TingReportContext_2:(id)arg1;
+- (void)Void_AsyncResultUR_1:(id)arg1;
+- (void)Void_Bool:(BOOL)arg1;
+- (void)Void_BoolInt32String:(BOOL)arg1 errorCode:(int)arg2 errorMsg:(id)arg3;
+- (void)Void_BoolInt32StringString:(BOOL)arg1 errorCode:(int)arg2 errorMsg:(id)arg3 categoryId:(id)arg4;
+- (void)Void_BoolStringTingPlayItem_2:(BOOL)arg1 errorMsg:(id)arg2 playItem:(id)arg3;
+- (void)Void_ByteArray:(id)arg1;
+- (void)Void_ByteBuffer:(id)arg1;
+- (void)Void_Empty;
+- (void)Void_Int64:(long long)arg1;
+- (void)Void_ListString:(id)arg1;
+- (void)Void_List_TingTapeItem_2:(id)arg1;
+- (void)Void_List_TingTaskPlayingInfoRecord_2:(id)arg1;
+- (void)Void_MMListenMembershipInfo_2:(id)arg1;
+- (void)Void_MMListenMembershipJoinInfo_2:(id)arg1;
+- (void)Void_MMListenMembershipJoinResponse_2:(id)arg1;
+- (void)Void_MMListenMusicChatRoomInfo_1:(id)arg1;
+- (void)Void_String:(id)arg1;
+- (void)Void_TingImageColorAsset_2:(id)arg1;
+- (void)Void_TingMusicSquareClientInsertionPatch_1:(id)arg1;
+- (void)Void_TingRGBAImageData_2:(id)arg1;
+- (void)Void_TingTaskSnapshot_2:(id)arg1;
+- (void)Void_Ting_TingDailyPlaylistPlayContext:(id)arg1;
+@end

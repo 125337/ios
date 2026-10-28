@@ -1,0 +1,2 @@
+@interface _TtC6WeChat22MagicEcsTLSubscribeBiz : _TtC6WeChat15MagicEcsBaseBiz
+@end

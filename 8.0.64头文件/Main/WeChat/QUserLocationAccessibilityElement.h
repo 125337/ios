@@ -1,0 +1,2 @@
+@interface QUserLocationAccessibilityElement : QBaseAccessibilityElement
+@end

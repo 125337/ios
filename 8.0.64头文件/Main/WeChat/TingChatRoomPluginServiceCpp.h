@@ -1,0 +1,25 @@
+@interface TingChatRoomPluginServiceCpp : UnitRCObjcBaseProxyClass <TingChatRoomPluginService>
+- (id)getCurRoomCategoryId;
+- (id)getCurRoomName;
+- (id)getCurRoomCategoryItem;
+- (void)createChatRoom:(id)arg1 roomType:(int)arg2 presetCategoryId:(id)arg3 callback:(id /* block */)arg4;
+- (void)joinChatRoom:(id)arg1 callback:(id /* block */)arg2;
+- (void)exitChatRoom:(id)arg1;
+- (void)updateChatRoom:(id)arg1 isClose:(BOOL)arg2 genPlaylistOnClosing:(BOOL)arg3 callback:(id /* block */)arg4;
+- (id)getRoomChatMessageList;
+- (unsigned int)getRoomMemberCount;
+- (void)sendRoomMsg:(id)arg1 categoryId:(id)arg2 callback:(id /* block */)arg3;
+- (void)addRoomListener:(id)arg1;
+- (void)removeRoomListener:(id)arg1;
+- (id)getRoomRecommendPlayList;
+- (BOOL)hasShownCheerMessage:(id)arg1;
+- (void)onShowCheerMessage:(id)arg1;
+- (id)getRoomRecommendPlayTaskService;
+- (void)savePrivateSessionInfo:(id)arg1;
+- (id)getPrivateSessionInfo;
+- (id)getEncryptedUserInfo;
+- (void)setChatRoomPluginServiceListener:(id)arg1;
+- (BOOL)getIsPlayingHistory;
+- (void)setIsPlayingHistory:(BOOL)arg1;
+- (void)getChatRoomInfo:(id)arg1 callback:(id /* block */)arg2;
+@end

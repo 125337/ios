@@ -1,0 +1,130 @@
+@interface BaseMessageCellView : BaseChatCellView <WCActionSheetDelegate, SnapshotPrinterViewProtocol, WCForceTouchTriggerLongPressProtocol, WCForceTouchPreviewProtocol>
+{
+    NSArray * m_arrMenuItems; // +0x10
+    UIView * m_contentView; // +0x18
+    BOOL m_touchEnded; // +0x20
+    BOOL m_bDisableAllOperation; // +0x21
+    BOOL m_bIsLongPressHandled; // +0x22
+    BOOL m_isConverting3dTouchToLongPress; // +0x23
+    BOOL m_isTouchUpInsideHandled; // +0x24
+    NSSet * _touches; // +0x28
+    id <ReaderMessageTemplateMsgFolderCellViewDelegate> _templateMsgFolderCellViewDelegate; // +0x30
+    unsigned long long _revokeActionSheetShowTime; // +0x38
+}
+- (CGRect)targetRectForMenuController;
+- (CGRect)targetRectForMenuControllerForRecordDetail;
+- (BOOL)isOnlyShowDeleteMenu;
+- (id)generateOperationMenu;
+- (id)generateOperationMenuForRecordDetail;
+- (id)bypassMessageMenuItemsWhitelist;
+- (id)uniqMenuItems:(id)arg1;
+- (id)filteredMenuItems:(id)arg1;
+- (void)showOperationMenu;
+- (void)onShowOperationMenu;
+- (void)handleMenuControllerWillHideMenuNotification:(id)arg1;
+- (id)operationMenuItems;
+- (BOOL)canCellShowOperationMenu;
+- (BOOL)canBecomeFirstResponder;
+- (BOOL)canPerformAction:(SEL)arg1 withSender:(id)arg2;
+- (id)scheduleMenuItem;
+- (void)onSchedule:(id)arg1;
+- (BOOL)canShowScheduleMenuItem;
+- (id)forwardMenuItem;
+- (void)onForward:(id)arg1;
+- (BOOL)canShowForwardMenuItem;
+- (id)favoriteMenuItem;
+- (void)onFavorite:(id)arg1;
+- (BOOL)canShowFavoriteMenuItem;
+- (id)copyMenuItem;
+- (void)onCopy:(id)arg1;
+- (id)deleteMenuItem;
+- (void)onDelete:(id)arg1;
+- (BOOL)canShowDeleteMenuItem;
+- (id)revokeMsgMenuItem;
+- (void)onRevokeMsg:(id)arg1;
+- (id)getBatchRevokeActionSheet:(unsigned long long)arg1;
+- (void)addRevokeOrDeleteMenuItem:(id)arg1;
+- (BOOL)canShowRevokeMsgMenuItem;
+- (BOOL)canRevokeWhenSending;
+- (id)shareMsgToThirdPartyServiceMenuItem;
+- (void)onShareMsgToThirdPartyService:(id)arg1;
+- (BOOL)canShowSendToDevices;
+- (BOOL)canShowSendToWeappTool;
+- (BOOL)canShowShareMsgToThirdPartyServiceMenuItem;
+- (id)restoreMenuItem;
+- (void)onRestore:(id)arg1;
+- (id)moreMenuItem;
+- (void)onMore:(id)arg1;
+- (BOOL)canShowMoreMenuItem;
+- (id)starMenuItem;
+- (void)onStar:(id)arg1;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)actionSheetCancel:(id)arg1;
+- (BOOL)canShowFTSIndexMenuItem;
+- (id)showFTSIndexMenuItem;
+- (void)onShowFTSIndexMenuItem:(id)arg1;
+- (id)msgReplyMenuItem;
+- (void)onShowMsgReplyMenuItem:(id)arg1;
+- (BOOL)canShowTopMsgMenuItem;
+- (id)topMsgMenuItem;
+- (void)onTopMsgMenuItem:(id)arg1;
+- (BOOL)canShowCancelTopMenuItem;
+- (id)cancelTopMsgItem;
+- (void)onCancelTopMsgMenuItem:(id)arg1;
+- (BOOL)isChatSupportTopMessage;
+- (BOOL)canShowEditMenuItem;
+- (BOOL)canShowSearchMenuItem;
+- (void)dealloc;
+- (void)prepareForReuse;
+- (void)setHighlighted:(BOOL)arg1;
+- (BOOL)highlighted;
+- (void)highlightMsgAnimatedWithHighlightTextRange:(_NSRange)arg1;
+- (void)layoutInternal;
+- (void)layoutFinished;
+- (void)layoutContentView;
+- (void)updateNodeStatus;
+- (BOOL)accessibilityElementsHidden;
+- (id)accessibilityLabel;
+- (id)accessibilityValue;
+- (unsigned long long)accessibilityTraits;
+- (id)accessibilityCustomActions;
+- (BOOL)onCustomActionOperated:(id)arg1;
+- (void)updateStatus;
+- (double)contentViewCenterY;
+- (void)doForward;
+- (void)doFavorite;
+- (void)setDisableAllOperation;
+- (void)setEnableAllOperation;
+- (id)displayViewForImageBrowser;
+- (id)displayViewForRefer;
+- (CGRect)showRectForMenuController;
+- (id)getContentView;
+- (BOOL)checkContentSize;
+- (BOOL)isTouchInView:(id)arg1;
+- (void)touchesBegan:(id)arg1 withEvent:(id)arg2;
+- (void)touchesEnded:(id)arg1 withEvent:(id)arg2;
+- (void)touchesCancelled:(id)arg1 withEvent:(id)arg2;
+- (void)triggerLongPressFor3DTouchAtLocation:(CGPoint)arg1 inCoordinateView:(id)arg2;
+- (void)LongPressEvents;
+- (void)onTouchDown;
+- (BOOL)autoHighlight;
+- (BOOL)supportDoubleTap;
+- (void)onTouchDownRepeat;
+- (void)onDelayedTouchUpInside;
+- (void)onTouchUpInside;
+- (void)onTouchEnded;
+- (void)onLongTouch:(CGPoint)arg1;
+- (void)onLongTouch;
+- (void)onTouchCancel;
+- (id)forceTouchShakeView;
+- (BOOL)canPeek;
+- (CGRect)previewingSourceRectForLocation:(CGPoint)arg1 inCoordinateView:(id)arg2;
+- (id)extInfoForSnapshotPrinter;
+- (id)touches;
+- (void)setTouches:(id)arg1;
+- (id)templateMsgFolderCellViewDelegate;
+- (void)setTemplateMsgFolderCellViewDelegate:(id)arg1;
+- (unsigned long long)revokeActionSheetShowTime;
+- (void)setRevokeActionSheetShowTime:(unsigned long long)arg1;
+- (void).cxx_destruct;
+@end
