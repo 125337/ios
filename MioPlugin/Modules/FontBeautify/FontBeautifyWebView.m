@@ -20,7 +20,7 @@ static NSString *g_b64Font = nil;
 static NSString *g_b64Path = nil;
 
 static NSString *MioFontBase64(void) {
-    // 配置只存文件名，运行时按当前容器 Library/Preferences/fonts 解析（容器迁移不失效）
+    // 配置只存文件名，运行时按当前容器 Library/Preferences/Mio/fonts 解析（容器迁移不失效）
     NSString *path = [[FontBeautifyConfig shared] resolvedActiveFontPath];
     if (path.length == 0) return nil;
     if (g_b64Font && [g_b64Path isEqualToString:path]) return g_b64Font;

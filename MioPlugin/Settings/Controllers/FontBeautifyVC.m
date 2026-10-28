@@ -9,7 +9,7 @@
 // 字体美化设置页（同款 UI 框架：普通开关行 + 按钮行 + hint 平铺，无手风琴）
 // 主页只留开关 + "选择字体"入口（push FontPickerVC）；
 // 导入/删除/预览都在 FontPickerVC 内完成。配置只存字体文件名，
-// 运行时按 Library/Preferences/fonts/<文件名> 解析（容器迁移不失效）。
+// 运行时按 Library/Preferences/Mio/fonts/<文件名> 解析（容器迁移不失效）。
 @interface FontBeautifyVC ()
 @end
 

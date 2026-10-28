@@ -26,14 +26,14 @@
     ];
 }
 
-// 字体统一落盘目录：Library/Preferences/fonts（顺带建目录，导入/扫描/Hook 注册共用一个入口）。
-// 位置照抄微信助手 3.9-5 反编译实锤（MiYouPriUtil fontPath → "%@/Preferences/fonts"）：
+// 字体统一落盘目录：Library/Preferences/Mio/fonts（顺带建目录，导入/扫描/Hook 注册共用一个入口）。
 // Preferences 是"部分还原"式安装唯一会被还原的目录（NSUserDefaults 也在这），
-// 字体文件放这里跟着一起活下来，天然免疫覆盖安装丢文件
+// 字体文件放这里跟着一起活下来，天然免疫覆盖安装丢文件；
+// 加 Mio 子目录隔离，避免和微信助手（Preferences/fonts）等其他插件的字体目录混在一起
 + (NSString *)mioFontsDir {
     NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)
                      firstObject];
-    dir = [dir stringByAppendingPathComponent:@"Preferences/fonts"];
+    dir = [dir stringByAppendingPathComponent:@"Preferences/Mio/fonts"];
     [[NSFileManager defaultManager] createDirectoryAtPath:dir
                               withIntermediateDirectories:YES
                                                attributes:nil
@@ -52,7 +52,7 @@
 #pragma mark - 旧版备份残留清理
 
 // 老版本曾把字体字节备份进 UserDefaults（MioFontData_ 前缀，一个字体可占十几 MB）。
-// 现字体目录已改 Library/Preferences/fonts——"部分还原"式安装会整体还原该目录，
+// 现字体目录已改 Library/Preferences/Mio/fonts——"部分还原"式安装会整体还原该目录，
 // 字体文件天然幸存，不再需要备份。首次启动把残留 key 清干净
 static void MioPurgeLegacyFontBackups(void) {
     NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
