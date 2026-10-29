@@ -93,8 +93,8 @@ static void dns_sweepView(UIView *v) {
     for (UIView *sub in v.subviews) dns_sweepView(sub);
 }
 
-// 全窗口扫描（总开关翻转时一次性调用，非热路径）
-+ (void)sweepAllSkins {
+// 全窗口递归扫描：关→摘皮肤；开→标脏（总开关翻转时一次性调用，非热路径）
+static void dns_sweepAllSkins(void) {
     NSMutableArray<UIWindow *> *wins = [[NSMutableArray alloc] init];
     UIWindow *key = nil;
     if (@available(iOS 13.0, *)) {
@@ -211,7 +211,7 @@ static BOOL dns_hookMethod(Class cls, SEL sel, IMP hookImp, IMP *outOrig) {
                                                   usingBlock:^(NSNotification *note) {
         WPLog(@"DayNightSkin", @"[DNSHook] 总开关 -> %@，开始当场清理",
               [note.userInfo[@"on"] boolValue] ? @"ON" : @"OFF");
-        [DayNightSkinHook sweepAllSkins];
+        dns_sweepAllSkins();
     }];
 }
 
