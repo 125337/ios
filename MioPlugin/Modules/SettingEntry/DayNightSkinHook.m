@@ -28,9 +28,18 @@
 #import <substrate.h>
 
 static IMP orig_switchDidMoveToSuperview = NULL;
+static IMP orig_switchSetOn = NULL;
+static IMP orig_switchSetOnAnimated = NULL;
 
 /// 防重标记：已叠加皮肤的 UISwitch 上挂着皮肤控件引用
 static char kDayNightSkinKey;
+
+/// 程序化 setOn 后同步皮肤显示（cell 配置/复用都走这条路，且发生在上屏之后）
+static void DayNightSkin_syncAfterSetOn(UISwitch *sw) {
+    DayNightSwitch *skin = objc_getAssociatedObject(sw, &kDayNightSkinKey);
+    // 皮肤 changeAction 写回 sw.on 时值已相同，这里不会触发（KVO 同值不通知），无回环
+    if (skin && skin.on != sw.on) skin.on = sw.on;
+}
 
 static void DayNightSkinHook_installed(id self, SEL _cmd) {
     // 原实现（UIView 版）先走
@@ -57,7 +66,7 @@ static void DayNightSkinHook_installed(id self, SEL _cmd) {
 
     if (skin) {
         // 已换肤（cell 复用等重复上屏）：同步一次状态即可，不再叠加
-        skin.on = sw.on;
+        if (skin.on != sw.on) skin.on = sw.on;
         return;
     }
 
@@ -73,6 +82,18 @@ static void DayNightSkinHook_installed(id self, SEL _cmd) {
     sw.layer.shadowOpacity = 0.0;
     [sw addSubview:skin];
     objc_setAssociatedObject(sw, &kDayNightSkinKey, skin, OBJC_ASSOCIATION_RETAIN);
+}
+
+// 程序化 setOn:（含 .on 属性赋值）——微信 cell 配置开关的主要通路
+static void DayNightSkinHook_setOn(id self, SEL _cmd, BOOL on) {
+    ((void (*)(id, SEL, BOOL))orig_switchSetOn)(self, _cmd, on);
+    DayNightSkin_syncAfterSetOn((UISwitch *)self);
+}
+
+// setOn:animated: 若内部不走 setOn:，单独兜底同步
+static void DayNightSkinHook_setOnAnimated(id self, SEL _cmd, BOOL on, BOOL animated) {
+    ((void (*)(id, SEL, BOOL, BOOL))orig_switchSetOnAnimated)(self, _cmd, on, animated);
+    DayNightSkin_syncAfterSetOn((UISwitch *)self);
 }
 
 @implementation DayNightSkinHook
@@ -95,7 +116,22 @@ static void DayNightSkinHook_installed(id self, SEL _cmd) {
         if (m) method_setImplementation(m, (IMP)DayNightSkinHook_installed);
     }
 
-    WPLog(@"DayNightSkin", @"[DayNightSkinHook] ✓ UISwitch::didMoveToSuperview（dayNightSkinEnabled 实时生效）");
+    // setOn:/setOn:animated: 是 UISwitch 自有方法，MSHookMessageEx 直接换 IMP。
+    // 两条都挂：程序化赋值（cell 配置/复用）发生上屏之后，必须实时同步皮肤显示
+    SEL setOnSel = NSSelectorFromString(@"setOn:");
+    Method setOnM = class_getInstanceMethod(cls, setOnSel);
+    if (setOnM) {
+        orig_switchSetOn = method_getImplementation(setOnM);
+        method_setImplementation(setOnM, (IMP)DayNightSkinHook_setOn);
+    }
+    SEL setOnAnimSel = NSSelectorFromString(@"setOn:animated:");
+    Method setOnAnimM = class_getInstanceMethod(cls, setOnAnimSel);
+    if (setOnAnimM) {
+        orig_switchSetOnAnimated = method_getImplementation(setOnAnimM);
+        method_setImplementation(setOnAnimM, (IMP)DayNightSkinHook_setOnAnimated);
+    }
+
+    WPLog(@"DayNightSkin", @"[DayNightSkinHook] ✓ UISwitch::didMoveToSuperview + setOn:/setOn:animated:（dayNightSkinEnabled 实时生效）");
 }
 
 @end
