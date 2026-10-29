@@ -224,7 +224,19 @@
 
 - (UIImageView *)setupCloud {
     UIImageView *v = [[UIImageView alloc] initWithFrame: CGRectMake(self.frame.size.width / 3, self.frame.size.height * 0.4, self.frame.size.width / 3, self.frame.size.width * 0.23)];
-    v.image = [UIImage imageNamed:@"cloud"]; // dylib 无 bundle → nil，云朵不显示但安全
+    // dylib 无图片资源，原版 imageNamed:@"cloud" 拿不到图 → 改矢量绘制一朵云（三个圆 + 底部封条）
+    CGFloat cw = v.frame.size.width;
+    CGFloat ch = v.frame.size.height;
+    UIBezierPath *p = [UIBezierPath bezierPath];
+    [p appendPath:[UIBezierPath bezierPathWithArcCenter:CGPointMake(cw * 0.28, ch * 0.65) radius:ch * 0.32 startAngle:0 endAngle:M_PI * 2 clockwise:YES]];
+    [p appendPath:[UIBezierPath bezierPathWithArcCenter:CGPointMake(cw * 0.55, ch * 0.45) radius:ch * 0.48 startAngle:0 endAngle:M_PI * 2 clockwise:YES]];
+    [p appendPath:[UIBezierPath bezierPathWithArcCenter:CGPointMake(cw * 0.80, ch * 0.68) radius:ch * 0.30 startAngle:0 endAngle:M_PI * 2 clockwise:YES]];
+    [p appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(cw * 0.10, ch * 0.62, cw * 0.85, ch * 0.35) cornerRadius:ch * 0.17]];
+    CAShapeLayer *cloudLayer = [CAShapeLayer layer];
+    cloudLayer.path = p.CGPath;
+    cloudLayer.fillColor = [UIColor whiteColor].CGColor;
+    [v.layer addSublayer:cloudLayer];
+
     v.transform = CGAffineTransformMakeScale(0, 0);
 
     self.cloud = v;

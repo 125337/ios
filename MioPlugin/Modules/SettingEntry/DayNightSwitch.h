@@ -29,8 +29,8 @@
 /// 关态背景上的星点
 @property (nonatomic, nullable) NSArray<UIView *> *stars;
 
-/// 开态月亮上的云朵贴图（dylib 无 bundle 时 imageNamed 返回 nil，云朵不显示但不崩溃）
-@property (nonatomic, nonnull) UIImageView *cloud;
+/// 开态月亮上的云朵（CAShapeLayer 矢量绘制，无图片资源依赖）
+@property (nonatomic, nonnull) UIView *cloud;
 
 - (CGFloat)knobMargin;
 - (nonnull instancetype)initWithCenter:(CGPoint)center;
