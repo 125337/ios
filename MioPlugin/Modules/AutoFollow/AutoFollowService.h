@@ -2,10 +2,10 @@
 //  AutoFollowService.h
 //  MioPlugin
 //
-//  自动关注公众号核心服务。
-//  时序（照抄微信自身 WAJSEventHandler_private_quicklyAddBrandContact 的等 sync 模式）：
+//  自动关注公众号核心服务（完全静默：无 UI、无配置、无提示）。
+//  每次冷启动（进程生命周期内）执行一轮：
 //    前台激活 → 延迟 15s → 轮询判定（最多 3 次 × 10s，等联系人 sync 落库）
-//    → 仍未关注才发起关注 → 30s 后确认落地 → 硬性一次性标记
+//    → 仍不在通讯录才发起关注 → 30s 后仅记日志确认落地
 //  走微信自有 BrandDirectlyOperateContactLogic tryAddBrandContact:context:，
 //  协议层面与视频号/生活插件内部关注同通路，无自造包。
 //
@@ -18,9 +18,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 安装前台激活监听（由 AutoFollowHook 调用，幂等）
 + (void)startObserving;
-
-/// 立即执行一轮判定（设置页"立即执行"按钮用）：跳过 15s 初始延迟，仍保留轮询
-+ (void)runNow;
 
 @end
 

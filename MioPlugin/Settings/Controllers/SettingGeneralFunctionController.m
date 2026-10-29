@@ -11,10 +11,8 @@
 #import "../../Modules/KeywordAlert/KeywordAlertConfig.h"
 #import "SettingKeywordAlertController.h"
 #import "SettingMsgTailController.h"
-#import "SettingAutoFollowController.h"
 #import "../../Modules/MsgTail/MsgTailConfig.h"
 #import "../../Modules/SystemCamera/SystemCameraConfig.h"
-#import "../../Modules/AutoFollow/AutoFollowConfig.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
@@ -155,17 +153,6 @@
                                  cy:cy
                               width:w];
 
-    cy = [self addSeparatorInGroup:group cy:cy width:w];
-
-    NSString *afStatus = [AutoFollowConfig shared].autoFollowEnabled ? @"已开启" : @"已关闭";
-    cy = [self addNavRowInGroup:group
-                             title:@"自动关注公众号"
-                          subtitle:afStatus
-                               tag:700
-                            action:@selector(onAutoFollowTap)
-                                cy:cy
-                             width:w];
-
     y = [self finishGroup:group atY:y height:cy];
 
     // ── 隐私保护卡片 ──
@@ -305,11 +292,6 @@
     WPLog(@"Setting", @"[Nav] pushed SettingMsgTailController");
     SettingMsgTailController *vc = [[SettingMsgTailController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
-}
-
-- (void)onAutoFollowTap {
-    WPLog(@"Setting", @"[Nav] pushed SettingAutoFollowController");
-    [self.navigationController pushViewController:[[SettingAutoFollowController alloc] init] animated:YES];
 }
 
 @end

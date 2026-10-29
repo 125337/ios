@@ -49,8 +49,6 @@
 #import "../Modules/MsgTail/MsgTailConfig.h"
 #import "../Modules/SystemCamera/SystemCameraConfig.h"
 #import "../Modules/FontBeautify/FontBeautifyConfig.h"
-#import "../Modules/AutoFollow/AutoFollowConfig.h"
-#import "../Settings/Controllers/SettingAutoFollowController.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -199,12 +197,13 @@
                                                   subtitle:@"自动收款"
                                              sectionTitle:@"通用"],
 
+            // 自动关注：完全静默后台执行，无 Config 无设置页
             [MioModuleDescriptor descriptorWithIdentifier:@"autofollow"
                                                     title:@"自动关注"
-                                               configClass:[AutoFollowConfig class]
+                                               configClass:nil
                                                hookClasses:@[[AutoFollowHook class]]
-                                           controllerClass:[SettingAutoFollowController class]
-                                                  subtitle:@"关注公众号"
+                                           controllerClass:nil
+                                                  subtitle:nil
                                              sectionTitle:@"通用"],
             
             // ──── 界面布局 ────
