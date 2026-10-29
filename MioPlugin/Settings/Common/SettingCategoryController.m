@@ -423,13 +423,19 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 #pragma mark - Row: Switch
 
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
+    return [self addSwitchRowInGroup:group title:title desc:desc key:key isOn:on cy:cy width:w subIndicator:YES];
+}
+
+// subIndicator=NO 的调用方是手风琴总开关行（addMasterSwitchRowInGroup）：
+// 总开关是分组入口而非叶子配置，标题不加「↳」叶子前缀——由行类型决定，与构建期标志位无关
+- (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w subIndicator:(BOOL)subIndicator {
     WPWGroup *g = (WPWGroup *)group;
     if (![g isKindOfClass:[WPWGroup class]]) return cy;
     NSDictionary *row = @{@"type": @"switch",
                           @"title": title ?: @"",
                           @"key": key ?: @"",
                           @"desc": desc ?: @""};
-    id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, [self wpSubTitle:title], on);
+    id cell = WPWCSwitchCell([self wpRegisterSwitchSelectorForKey:key], self, subIndicator ? [self wpSubTitle:title] : title, on);
     if (cell) {
         wpAttachRow(cell, row);
         [g addCell:cell];
@@ -673,7 +679,7 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
     [self.masterSwitchKeys addObject:key];
     WPLog(@"Config", @"[MASTER] 注册 masterSwitchKey=%@, isOn=%d, masterKeys当前=%@", key, on, self.masterSwitchKeys);
 
-    CGFloat resultCy = [self addSwitchRowInGroup:group title:title desc:nil key:key isOn:on cy:cy width:w];
+    CGFloat resultCy = [self addSwitchRowInGroup:group title:title desc:nil key:key isOn:on cy:cy width:w subIndicator:NO];
 
     // 开即展开、关即收起：无独立「展开/收起」触发行，总开关为唯一入口。
     // 展开期间置 wpBuildingSubRows（保存/恢复以支持嵌套手风琴，如防撤回页子开关）
