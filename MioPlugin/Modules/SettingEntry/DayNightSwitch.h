@@ -14,6 +14,9 @@
 /// 状态变化回调（用户点击/拖动即触发）
 @property (nonatomic, copy, nullable) void (^changeAction)(BOOL);
 
+/// 程序化同步时置 YES：on 变化不触发 changeAction（防皮肤↔原生开关循环回调，WCR blockChangeAction 同款）
+@property (nonatomic, assign) BOOL suppressCallback;
+
 /// 当前状态，赋值会触发切换动画
 @property (nonatomic) BOOL on;
 

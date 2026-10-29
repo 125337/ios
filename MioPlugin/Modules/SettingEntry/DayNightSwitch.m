@@ -315,8 +315,8 @@
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
     if ([keyPath isEqualToString:@"on"]) {
-        // 状态变化先回调业务方（写回 UISwitch）
-        if (self.changeAction) { self.changeAction(self.on); }
+        // 状态变化先回调业务方（写回 UISwitch）；程序化同步（suppressCallback）不回调，防循环
+        if (self.changeAction && !self.suppressCallback) { self.changeAction(self.on); }
 
         self.knob.on = self.on;
 
