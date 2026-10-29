@@ -75,7 +75,6 @@
 #import "../Modules/SystemCamera/SystemCameraHook.h"
 #import "../Modules/FontBeautify/FontBeautifyHook.h"
 #import "../Modules/FontBeautify/FontImportHook.h"
-#import "../Modules/SettingEntry/DayNightSkinHook.h"
 #import "../Modules/SettingEntry/DayNightSkinConfig.h"
 #import "../Settings/Controllers/FontBeautifyVC.h"
 
@@ -375,7 +374,7 @@
             [MioModuleDescriptor descriptorWithIdentifier:@"daynightskin"
                                                     title:@"日月开关"
                                                configClass:[DayNightSkinConfig class]
-                                               hookClasses:@[[DayNightSkinHook class]]
+                                               hookClasses:@[]
                                            controllerClass:nil
                                                   subtitle:@"微信内开关换成太阳/月亮切换样式"
                                              sectionTitle:@"界面定制"],

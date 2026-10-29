@@ -10,6 +10,7 @@
 #import "../../Core/LogManager.h"
 #import "WPWeChatTable.h"
 #import "WPColorRow.h"
+#import "../../Modules/SettingEntry/DayNightSwitch.h"
 #import "../../Core/MioAlertHelper.h"
 
 // 微信引擎 switch 回调 trampoline：每行独立 selector（wpSw_<key>_<hash>），共享 IMP 从 _cmd 反解行身份。
@@ -444,6 +445,39 @@ static void wpAttachRow(id cellMgr, NSDictionary *row) {
 - (CGFloat)addSubSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w {
     // 子开关行 = switchCell（WCR 同款无前置小箭头，层级由缩进语义弱化）
     return [self addSwitchRowInGroup:group title:title desc:nil key:key isOn:on cy:cy width:w];
+}
+
+#pragma mark - Row: DayNight（日月皮肤开关，WCR 同款：自绘控件直挂行右侧，所见即所得，零 hook）
+
+- (CGFloat)addDayNightRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key cy:(CGFloat)cy width:(CGFloat)w {
+    WPWGroup *g = (WPWGroup *)group;
+    if (![g isKindOfClass:[WPWGroup class]]) return cy;
+    BOOL on = [[ConfigManager valueForKey:key] boolValue];
+
+    DayNightSwitch *dns = [[DayNightSwitch alloc] initWithFrame:CGRectMake(0, 0, 52.5, 30)];
+    dns.on = on;
+    objc_setAssociatedObject(dns, "wpDNSKey", key ?: @"", OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    dns.changeAction = ^(BOOL value) {
+        NSString *k = objc_getAssociatedObject(dns, "wpDNSKey");
+        [ConfigManager setValue:@(value) forKey:k];
+        WPLog(@"DayNightSkin", @"[DNS] %@ = %@", k, value ? @"ON" : @"OFF");
+    };
+
+    UIView *cv = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 130, kRowH)];
+    cv.backgroundColor = [UIColor clearColor];
+    dns.center = CGPointMake(130 - 32, kRowH / 2.0);
+    [cv addSubview:dns];
+
+    id cell = WPWCViewCell((SEL)0, self, [self wpSubTitle:title], cv);
+    if (cell) {
+        wpAttachRow(cell, @{@"type": @"daynight",
+                            @"title": title ?: @"",
+                            @"key": key ?: @""});
+        [g addCell:cell];
+    } else {
+        WPLog(@"WCTable", @"[WCTABLE] viewCell 不可用，日月行缺失: %@", title);
+    }
+    return cy + kRowH;
 }
 
 #pragma mark - Row: Info（只读信息/复制行）
