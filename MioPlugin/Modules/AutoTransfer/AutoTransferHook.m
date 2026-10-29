@@ -12,6 +12,9 @@
 static NSMutableSet *_processedTransferIds = nil;
 static NSMutableDictionary *_pendingTransferData = nil;
 
+/// 已记录统计的转账单号（收款统计去重：同笔只记一次）
+static NSMutableSet<NSString *> *_statConfirmedTransferIds = nil;
+
 static NSString *extractXMLValue(NSString *content, NSString *tagName) {
     NSString *pattern = [NSString stringWithFormat:@"<%@>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</%@>", tagName, tagName];
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
@@ -310,6 +313,20 @@ static void processTransferMessage(id wrap) {
             if ([payLogicMgr respondsToSelector:confirmSelA]) {
                 ((void (*)(id, SEL, id))objc_msgSend)(payLogicMgr, confirmSelA, request);
                 WPLog(@"AutoTransfer", @"[CONFIRM-A] 已确认收款: transferID=%@ fee=%.2f", transferID, feeAmount / 100.0);
+
+                // 持久累计记录点（实测 8.0.60+ 确认响应回调 insideCallBackOnConfirmTransferMoneyResponse
+                // 不触发，故记在确认动作实际发出处；transferID 去重防同笔重复确认）
+                if (transferID.length > 0) {
+                    if (!_statConfirmedTransferIds) _statConfirmedTransferIds = [NSMutableSet set];
+                    BOOL firstTime = NO;
+                    @synchronized (_statConfirmedTransferIds) {
+                        if (![_statConfirmedTransferIds containsObject:transferID]) {
+                            [_statConfirmedTransferIds addObject:transferID];
+                            firstTime = YES;
+                        }
+                    }
+                    if (firstTime) [MioEarnStats addTransferFen:feeAmount];
+                }
             } else {
                 WPLog(@"AutoTransfer", @"[ERROR] WCPayLogicMgr does not respond to ConfirmTransferMoney:");
                 return;
@@ -381,8 +398,10 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
     @try { id ft = [response valueForKey:@"m_nsFeeType"]; if (ft) feeType = ft; } @catch (NSException *e) {}
     @try { id p = [response valueForKey:@"m_nsPayer"]; if (p) payer = p; } @catch (NSException *e) {}
 
+    // 诊断日志：无条件记录（实锤该回调在当前版本是否触发、fee 读数是多少）
+    WPLog(@"AutoTransfer", @"[RESP-CB] 确认响应回调触发: fee=%lld feeType=%@ payer=%@", fee, feeType, payer);
+
     if (fee > 0) {
-        [MioEarnStats addTransferFen:fee];  // 持久累计（跨重启，服务端确认后的权威时点）
         if (config.autoConfirmTransferNotify) {
             NSString *msg = [NSString stringWithFormat:@"已收款 %.2f%@ 来自%@", fee / 100.0, feeType, payer];
             WPLog(@"AutoTransfer", @"[OK] 自动收款成功(回调): %@", msg);

@@ -206,11 +206,16 @@
             *ecy2 = [self addButtonRowInGroup:expand2 title:@"选择群聊" hint:groupFilterHint key:@"selectGroupFilter" cy:*ecy2 width:w];
         } cy:*ecy width:w];
         *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"抢红包后自动回复" key:@"redEnvelopAutoReply" isOn:config.redEnvelopAutoReply cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addSubSwitchRowInGroup:expand title:@"群聊中也自动回复" key:@"redEnvelopAutoReplyInGroup" isOn:config.redEnvelopAutoReplyInGroup cy:*ecy width:w];
-        *ecy = [self addSeparatorInGroup:expand cy:*ecy width:w];
-        *ecy = [self addInputRowInGroup:expand title:@"回复内容" key:@"redEnvelopAutoReplyStr" value:config.redEnvelopAutoReplyStr hint:@"谢谢老板" valueType:InputValueTypeText cy:*ecy width:w];
+        // 子开关：抢红包后自动回复（开=展开群聊回复/回复内容，关=收起；嵌套手风琴）
+        *ecy = [self addMasterSwitchRowInGroup:expand
+                                         title:@"抢红包后自动回复"
+                                           key:@"redEnvelopAutoReply"
+                                          isOn:config.redEnvelopAutoReply
+                                    subBuilder:^(UIView *expand2, CGFloat *ecy2) {
+            *ecy2 = [self addSubSwitchRowInGroup:expand2 title:@"群聊中也自动回复" key:@"redEnvelopAutoReplyInGroup" isOn:config.redEnvelopAutoReplyInGroup cy:*ecy2 width:w];
+            *ecy2 = [self addSeparatorInGroup:expand2 cy:*ecy2 width:w];
+            *ecy2 = [self addInputRowInGroup:expand2 title:@"回复内容" key:@"redEnvelopAutoReplyStr" value:config.redEnvelopAutoReplyStr hint:@"谢谢老板" valueType:InputValueTypeText cy:*ecy2 width:w];
+        } cy:*ecy width:w];
 
         *ecy = [self addHintRowInGroup:expand text:@"关键词过滤: 红包消息中包含指定关键词则不抢\n群过滤: 指定群聊中不自动抢红包\n延迟时间建议设为 1-3 秒" cy:*ecy width:w];
     } cy:cy width:w];
