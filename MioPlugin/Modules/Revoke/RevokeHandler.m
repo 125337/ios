@@ -47,18 +47,6 @@ static NSString *sanitizeInlineText(NSString *text, NSUInteger maxLen) {
     return clean.length > 0 ? clean : nil;
 }
 
-static NSString *timeTextFromTimestamp(unsigned int timestamp, NSString *dateFormat) {
-    NSDate *date = timestamp > 0 ? [NSDate dateWithTimeIntervalSince1970:timestamp] : [NSDate date];
-    static NSDateFormatter *formatter = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        formatter = [[NSDateFormatter alloc] init];
-        formatter.locale = [NSLocale localeWithLocaleIdentifier:@"zh_CN"];
-    });
-    formatter.dateFormat = dateFormat.length > 0 ? dateFormat : kDefaultDateFormat;
-    return [formatter stringFromDate:date] ?: @"";
-}
-
 static NSString *displayName(NSString *userName) {
     NSString *trimmedUser = trimText(userName);
     if (!trimmedUser) return nil;

@@ -35,13 +35,6 @@ static NSArray<NSString *> *_specialTokenOrder(void) {
     return @[@"{EEEE}", @"{EE}", @"{a}", @"{b}"];
 }
 
-static BOOL _isSpecialToken(NSString *token) {
-    return [token isEqualToString:@"{EE}"] ||
-           [token isEqualToString:@"{EEEE}"] ||
-           [token isEqualToString:@"{a}"] ||
-           [token isEqualToString:@"{b}"];
-}
-
 @implementation MessageTimeFormatParser
 
 + (NSString *)defaultFormat { return kDefaultFormat; }

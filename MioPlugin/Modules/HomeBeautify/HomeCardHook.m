@@ -125,11 +125,6 @@ static CGFloat HCCardMargin(HomeCardConfig *cfg) {
     return cfg.hcCardMargin > 0 ? cfg.hcCardMargin : 0.0;
 }
 
-static UIColor *HCColor(NSString *hex) {
-    if (hex.length == 0) return nil;
-    return [WPColorUtil colorFromHexString:hex];
-}
-
 // 浅/深色取色：双向互为回落，统一走 WPColorUtil 解析器
 static UIColor *HCColorForMode(NSString *hex, NSString *hexDark, BOOL dark) {
     return [WPColorUtil resolveColorFromLightHex:hex
