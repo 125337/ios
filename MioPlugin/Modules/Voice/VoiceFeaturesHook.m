@@ -30,7 +30,6 @@
 // ═══════════════════════════════════════════════════════════════
 
 static IMP orig_UVW_setVoiceTime = NULL;    // UploadVoiceWrap setM_uiVoiceTime:（① 假秒数）
-static IMP orig_VMC_init = NULL;            // VoiceMessageCellView initWithMessageWrap:contact:chat:
 static IMP orig_VMC_onAppear = NULL;        // onAppear
 static IMP orig_VMC_didMoveToWindow = NULL; // didMoveToWindow
 static IMP orig_VMC_layoutContentView = NULL; // layoutContentView
@@ -54,7 +53,6 @@ static int g_autoRateGuard = 0;             // ④ 自动倍速点击期间吞�
 static int g_bgGuard = 0;                   // ⑤ onMinimize 触发期间防递归（WCR DAT_028e48c1）
 
 // assoc keys（WCR 的 DAT_028ce0xx / DAT_028e3bxx 等价物）
-static char kVFVMCInitFlag;      // ② init 已走过
 static char kVFAutoTxDone;       // ② 去重
 static char kVFPanGesture;       // ③ pan 手势缓存
 static char kVFDurationCache;    // ③ 时长缓存 NSNumber
@@ -795,13 +793,7 @@ static void hook_UVW_setVoiceTime_(id self, SEL _cmd, unsigned int ms) {
     if (orig_UVW_setVoiceTime) ((void (*)(id, SEL, unsigned int))orig_UVW_setVoiceTime)(self, _cmd, v);
 }
 
-// ── ② VoiceMessageCellView init / onAppear ──
-static id hook_VMC_init(id self, SEL _cmd, id wrap, id contact, id chat) {
-    id r = orig_VMC_init ? ((id (*)(id, SEL, id, id, id))orig_VMC_init)(self, _cmd, wrap, contact, chat) : self;
-    if (VFIsVMC(self)) objc_setAssociatedObject(self, &kVFVMCInitFlag, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return r;
-}
-
+// ── ② VoiceMessageCellView onAppear ──
 static void hook_VMC_onAppear(id self, SEL _cmd) {
     if (orig_VMC_onAppear) ((void (*)(id, SEL))orig_VMC_onAppear)(self, _cmd);
     if (VFIsVMC(self)) VFTryAutoTranslate(self);
@@ -1035,8 +1027,7 @@ static BOOL hook_WAM_interrupt(id self, SEL _cmd, id arg) {
 + (void)hookVoiceCell {
     Class cellCls = objc_getClass("VoiceMessageCellView");
     if (!cellCls) { WPLog(@"VoiceFeat", @"VoiceMessageCellView 不存在，跳过语音 cell hooks"); return; }
-    // ② init + onAppear
-    VF_HOOK(cellCls, "initWithMessageWrap:contact:chat:", hook_VMC_init, orig_VMC_init);
+    // ② onAppear（本版本 VoiceMessageCellView 无 initWithMessageWrap:contact:chat:，已清理）
     VF_HOOK(cellCls, "onAppear", hook_VMC_onAppear, orig_VMC_onAppear);
     // ③ 生命周期 + ⑦ 长按挂载
     VF_HOOK(cellCls, "didMoveToWindow", hook_VMC_didMoveToWindow, orig_VMC_didMoveToWindow);
