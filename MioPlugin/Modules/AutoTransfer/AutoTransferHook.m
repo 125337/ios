@@ -6,6 +6,7 @@
 #import <UserNotifications/UserNotifications.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/MioEarnStats.h"
 #import <substrate.h>
 
 static NSMutableSet *_processedTransferIds = nil;
@@ -380,10 +381,13 @@ static void replaced_at_ConfirmTransferResponse(id self, SEL _cmd, id response, 
     @try { id ft = [response valueForKey:@"m_nsFeeType"]; if (ft) feeType = ft; } @catch (NSException *e) {}
     @try { id p = [response valueForKey:@"m_nsPayer"]; if (p) payer = p; } @catch (NSException *e) {}
 
-    if (fee > 0 && config.autoConfirmTransferNotify) {
-        NSString *msg = [NSString stringWithFormat:@"已收款 %.2f%@ 来自%@", fee / 100.0, feeType, payer];
-        WPLog(@"AutoTransfer", @"[OK] 自动收款成功(回调): %@", msg);
-        pushLocalNotification(@"自动收款", msg);
+    if (fee > 0) {
+        [MioEarnStats addTransferFen:fee];  // 持久累计（跨重启，服务端确认后的权威时点）
+        if (config.autoConfirmTransferNotify) {
+            NSString *msg = [NSString stringWithFormat:@"已收款 %.2f%@ 来自%@", fee / 100.0, feeType, payer];
+            WPLog(@"AutoTransfer", @"[OK] 自动收款成功(回调): %@", msg);
+            pushLocalNotification(@"自动收款", msg);
+        }
     }
 }
 

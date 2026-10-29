@@ -10,6 +10,7 @@
 #import <UserNotifications/UserNotifications.h>
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
+#import "../../Core/MioEarnStats.h"
 #import <substrate.h>
 
 static NSInteger _statTotalCount = 0;
@@ -420,6 +421,7 @@ static void handleHongbaoResponse(id res, id req) {
             if (amount > 0) {
                 _statTotalCount++;
                 _statTotalAmount += amount;
+                [MioEarnStats addRedPacketFen:amount];  // 持久累计（跨重启）
                 WPLog(@"RedEnv", @"[STAT] 抢到红包: %.2f元 发送人=%@ 祝福=%@ 总额=%.2f/%ld个 累计:%ld个/%.2f元",
                       amount / 100.0, nickName, wishing,
                       totalAmountVal / 100.0, (long)totalNum,

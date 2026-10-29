@@ -5,6 +5,8 @@
 #import "MioContactPicker.h"
 #import "SettingFixedInviteRulesController.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/MioEarnStats.h"
+#import "../../Core/MioAlertHelper.h"
 
 @implementation SettingRedEnvelopController
 
@@ -35,6 +37,17 @@
     if ([key isEqualToString:@"fixedInviteRules"]) {
         SettingFixedInviteRulesController *vc = [[SettingFixedInviteRulesController alloc] init];
         [self.navigationController pushViewController:vc animated:YES];
+        return;
+    }
+    if ([key isEqualToString:@"resetEarnStats"]) {
+        [MioAlertHelper showConfirmAlertWithTitle:@"清零统计"
+                                          message:@"将清空累计抢红包与累计自动收款金额，清零后无法恢复。"
+                                     confirmTitle:@"清零"
+                                        onConfirm:^{
+            [MioEarnStats resetAll];
+            WPLog(@"Setting", @"[EarnStats] 统计已清零，刷新页面");
+            [self wpReloadUI];
+        }];
         return;
     }
     WPLog(@"Setting", @"[BUTTON] key not SelectGroupFilter, calling super");
@@ -254,6 +267,33 @@
     if (!transferConfig.autoConfirmTransfer) {
         [self addSectionFooter:@"开启自动收款后可配置详细选项" y:y width:w];
     }
+
+    // ===== 卡片3：收益统计（持久累计，跨重启） =====
+    y = [self addSectionHeader:@"收益统计" y:y width:w];
+    UIView *group3 = [self addTableGroupAtY:y width:w];
+    CGFloat cy3 = [self addInfoRowInGroup:group3
+                                    title:@"累计抢红包"
+                               rightValue:[NSString stringWithFormat:@"%.2f 元", [MioEarnStats redPacketFen] / 100.0]
+                                 copyText:nil
+                               showArrow:NO
+                                      cy:0
+                                   width:w];
+    cy3 = [self addSeparatorInGroup:group3 cy:cy3 width:w];
+    cy3 = [self addInfoRowInGroup:group3
+                            title:@"累计自动收款"
+                       rightValue:[NSString stringWithFormat:@"%.2f 元", [MioEarnStats transferFen] / 100.0]
+                         copyText:nil
+                       showArrow:NO
+                              cy:cy3
+                           width:w];
+    cy3 = [self addSeparatorInGroup:group3 cy:cy3 width:w];
+    cy3 = [self addButtonRowInGroup:group3
+                              title:@"清零统计"
+                               hint:@"清空以上累计金额"
+                                key:@"resetEarnStats"
+                                 cy:cy3
+                              width:w];
+    y = [self finishGroup:group3 atY:y height:cy3];
 
     WPLog(@"UI", @"[Sub] SettingRedEnvelopController wpBuildRows done");
 }
