@@ -1,0 +1,2 @@
+@interface CBTAsstContentViewController : BaseMsgContentViewController
+@end

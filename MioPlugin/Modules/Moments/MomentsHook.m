@@ -528,10 +528,10 @@ static void hooked_hd_popDismiss(id self, SEL _cmd, BOOL animated) {
     gHDPending = NO;
 }
 
-// ===== 画质生效层：4 类 14 个能力/限制 getter 改写（WCR FUN_0033c69c 安装器逐函数反编译实锤）=====
+// ===== 画质生效层：4 类 13 个能力/限制 getter 改写（WCR FUN_0033c69c 安装器逐函数反编译实锤）=====
 // 带窗（gHDPending）：能力类返 1、限制类返 0、大小限制返 NSUIntegerMax、时长上限返 18000；
 // 关窗透传原实现（防普通发图误伤）。每条目用 imp_implementationWithBlock 独立生成垫片，
-// 自持各自 orig——canSendOriginalImage/hideOriginButton 同名挂在 OptionObj 与 PickerController
+// 自持各自 orig——hideOriginButton 同名挂在 OptionObj 与 PickerController
 // 两个类上，独立 block 才不会串 orig（查表式垫片会拿错类的原实现）。
 
 typedef struct {
@@ -555,9 +555,9 @@ static MioHDGetterSpec gHDGetterSpecs[] = {
     {"MMAssetInfo", "originLimitSize", -1},
     // MMConfigMgr（全局配置：视频大小限制，1 个）
     {"MMConfigMgr", "getInputLimitVideoSize", -1},
-    // MMImagePickerController（选图器 VC，3 个）
+    // MMImagePickerController（选图器 VC，2 个；canSendOriginalImage 仅存在于
+    // 8.0.5x 时代，8.0.64/8.0.80 头文件实锤无此方法（只有 canSendOriginImage），已移除）
     {"MMImagePickerController", "canSendOriginImage", 1},
-    {"MMImagePickerController", "canSendOriginalImage", 1},
     {"MMImagePickerController", "hideOriginButton", 0},
 };
 static const int gHDGetterSpecCount = (int)(sizeof(gHDGetterSpecs) / sizeof(gHDGetterSpecs[0]));
@@ -576,10 +576,10 @@ static void MioHDInstallGetterHooks(void) {
     for (int i = 0; i < gHDGetterSpecCount; i++) {
         MioHDGetterSpec *sp = &gHDGetterSpecs[i];
         Class cls = objc_getClass(sp->cls);
-        if (!cls) continue;
+        if (!cls) { WPLog(@"Moments", @"[HD] spec skip: %s 类缺失", sp->cls); continue; }
         SEL sel = NSSelectorFromString(@(sp->sel));
         Method m = class_getInstanceMethod(cls, sel);
-        if (!m) continue;
+        if (!m) { WPLog(@"Moments", @"[HD] spec skip: %s::%s 方法缺失", sp->cls, sp->sel); continue; }
         IMP orig = method_getImplementation(m);
         char *ret = method_copyReturnType(m);
         IMP newImp = NULL;

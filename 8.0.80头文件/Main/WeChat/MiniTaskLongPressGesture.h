@@ -1,0 +1,2 @@
+@interface MiniTaskLongPressGesture : UILongPressGestureRecognizer
+@end

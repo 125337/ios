@@ -1,0 +1,2 @@
+@interface WCFinderVideoProducerSectionModel : WCFinderBaseSectionModel
+@end

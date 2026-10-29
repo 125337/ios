@@ -1,0 +1,2 @@
+@interface WCFileBrowseData : MMObject
+@end

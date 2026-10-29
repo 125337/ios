@@ -1,0 +1,3 @@
+@interface MMFinderLiveCommentPlugin : MMLiveTaskBaseFunctionPlugin
+@end
+

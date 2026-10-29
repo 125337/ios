@@ -1,0 +1,3 @@
+@interface FixTitleColorButtonChainModel : _FixTitleColorButtonChainModel
+@end
+

@@ -1,0 +1,3 @@
+@interface WCVideoProducerSectionModel : WCBaseSectionModel
+@end
+

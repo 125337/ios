@@ -1,0 +1,24 @@
+@interface ContactBetaFunctionCallRegister : FunctionCallBetaBaseRegister
+- (id)moduleName;
+- (id)getAllowUsernamesSet;
+- (BOOL)isContactInAllowList:(id)arg1 allowedUsernamesSet:(id)arg2;
+- (id)getExtendSearchContacts;
+- (id)buildChatDictForContact:(id)arg1 recentChatTime:(double)arg2 matchedKeyword:(id)arg3;
+- (id)buildMemberInfoForUsername:(id)arg1 groupContact:(id)arg2;
+- (id)buildGroupChatDict:(id)arg1 sessionInfo:(id)arg2 matchedKeyword:(id)arg3 matchTip:(id)arg4 matchedType:(long long)arg5 scene:(long long)arg6;
+- (id)buildSingleChatDict:(id)arg1 sessionInfo:(id)arg2 matchedKeyword:(id)arg3 matchedType:(long long)arg4 scene:(long long)arg5;
+- (BOOL)shouldExcludeChatRoomFromSearch:(id)arg1;
+- (BOOL)doesGroupMatchMemberCountFilter:(id)arg1 minNumber:(long long)arg2 maxNumber:(long long)arg3;
+- (id)fullContactForContact:(id)arg1;
+- (id)getTagNamesForContact:(id)arg1;
+- (long long)getAddSceneCategoryForContact:(id)arg1;
+- (id)getSourceGroupInfoForContact:(id)arg1;
+- (id)getSourceSharerInfoForContact:(id)arg1;
+- (id)getRegionStringForContact:(id)arg1;
+- (unsigned int)getAddTimeForContact:(id)arg1;
+- (long long)buildContactStatusFlags:(id)arg1 sessionInfo:(id)arg2;
+- (BOOL)doesMatchRequireStatus:(long long)arg1 sessionInfo:(id)arg2 contact:(id)arg3;
+- (BOOL)doesSingleChatMatchFilters:(id)arg1 filter:(id)arg2 matchedType:(long long *)arg3;
+- (id)parseContactSearchFilterFromParams:(id)arg1;
+- (void)registerModuleFunctions;
+@end

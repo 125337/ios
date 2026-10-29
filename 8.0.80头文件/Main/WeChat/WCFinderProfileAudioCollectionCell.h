@@ -1,0 +1,2 @@
+@interface WCFinderProfileAudioCollectionCell : UICollectionViewCell
+@end

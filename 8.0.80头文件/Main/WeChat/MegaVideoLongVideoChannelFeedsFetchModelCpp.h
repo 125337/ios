@@ -1,0 +1,2 @@
+@interface MegaVideoLongVideoChannelFeedsFetchModelCpp : MegaVideoAbsFeedsDataFetchModelCpp <MegaVideoLongVideoChannelFeedsFetchModel>
+@end

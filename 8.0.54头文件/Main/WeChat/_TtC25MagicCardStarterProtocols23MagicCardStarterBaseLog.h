@@ -1,0 +1,3 @@
+@interface _TtC25MagicCardStarterProtocols23MagicCardStarterBaseLog : _TtCs12_SwiftObject
+@end
+

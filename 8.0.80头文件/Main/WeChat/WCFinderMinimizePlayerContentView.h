@@ -1,0 +1,73 @@
+@interface WCFinderMinimizePlayerContentView : WCFinderMinimizeDisplayContentBaseView <WCPlayerControlProtocol>
+{
+    WCPlayerView * _playerView; // +0x30
+    id /* block */ _playerGenerator; // +0x38
+}
+- (id)init;
+- (void)dealloc;
+- (void)layoutSubviews;
+- (void)updateContentVM:(id)arg1;
+- (CGSize)contentSize;
+- (CGSize)calMediaSize;
+- (BOOL)beTakeOverAudioModel;
+- (void)didMoveToSuperview;
+- (void)onMinimizeFloatingViewDidDisplay;
+- (void)setPlayerView:(id)arg1;
+- (void)resetPlayerView;
+- (void)didExpandVC;
+- (void)cleanUp;
+- (BOOL)supportRestore;
+- (void)beforeRestore;
+- (void)updateFoldStatus:(BOOL)arg1;
+- (void)hidePlayerViewIfNeeded:(BOOL)arg1;
+- (void)changePlayerViewPIPOpen:(BOOL)arg1;
+- (void)notifyPipAudioModuleActiveStateChanged:(BOOL)arg1;
+- (void)replaceCurContentVM:(id)arg1;
+- (void)configDirectlyWithPlayer:(id)arg1 contentVM:(id)arg2;
+- (BOOL)canGenPIP;
+- (void)pausePlay;
+- (void)resumePlay;
+- (unsigned long long)getCurAudioModuleOptions;
+- (BOOL)isCurPipSupport;
+- (BOOL)isPlaying;
+- (void)ensurePlayer;
+- (void)keepHandlePlayer;
+- (double)playPosition;
+- (void)onPlayerRestoreUserInterface;
+- (void)onPlayerView:(id)arg1 pipSeekFromTime:(double)arg2 toTime:(double)arg3;
+- (void)onPipStatePlayWithPlayerView:(id)arg1;
+- (void)onPipStateRePlayWithPlayerView:(id)arg1;
+- (void)onPipStatePauseWithPlayerView:(id)arg1;
+- (void)onPlayerView:(id)arg1 startDisplayOnPipWindow:(long long)arg2;
+- (void)onPlayerView:(id)arg1 stopDisplayOnPipWindow:(long long)arg2;
+- (void)onPlayerView:(id)arg1 pictureInPictureStateDidChange:(long long)arg2;
+- (void)onVideoFristFrameRendered;
+- (void)onVideoPrepareToPlay:(id)arg1;
+- (void)onVideoPlay;
+- (void)onVideoPause;
+- (void)onVideoPlayFail:(unsigned long long)arg1 errorCode:(int)arg2 LocalizedErrorDes:(id)arg3;
+- (void)onVideoPlayFinish;
+- (void)onVideoDidPlayToEndTime;
+- (void)_handleVideoFinishPlay;
+- (void)onCreateThumbImage:(id)arg1;
+- (void)onDataSourceChangeStart:(id)arg1;
+- (void)onDataSourceChangeSucc:(id)arg1;
+- (void)onDataSourceChangeSuccessWithDownloadArgsWrap:(id)arg1;
+- (void)onPlayerGetSeiInfo:(id)arg1;
+- (void)showBufferingView;
+- (void)hiddenBufferingView;
+- (void)showPercentView;
+- (void)hiddenPercentView;
+- (void)showThumbImageView;
+- (void)hiddenThumbImageView;
+- (void)startObserveVolume;
+- (void)stopObserveVolume;
+- (void)onVideoSizeChange:(CGSize)arg1;
+- (void)updateVideoBufferPercent:(double)arg1;
+- (void)updateVideoCurrentTime:(double)arg1;
+- (void)onPlayerVideoFrameOut:(id)arg1;
+- (id)playerView;
+- (id /* block */)playerGenerator;
+- (void)setPlayerGenerator:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end

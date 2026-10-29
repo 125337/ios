@@ -1,0 +1,3 @@
+@interface BrandProfileCgiContext : NSObject
+@end
+

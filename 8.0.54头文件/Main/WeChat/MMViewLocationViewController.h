@@ -1,0 +1,204 @@
+@interface MMViewLocationViewController : MMUIViewController <QMapViewDelegate, QMapViewIndoorDelegate, WCActionSheetDelegate, ILocationMgrExt, NavigateLogicControllerDelegate, IFavoritesExt, INavigateLogicControllerExt, FavTagViewDelegate, MMScrollActionSheetDelegate, RecentForwardScrollViewDelegate, ForwardMessageLogicDelegate, WCFinderLocationPoiDetailViewDelegate, POICorrectionGuideViewDelegate>
+{
+    BOOL _canAddToFav; // +0x68
+    BOOL _canSendToFriend; // +0x69
+    BOOL _directShowDirection; // +0x6a
+    BOOL _isLoadFinish; // +0x6b
+    BOOL _isMapRegionChanging; // +0x6c
+    BOOL _hasReportLocateError; // +0x6d
+    unsigned long long _headingTag; // +0x70
+    unsigned int _reportNavTapCount; // +0x78
+    double _trueHeading; // +0x80
+    POIInfo * _poiInfo; // +0x88
+    UIButton * _myLocationButton; // +0x90
+    MMMapView * _mapView; // +0x98
+    MMFloorPickView * _floorPickView; // +0xa0
+    MMTimer * _updateUserLocationTimer; // +0xa8
+    UnderLineLabel * _infoLabel; // +0xb0
+    NavigateLogicController * _navigateLogicController; // +0xb8
+    AnnotationLogicController * _annotationLogicController; // +0xc0
+    ForwardMessageLogicController * _forwardLogicController; // +0xc8
+    id <ViewLocationDelegate> _delegate; // +0xd0
+    int _locationUpdateCount; // +0xd8
+    BOOL _enterBackground; // +0xdc
+    BOOL _isCoordinateError; // +0xdd
+    BOOL _hiddenMoreButtonItem; // +0xde
+    unsigned int _srcType; // +0xe0
+    NSString * fromUsername; // +0xe8
+    NSString * _messageSvrID; // +0xf0
+    id <IFinderPOIDetailViewController> _poiDetailVc; // +0xf8
+    FavDataItemWrap * _favDataWrap; // +0x100
+    FavoritesItem * _favItem; // +0x108
+    unsigned long long _assignAuthScene; // +0x110
+    UIButton * _backBtn; // +0x118
+    UIButton * _moreBtn; // +0x120
+    UIView * _topMaskView; // +0x128
+    CAGradientLayer * _topGradientLayer; // +0x130
+    UIView * _bottomMaskView; // +0x138
+    CAGradientLayer * _bottomGradientLayer; // +0x140
+    UIButton * _addressDetailBtn; // +0x148
+    UIButton * _addressNavigationBtn; // +0x150
+    CLLocation * _userLocation; // +0x158
+    unsigned long long _authScene; // +0x160
+    PickLocationAnnotationView * _annotationView; // +0x168
+    NSString * _buildingId; // +0x170
+    NSString * _floorName; // +0x178
+    MMScrollActionSheet * _scrollActionSheet; // +0x180
+    NSString * _reportSessionID; // +0x188
+}
+- (id)initWithPOIInfo:(id)arg1 FromSrc:(unsigned int)arg2;
+- (void)dealloc;
+- (unsigned long long)getAuthSceneFrom:(unsigned int)arg1;
+- (BOOL)useTransparentNavibar;
+- (void)viewDidLoad;
+- (void)viewDidBePopedOrDismissed:(BOOL)arg1;
+- (void)viewDidLayoutSubviews;
+- (void)initView;
+- (void)initAddressDetailView;
+- (void)viewWillAppear:(BOOL)arg1;
+- (BOOL)shouldNavigationBarAccessibilityHidden;
+- (void)checkAuthorization;
+- (BOOL)useBlackStatusbar;
+- (id)getLocationText:(CLLocationCoordinate2D)arg1;
+- (void)startViewingLocation;
+- (void)stopViewingLocation;
+- (void)onClickInfo:(id)arg1;
+- (void)setIsCoordinateError:(BOOL)arg1;
+- (void)setPOICalloutShow:(BOOL)arg1;
+- (void)onMyLocationButtonClick;
+- (void)onReturn;
+- (void)onTapMoreBtn:(id)arg1;
+- (id)genMenuItemArray;
+- (void)reportCustomActionSheetClickWithIndex:(unsigned long long)arg1;
+- (id)dataReportParamDict;
+- (void)onAction:(id)arg1;
+- (void)registerFavReport:(id)arg1;
+- (id)getMenuItemArray;
+- (void)scrollActionSheet:(id)arg1 didSelecteItem:(id)arg2;
+- (void)clickRFItemCallBack:(id)arg1;
+- (void)relayoutScrollSheet;
+- (void)forwardLocationMsg:(id)arg1;
+- (void)updateZoomLevelToDefault;
+- (void)updateZoomLevelToMyLocation;
+- (id)getCurrentViewController;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)onNavigateToPOI:(id)arg1;
+- (BOOL)canPoiForwardOrFavorite;
+- (id)favItem;
+- (void)startUpdateTrueHeading;
+- (void)stopUpdateTrueHeading;
+- (void)onHeadingChanged:(id)arg1 withTag:(unsigned long long)arg2;
+- (void)onHeadingError:(int)arg1 withTag:(unsigned long long)arg2;
+- (id)getUserLocation;
+- (void)onTimerUpdateLocation;
+- (void)startTimerCheckUserLocation;
+- (void)stopTimerCheckUserLocation;
+- (void)startUpdateUserLocation;
+- (void)stopUpdateUserLocation;
+- (void)mapView:(id)arg1 didChangeActiveBuilding:(id)arg2;
+- (void)mapView:(id)arg1 didChangeActiveLevel:(id)arg2;
+- (BOOL)isOnUserLocation:(CLLocationCoordinate2D)arg1;
+- (void)setAnnotation:(id)arg1 Coordinate:(CLLocationCoordinate2D)arg2 Animated:(BOOL)arg3 Duration:(float)arg4;
+- (void)mapView:(id)arg1 regionWillChangeAnimated:(BOOL)arg2 gesture:(BOOL)arg3;
+- (void)mapView:(id)arg1 regionDidChangeAnimated:(BOOL)arg2 gesture:(BOOL)arg3;
+- (id)mapView:(id)arg1 viewForAnnotation:(id)arg2;
+- (void)mapView:(id)arg1 scaleViewChanged:(double)arg2;
+- (id)mapView:(id)arg1 viewForOverlay:(id)arg2;
+- (void)mapView:(id)arg1 didUpdateUserLocation:(id)arg2 fromHeading:(BOOL)arg3;
+- (void)mapView:(id)arg1 didSelectAnnotationView:(id)arg2;
+- (void)mapView:(id)arg1 didDeselectAnnotationView:(id)arg2;
+- (void)mapViewDidFailLoadingMap:(id)arg1 withError:(id)arg2;
+- (void)mapView:(id)arg1 didFailToLocateUserWithError:(id)arg2;
+- (void)showDirection;
+- (id)getDisplayNameByUsername:(id)arg1;
+- (void)navigateTo:(id)arg1 Name:(id)arg2 Sender:(id)arg3 WeAppList:(id)arg4;
+- (void)onStartLoading;
+- (void)onStopLoading;
+- (void)onPresentViewControlelr:(id)arg1 Animated:(BOOL)arg2;
+- (void)onPushViewController:(id)arg1 Animated:(BOOL)arg2;
+- (void)onOpenWeAppWithPara:(id)arg1;
+- (id)sceneNoteForSrcType;
+- (BOOL)canShowShareLocationMsgToDevice;
+- (void)onShareLocationMsgToDevice;
+- (void)OnDelFavoritesItems:(id)arg1;
+- (void)OnUpdateItems:(id)arg1;
+- (void)silentPopSelf;
+- (void)onFavTagEditBegin:(int)arg1;
+- (void)traitCollectionDidChange:(id)arg1;
+- (void)updateMapStyle;
+- (void)applicationDidEnterBackground;
+- (void)applicationWillEnterForeground;
+- (void)onMapItemClickOrCancel:(BOOL)arg1;
+- (id)reportSessionID;
+- (void)reportLog26733;
+- (unsigned int)reportType;
+- (unsigned long long)forwardMessageScene;
+- (void)updateFinderContextId;
+- (void)reportCustomMoreViewClickEvent:(id)arg1;
+- (void)reportCustomMoreViewClickEvent:(id)arg1 dicParam:(id)arg2;
+- (void)OnOpenLocationWAApp;
+- (void)onLocatingPoiCoordinate:(CLLocationCoordinate2D)arg1;
+- (void)onDragProgressChanged:(double)arg1;
+- (void)onShrinkPOIView;
+- (void)onExpandPOIView;
+- (void)onUpdateFavSelected:(BOOL)arg1;
+- (void)changeFavSelected:(BOOL)arg1;
+- (BOOL)isCurrentPOIFavorite;
+- (void)layoutMapViewCenterIfNeeded;
+- (id)fromUsername;
+- (void)setFromUsername:(id)arg1;
+- (BOOL)canAddToFav;
+- (void)setCanAddToFav:(BOOL)arg1;
+- (BOOL)canSendToFriend;
+- (void)setCanSendToFriend:(BOOL)arg1;
+- (BOOL)directShowDirection;
+- (void)setDirectShowDirection:(BOOL)arg1;
+- (id)poiInfo;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)messageSvrID;
+- (void)setMessageSvrID:(id)arg1;
+- (BOOL)isCoordinateError;
+- (id)poiDetailVc;
+- (void)setPoiDetailVc:(id)arg1;
+- (id)favDataWrap;
+- (void)setFavDataWrap:(id)arg1;
+- (void)setFavItem:(id)arg1;
+- (BOOL)hiddenMoreButtonItem;
+- (void)setHiddenMoreButtonItem:(BOOL)arg1;
+- (unsigned long long)assignAuthScene;
+- (void)setAssignAuthScene:(unsigned long long)arg1;
+- (id)backBtn;
+- (void)setBackBtn:(id)arg1;
+- (id)moreBtn;
+- (void)setMoreBtn:(id)arg1;
+- (id)topMaskView;
+- (void)setTopMaskView:(id)arg1;
+- (id)topGradientLayer;
+- (void)setTopGradientLayer:(id)arg1;
+- (id)bottomMaskView;
+- (void)setBottomMaskView:(id)arg1;
+- (id)bottomGradientLayer;
+- (void)setBottomGradientLayer:(id)arg1;
+- (id)addressDetailBtn;
+- (void)setAddressDetailBtn:(id)arg1;
+- (id)addressNavigationBtn;
+- (void)setAddressNavigationBtn:(id)arg1;
+- (id)userLocation;
+- (void)setUserLocation:(id)arg1;
+- (unsigned int)srcType;
+- (void)setSrcType:(unsigned int)arg1;
+- (unsigned long long)authScene;
+- (void)setAuthScene:(unsigned long long)arg1;
+- (id)annotationView;
+- (void)setAnnotationView:(id)arg1;
+- (id)buildingId;
+- (void)setBuildingId:(id)arg1;
+- (id)floorName;
+- (void)setFloorName:(id)arg1;
+- (id)scrollActionSheet;
+- (void)setScrollActionSheet:(id)arg1;
+- (void)setReportSessionID:(id)arg1;
+- (void).cxx_destruct;
+@end
+

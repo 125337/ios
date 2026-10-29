@@ -1,0 +1,2 @@
+@interface WCCommentInputView : UIView
+@end

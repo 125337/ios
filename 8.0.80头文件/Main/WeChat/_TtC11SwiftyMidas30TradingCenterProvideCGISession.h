@@ -1,0 +1,2 @@
+@interface _TtC11SwiftyMidas30TradingCenterProvideCGISession : _TtC11SwiftyMidas27TradingCenterBaseCGISession
+@end

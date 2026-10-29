@@ -1,0 +1,2 @@
+@interface CloseTouchLockResp : NSObject
+@end

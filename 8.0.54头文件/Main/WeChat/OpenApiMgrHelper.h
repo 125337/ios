@@ -1,0 +1,31 @@
+@interface OpenApiMgrHelper : NSObject
++ (id)FormTextMsg:(id)arg1 withText:(id)arg2 appID:(id)arg3;
++ (id)FormAppMessage:(id)arg1 withAppMessage:(id)arg2 appID:(id)arg3;
++ (id)FormMessage:(id)arg1 withAppData:(id)arg2 withAppId:(id)arg3 redirectUrl:(id)arg4;
++ (id)createConfirmLogicHelper:(id)arg1 withAppData:(id)arg2 withAppId:(id)arg3 showTextView:(BOOL)arg4 appScene:(unsigned int)arg5 redirectUrl:(id)arg6;
++ (id)createConfirmLogicHelper:(id)arg1 withAppData:(id)arg2 withAppId:(id)arg3 showTextView:(BOOL)arg4 appScene:(unsigned int)arg5;
++ (BOOL)isLogin;
++ (id)makeFileAppCommunicateData:(id)arg1;
++ (void)makeFileInternalMessage:(id)arg1;
++ (id)makeMediaMessageForShareTo3rdApp:(id)arg1 withType:(long long)arg2;
++ (id)makeLocationMessageForShareTo3rdAppWithLatitude:(double)arg1 andLongitude:(double)arg2 title:(id)arg3;
++ (id)makeTextMessageForShareTo3rdApp:(id)arg1;
++ (id)makeURLMessageForShareTo3rdApp:(id)arg1 withTitle:(id)arg2;
++ (void)hideChatViewKeyborad;
++ (void)checkShowTabbar;
++ (id)getNetWorkErrorHtml;
++ (id)checkAppMsgThumbData:(id)arg1;
++ (id)checkWebSendAppMsgThumbData:(id)arg1;
++ (id)parseURLParamsByDecodeOnce:(id)arg1;
++ (id)parseURLParams:(id)arg1;
++ (id)transferImageDataToTargetSize:(id)arg1;
++ (id)createMusicVideoCDNMediaInfo:(id)arg1;
++ (void)asyncFormVideoMessageWithVideoData:(id)arg1 param:(id)arg2 callback:(id /* block */)arg3;
++ (id)formVideoMessageWithVideoData:(id)arg1 param:(id)arg2;
++ (id)genBaseVideoMsgWithMediaMessage:(id)arg1 appId:(id)arg2;
++ (id)genCaptureVideoInfoWithVideoData:(id)arg1 mediaMessage:(id)arg2 param:(id)arg3;
++ (BOOL)saveLocalData:(id)arg1 toPath:(id)arg2;
++ (id)getTmpOpenApiVideoPathWithData:(id)arg1 videoType:(unsigned int)arg2;
++ (long long)getVideoDurationFromVideoPath:(id)arg1;
+@end
+

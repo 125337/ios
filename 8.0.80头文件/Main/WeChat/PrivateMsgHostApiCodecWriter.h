@@ -1,0 +1,3 @@
+@interface PrivateMsgHostApiCodecWriter : FlutterStandardWriter
+- (void)writeValue:(id)arg1;
+@end

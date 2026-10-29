@@ -1,0 +1,3 @@
+@interface WCSplitEdgePanGestureRecognizer : UIScreenEdgePanGestureRecognizer
+@end
+

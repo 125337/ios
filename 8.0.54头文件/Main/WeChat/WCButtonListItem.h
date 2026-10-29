@@ -1,0 +1,3 @@
+@interface WCButtonListItem : NSObject
+@end
+

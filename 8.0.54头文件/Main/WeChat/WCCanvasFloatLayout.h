@@ -1,0 +1,3 @@
+@interface WCCanvasFloatLayout : WCCanvasFrameLayout
+@end
+

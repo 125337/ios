@@ -1,0 +1,2 @@
+@interface WAOpenSDKJSEventHandler_shareAppMessageDirectly : WAOpenSDKJSEventHandler_shareAppMessage
+@end

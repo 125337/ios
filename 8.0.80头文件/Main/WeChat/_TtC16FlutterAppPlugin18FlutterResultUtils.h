@@ -1,0 +1,2 @@
+@interface _TtC16FlutterAppPlugin18FlutterResultUtils : _TtCs12_SwiftObject
+@end

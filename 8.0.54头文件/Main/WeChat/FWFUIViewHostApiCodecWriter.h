@@ -1,0 +1,3 @@
+@interface FWFUIViewHostApiCodecWriter : FlutterStandardWriter
+@end
+

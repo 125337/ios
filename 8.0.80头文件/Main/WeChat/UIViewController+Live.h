@@ -1,0 +1,23 @@
+@interface UIViewController (Live)
+- (void)setLiveMinimizeWindowRunTimeHandler:(id)arg1;
+- (id)liveMinimizeWindowRunTimeHandler;
+- (void)setNeedShowLiveMinimizeWindow:(BOOL)arg1;
+- (void)setDoNotShowLiveMinimizeWindow:(BOOL)arg1;
+- (BOOL)doNotShowLiveMinimizeWindow;
+- (BOOL)needShowLiveMinizeWindow;
+- (void)setNeedShowLiveMinimizeWindowForAllPushedViewControllers:(BOOL)arg1;
+- (BOOL)needShowLiveMinimizeWindowForAllPushedViewControllers;
+- (void)setNeedShowLiveMinimizeWindowForPresentedViewController:(BOOL)arg1;
+- (BOOL)needShowLiveMinimizeWindowForPresentedViewController;
+- (void)setLiveOpenParam:(id)arg1;
+- (id)liveOpenParam;
+- (void)setIsHalfPage:(BOOL)arg1;
+- (BOOL)isHalfPage;
+- (BOOL)isPageSheetVC;
+- (BOOL)hasFullScreenPopup;
+- (void)setHasFullScreenPopup:(BOOL)arg1;
+- (BOOL)isLivePreviewMode;
+- (void)setIsLivePreviewMode:(BOOL)arg1;
+- (BOOL)isFullWeAppOverLiveRoom;
+- (BOOL)isFullPageViewOverLiveRoom;
+@end

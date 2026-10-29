@@ -1,0 +1,34 @@
+@interface FavFileUtil : NSObject
++ (id)getUserFavoritesRootDir;
++ (id)getFavoritesFontDir;
++ (id)getFavoritesFontCache;
++ (id)getFavoritesBkgImageDir;
++ (id)getFavoritesBkgImageCache;
++ (id)getFavoritesDBPath;
++ (id)getFavoritesDataDir;
++ (id)getFavorites3rdTempDir;
++ (id)getFavoritesRecentItemsDir;
++ (id)getFavTempFileDir;
++ (id)getCompressedVideoDir;
++ (id)getFavWebCacheDir;
++ (id)getFavoritesSyncBufferPath;
++ (id)getFavoritesSettingPath;
++ (id)getFavoritesBatchDelQueuePath;
++ (id)UIImageWriteToFile:(id)arg1;
++ (id)UIThumbImageWriteToFile:(id)arg1;
++ (id)TempDataWriteToFile:(id)arg1;
++ (id)TempDataWriteToFile:(id)arg1 ext:(id)arg2;
++ (void)DeleteTempFile:(id)arg1;
++ (id)CopyFileFromOriginPath:(id)arg1;
++ (id)getTempFilePath;
++ (BOOL)isFavoritesTempFilePath:(id)arg1;
++ (id)getCompressedVideoPathForPath:(id)arg1;
++ (BOOL)isCompressedVideoPath:(id)arg1;
++ (BOOL)isFavoritesDataFile:(id)arg1;
++ (BOOL)isFavoritesPath:(id)arg1;
++ (id)GetTempPathByMd5:(id)arg1 isThumb:(BOOL)arg2 DataFmt:(id)arg3;
++ (id)GetPathByMd5:(id)arg1 isThumb:(BOOL)arg2 DataFmt:(id)arg3;
++ (id)GetPathByMd5:(id)arg1 isThumb:(BOOL)arg2 DataFmt:(id)arg3 isTmp:(BOOL)arg4;
++ (id)Get3rdAppTempPathByLocalDataId:(id)arg1 isThumb:(BOOL)arg2 DataFmt:(id)arg3;
+@end
+

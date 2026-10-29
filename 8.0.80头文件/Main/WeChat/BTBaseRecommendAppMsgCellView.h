@@ -1,0 +1,2 @@
+@interface BTBaseRecommendAppMsgCellView : BTBaseRecommendMsgCellView
+@end

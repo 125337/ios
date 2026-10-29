@@ -1,0 +1,3 @@
+@interface MMObject : NSObject
+@end
+

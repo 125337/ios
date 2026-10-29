@@ -1,0 +1,2 @@
+@interface QAOILayerPolygonView : QPolygonView
+@end

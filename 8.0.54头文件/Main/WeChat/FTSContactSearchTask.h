@@ -1,0 +1,68 @@
+@interface FTSContactSearchTask : NSObject <FTSTopHitDelegate, IFTSContactDataProviderExt>
+{
+    BOOL m_isCancel; // +0x8
+    BOOL m_isRunning; // +0x9
+    FTSContactDB * m_contactDB; // +0x10
+    NSMutableArray * m_arrSingleContact; // +0x18
+    NSMutableArray * m_arrGroupContact; // +0x20
+    NSMutableArray * m_arrBrandContact; // +0x28
+    NSMutableArray * m_allContact; // +0x30
+    NSMutableDictionary * m_dicMatchTips; // +0x38
+    int m_searchType; // +0x40
+    NSString * m_pendingSearchText; // +0x48
+    BOOL _hasSearchDone; // +0x50
+    BOOL _isMultiKeyMatch; // +0x51
+    NSString * _taskKey; // +0x58
+    id <FTSContactSearchTaskDelegate> _delegate; // +0x60
+    FTSTopHitMgr * _topHitMgr; // +0x68
+    NSArray * _extendSearchContacts; // +0x70
+    NSString * _newestQueryText; // +0x78
+    NSString * _lastQueryText; // +0x80
+}
+- (id)initWithDB:(id)arg1;
+- (void)copyResultFromHomeTask:(id)arg1 withSearchType:(int)arg2;
+- (void)dealloc;
+- (void)asyncSearch:(id)arg1 type:(int)arg2;
+- (void)forceSearch;
+- (void)asyncSearch:(id)arg1 type:(int)arg2 isForce:(BOOL)arg3;
+- (int)getDBQueryType:(int)arg1;
+- (id)getMemSearchContactSourceWithType:(int)arg1;
+- (void)fillMultiKeywordContent:(id)arg1 toHelpItem:(id)arg2;
+- (void)cancelSearch;
+- (BOOL)checkMultiKeywordMatchInfo:(id)arg1;
+- (void)sortGroupContacts:(id)arg1 dicMatchTip:(id)arg2 dicSessionTime:(id)arg3;
+- (void)selectContact:(id)arg1;
+- (unsigned int)getTotalCount;
+- (id)getAllContacts;
+- (id)getSingleContacts;
+- (unsigned int)getSingleContactsCount;
+- (id)getGroupContacts;
+- (unsigned int)getGroupContactsCount;
+- (id)getBrandContacts;
+- (unsigned int)getBrandContactsCount;
+- (id)getAllSearchMatchTip;
+- (id)getMatchTipForUserName:(id)arg1;
+- (BOOL)hasMatchWechatID;
+- (id)getContactDictionary;
+- (BOOL)isTopHitContactReady;
+- (BOOL)isTopHitContactActive:(id)arg1;
+- (void)onContactReload;
+- (id)taskKey;
+- (void)setTaskKey:(id)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)topHitMgr;
+- (void)setTopHitMgr:(id)arg1;
+- (id)extendSearchContacts;
+- (void)setExtendSearchContacts:(id)arg1;
+- (id)newestQueryText;
+- (void)setNewestQueryText:(id)arg1;
+- (id)lastQueryText;
+- (void)setLastQueryText:(id)arg1;
+- (BOOL)hasSearchDone;
+- (void)setHasSearchDone:(BOOL)arg1;
+- (BOOL)isMultiKeyMatch;
+- (void)setIsMultiKeyMatch:(BOOL)arg1;
+- (void).cxx_destruct;
+@end
+

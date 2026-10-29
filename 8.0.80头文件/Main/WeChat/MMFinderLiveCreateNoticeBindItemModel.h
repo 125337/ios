@@ -1,0 +1,2 @@
+@interface MMFinderLiveCreateNoticeBindItemModel : NSObject
+@end

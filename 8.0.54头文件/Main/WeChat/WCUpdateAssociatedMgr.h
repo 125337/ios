@@ -1,0 +1,86 @@
+@interface WCUpdateAssociatedMgr : NSObject
+{
+    NSMutableDictionary * _methodSignatureSelectorDict; // +0x8
+    NSMutableDictionary * _selectorObjectNameDict; // +0x10
+}
++ (id)shareInstance;
++ (void)addMethodForClass:(Class)arg1 forSel:(SEL)arg2 withMethodType:(const char *)arg3 withPolicty:(unsigned long long)arg4;
++ (SEL)associateObjectForGetterName:(id)arg1;
++ (SEL)associateObjectForSetterName:(id)arg1;
+- (id)init;
+- (void)keepStuffFromStrip;
+- (void)centerSetLongLongAtomic:(long long)arg1;
+- (void)centerSetLongLongNonAtomic:(long long)arg1;
+- (long long)centerGetLongLong;
+- (void)centerSetUnsignedLongLongAtomic:(unsigned long long)arg1;
+- (void)centerSetUnsignedLongLongNonAtomic:(unsigned long long)arg1;
+- (unsigned long long)centerGetUnsignedLongLong;
+- (void)centerSetBOOLAtomic:(BOOL)arg1;
+- (void)centerSetBOOLNonAtomic:(BOOL)arg1;
+- (BOOL)centerGetBOOL;
+- (void)centerSetCharAtomic:(char)arg1;
+- (void)centerSetCharNonAtomic:(char)arg1;
+- (char)centerGetChar;
+- (void)centerSetUnsignedCharAtomic:(unsigned char)arg1;
+- (void)centerSetUnsignedCharNonAtomic:(unsigned char)arg1;
+- (unsigned char)centerGetUnsignedChar;
+- (void)centerSetIntAtomic:(int)arg1;
+- (void)centerSetIntNonAtomic:(int)arg1;
+- (int)centerGetInt;
+- (void)centerSetUnsignedIntAtomic:(unsigned int)arg1;
+- (void)centerSetUnsignedIntNonAtomic:(unsigned int)arg1;
+- (unsigned int)centerGetUnsignedInt;
+- (void)centerSetShortAtomic:(short)arg1;
+- (void)centerSetShortNonAtomic:(short)arg1;
+- (short)centerGetShort;
+- (void)centerSetUnsignedShortAtomic:(unsigned short)arg1;
+- (void)centerSetUnsignedShortNonAtomic:(unsigned short)arg1;
+- (unsigned short)centerGetUnsignedShort;
+- (void)centerSetFloatAtomic:(float)arg1;
+- (void)centerSetFloatNonAtomic:(float)arg1;
+- (float)centerGetFloat;
+- (void)centerSetDoubleAtomic:(double)arg1;
+- (void)centerSetDoubleNonAtomic:(double)arg1;
+- (double)centerGetDouble;
+- (void)centerSetIDAssign:(id)arg1;
+- (void)centerSetIDRetainNonAtomic:(id)arg1;
+- (void)centerSetIDCopyNonAtomic:(id)arg1;
+- (void)centerSetIDRetain:(id)arg1;
+- (void)centerSetIDCopy:(id)arg1;
+- (id)centerGetID;
+- (void)centerSetIDWeak:(id)arg1;
+- (id)centerGetWeakID;
+- (void)centerSetSELAtomic:(SEL)arg1;
+- (void)centerSetSELNonatomic:(SEL)arg1;
+- (SEL)centerGetSEL;
+- (void)centerSetCGSizeAtomic:(CGSize)arg1;
+- (void)centerSetCGSizeNonAtomic:(CGSize)arg1;
+- (CGSize)centerGetCGSize;
+- (void)centerSetCGPointAtomic:(CGPoint)arg1;
+- (void)centerSetCGPointNonAtomic:(CGPoint)arg1;
+- (CGPoint)centerGetCGPoint;
+- (void)centerSetCGVectorAtomic:(CGVector)arg1;
+- (void)centerSetCGVectorNonAtomic:(CGVector)arg1;
+- (CGVector)centerGetCGVector;
+- (void)centerSetCGRectAtomic:(CGRect)arg1;
+- (void)centerSetCGRectNonAtomic:(CGRect)arg1;
+- (CGRect)centerGetCGRect;
+- (void)centerSetCGTransformAtomic:(CGAffineTransform)arg1;
+- (void)centerSetCGTransformNonAtomic:(CGAffineTransform)arg1;
+- (CGAffineTransform)centerGetCGTransform;
+- (void)centerSetUIEdgeInsetsAtomic:(UIEdgeInsets)arg1;
+- (void)centerSetUIEdgeInsetsNonAtomic:(UIEdgeInsets)arg1;
+- (UIEdgeInsets)centerGetUIEdgeInsets;
+- (void)centerSetUIOffsetAtomic:(UIOffset)arg1;
+- (void)centerSetUIOffsetNonAtomic:(UIOffset)arg1;
+- (UIOffset)centerGetUIOffset;
+- (void)centerSetNSRangeAtomic:(_NSRange)arg1;
+- (void)centerSetNSRangeNonAtomic:(_NSRange)arg1;
+- (_NSRange)centerGetNSRange;
+- (id)methodSignatureSelectorDict;
+- (void)setMethodSignatureSelectorDict:(id)arg1;
+- (id)selectorObjectNameDict;
+- (void)setSelectorObjectNameDict:(id)arg1;
+- (void).cxx_destruct;
+@end
+

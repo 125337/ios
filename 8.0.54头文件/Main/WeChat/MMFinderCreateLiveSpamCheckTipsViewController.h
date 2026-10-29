@@ -1,0 +1,3 @@
+@interface MMFinderCreateLiveSpamCheckTipsViewController : MMFinderCreateLiveSpamCheckNoticeBaseViewController
+@end
+

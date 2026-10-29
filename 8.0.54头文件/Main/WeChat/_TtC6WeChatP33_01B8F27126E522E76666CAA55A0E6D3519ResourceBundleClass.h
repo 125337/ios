@@ -1,0 +1,3 @@
+@interface _TtC6WeChatP33_01B8F27126E522E76666CAA55A0E6D3519ResourceBundleClass : _TtCs12_SwiftObject
+@end
+

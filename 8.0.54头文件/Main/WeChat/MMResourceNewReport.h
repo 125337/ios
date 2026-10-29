@@ -1,0 +1,3 @@
+@interface MMResourceNewReport : NSObject
+@end
+

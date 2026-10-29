@@ -1,0 +1,3 @@
+@interface WAJSEventHandler_sdk_navigateToMiniProgram : WAJSEventHandler_navigateToMiniProgram
+@end
+

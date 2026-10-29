@@ -1,0 +1,3 @@
+@interface WCAdInteractionFloatView : WCAdInteractionContentView
+@end
+

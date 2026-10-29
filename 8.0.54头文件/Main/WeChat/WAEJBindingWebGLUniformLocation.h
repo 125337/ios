@@ -1,0 +1,3 @@
+@interface WAEJBindingWebGLUniformLocation : WAEJBindingWebGLObject
+@end
+

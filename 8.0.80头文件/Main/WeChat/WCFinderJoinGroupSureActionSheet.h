@@ -1,0 +1,2 @@
+@interface WCFinderJoinGroupSureActionSheet : WCFinderTitleDescButtonActionSheet
+@end

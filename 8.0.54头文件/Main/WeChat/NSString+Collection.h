@@ -1,0 +1,37 @@
+@interface NSString (Collection)
++ (id)repeat:(id)arg1 times:(int)arg2;
++ (BOOL)isEmptyString:(id)arg1;
+- (id)explode:(id)arg1;
+- (id)initials;
+- (id)toNumber;
+- (id)append:(id)arg1;
+- (id)prepend:(id)arg1;
+- (id)substr:(int)arg1 length:(int)arg2;
+- (id)trim;
+- (id)trimWithNewLine;
+- (id)replace:(id)arg1 with:(id)arg2;
+- (id)replaceRegexp:(id)arg1 with:(id)arg2;
+- (id)split;
+- (id)split:(int)arg1;
+- (id)trimLeft;
+- (id)trimRight;
+- (id)camelCase;
+- (id)pascalCase;
+- (id)snakeCase;
+- (id)newSnakeCase;
+- (id)ucFirst;
+- (id)lcFirst;
+- (id)withoutDiacritic;
+- (BOOL)endsWith:(id)arg1;
+- (BOOL)startsWith:(id)arg1;
+- (BOOL)contains:(id)arg1;
+- (BOOL)matches:(id)arg1;
+- (id)lpad:(int)arg1 string:(id)arg2;
+- (id)rpad:(int)arg1 string:(id)arg2;
+- (id)urlEncode;
+- (id)urlDecode;
+- (id)md5;
+- (id)toBase64;
+- (id)fromBase64;
+@end
+

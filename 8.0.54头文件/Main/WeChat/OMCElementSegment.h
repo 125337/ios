@@ -1,0 +1,62 @@
+@interface OMCElementSegment : OMCSegment <OMCTimeAdjustable, OMCSegmentCuttable, OMCCompoAnimAdjustable, OMCTextAnimAdjustable, OMCLayerSpatialAdjustable>
+{
+    XTMTime _minElementSegmentPreservedDuration; // +0x8
+    XTMTime _imageOriginDuration; // +0x18
+}
+- (id)initWithSegmentID:(id)arg1 timeline:(id)arg2;
+- (struct)mainPartStartTime;
+- (struct)mainPartDuration;
+- (struct)mainPartTimeRange;
+- (struct)transInDuration;
+- (struct)transOutDuration;
+- (BOOL)hasContentDescSegment;
+- (id)contentDescSegmentID;
+- (id)contentDescSegment;
+- (void)setDurationByChangingStartTime:(struct)arg1;
+- (void)setDurationByChangingEndTime:(struct)arg1;
+- (BOOL)setStartTimeKeepingDuration:(struct)arg1;
+- (BOOL)isLayerSpatialAdjustable;
+- (CGPoint)layerPosition;
+- (void)setLayerPosition:(CGPoint)arg1;
+- (CGPoint)layerNormalizedPosition;
+- (void)setLayerNormalizedPosition:(CGPoint)arg1;
+- (CGPoint)layerScale;
+- (void)setLayerScale:(CGPoint)arg1;
+- (float)layerRotation;
+- (void)setLayerRotation:(float)arg1;
+- (CGPoint)layerAnchorPoint;
+- (BOOL)isLayerAnchorPointRelative;
+- (void)setRelativeLayerAnchorPoint:(CGPoint)arg1;
+- (void)setAbsoluteLayerAnchorPoint:(CGPoint)arg1;
+- (BOOL)isLayerSpatialAdjusted;
+- (BOOL)isHeadExpandable;
+- (BOOL)isTailExpandable;
+- (struct)headExpandableDuration;
+- (struct)tailExpandableDuration;
+- (struct)totalDurationIncludingExpandable;
+- (BOOL)isHeadCompressible;
+- (BOOL)isTailCompressible;
+- (struct)headCompressibleDuration;
+- (struct)tailCompressibleDuration;
+- (BOOL)isCuttableAtPresentationTime:(struct)arg1;
+- (BOOL)isHeadExpandableToOrigin;
+- (BOOL)isTailExpandableToOrigin;
+- (void)expandHeadToOrigin;
+- (void)expandTailToOrigin;
+- (void)changeDurationByAdjustingHeadToPresentationTime:(struct)arg1;
+- (void)changeDurationByAdjustingTailToPresentationTime:(struct)arg1;
+- (BOOL)isHeadCompressibleToPresentationTime:(struct)arg1;
+- (BOOL)isTailCompressibleToPresentationTime:(struct)arg1;
+- (BOOL)isHeadAdjustableToPresentationTime:(struct)arg1;
+- (BOOL)isTailAdjustableToPresentationTime:(struct)arg1;
+- (XTMTime)minElementSegmentDuration;
+- (id)animPresetID;
+- (void)setAnimPresetID:(id)arg1;
+- (void)clearCompoAnim;
+- (void)enableBuiltinAnim;
+- (void)disableBuiltinAnim;
+- (BOOL)isBuiltinAnimEnabled;
+- (SharedPtr<XMSElementSegment>)backingElementSegment;
+- (id).cxx_construct;
+@end
+

@@ -1,0 +1,2 @@
+@interface _TtC6WeChat30MagicEcsKFCardServiceConstants : _TtCs12_SwiftObject
+@end

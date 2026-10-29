@@ -1,0 +1,2 @@
+@interface WCFinderPostMediaButton : UIButton
+@end

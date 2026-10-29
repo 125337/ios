@@ -1,0 +1,44 @@
+@interface _ZZTableViewChainModel : _ZZScrollViewChainModel
++ (Class)viewClass;
+- (id /* block */)delegate;
+- (id /* block */)delegate_O;
+- (id /* block */)dataSource;
+- (id /* block */)dataSource_O;
+- (id /* block */)rowHeight;
+- (id /* block */)rowHeight_O;
+- (id /* block */)sectionHeaderHeight;
+- (id /* block */)sectionHeaderHeight_O;
+- (id /* block */)sectionFooterHeight;
+- (id /* block */)sectionFooterHeight_O;
+- (id /* block */)estimatedRowHeight;
+- (id /* block */)estimatedRowHeight_O;
+- (id /* block */)estimatedSectionHeaderHeight;
+- (id /* block */)estimatedSectionHeaderHeight_O;
+- (id /* block */)estimatedSectionFooterHeight;
+- (id /* block */)estimatedSectionFooterHeight_O;
+- (id /* block */)separatorInset;
+- (id /* block */)separatorInset_O;
+- (id /* block */)editing;
+- (id /* block */)editing_O;
+- (id /* block */)allowsSelection;
+- (id /* block */)allowsSelection_O;
+- (id /* block */)allowsMultipleSelection;
+- (id /* block */)allowsMultipleSelection_O;
+- (id /* block */)allowsSelectionDuringEditing;
+- (id /* block */)allowsSelectionDuringEditing_O;
+- (id /* block */)allowsMultipleSelectionDuringEditing;
+- (id /* block */)allowsMultipleSelectionDuringEditing_O;
+- (id /* block */)separatorStyle;
+- (id /* block */)separatorStyle_O;
+- (id /* block */)separatorColor;
+- (id /* block */)separatorColor_O;
+- (id /* block */)tableHeaderView;
+- (id /* block */)tableHeaderView_O;
+- (id /* block */)tableFooterView;
+- (id /* block */)tableFooterView_O;
+- (id /* block */)sectionIndexBackgroundColor;
+- (id /* block */)sectionIndexBackgroundColor_O;
+- (id /* block */)sectionIndexColor;
+- (id /* block */)sectionIndexColor_O;
+@end
+

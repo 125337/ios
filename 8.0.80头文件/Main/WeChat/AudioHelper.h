@@ -1,0 +1,31 @@
+@interface AudioHelper : NSObject
++ (BOOL)IsWeiXinSoundPlaying;
++ (BOOL)IsWeiXinSoundPaused;
++ (void)StopAudio;
++ (BOOL)IsMusicPlaying;
++ (BOOL)IsMusicIdle;
++ (BOOL)IsMusicWaiting;
++ (BOOL)IsMusicPaused;
++ (void)StopMusic;
++ (BOOL)PauseMusic;
++ (void)RestartMusic;
++ (BOOL)IsAudioTalkPlaying;
++ (BOOL)IsAudioTalkRecording;
++ (BOOL)PauseAudioTalk;
++ (void)RestartAudioTalk;
++ (void)PlaySystemSound:(id)arg1 FileType:(id)arg2 Ambient:(BOOL)arg3;
++ (void)PlaySystemSoundID:(unsigned int)arg1 Ambient:(BOOL)arg2;
++ (void)PlaySystemSoundID:(unsigned int)arg1 Ambient:(BOOL)arg2 withCompletion:(id /* block */)arg3;
++ (void)AVPlaySystemSound:(id)arg1 FileType:(id)arg2 Ambient:(BOOL)arg3;
++ (void)playSound:(id)arg1 fileType:(id)arg2 volume:(float)arg3 ambient:(BOOL)arg4;
++ (void)playSoundAtPath:(id)arg1 volume:(float)arg2 ambient:(BOOL)arg3;
++ (void)playSoundWithParams:(id)arg1;
++ (void)playVibration;
++ (BOOL)playNewMsgNotify;
++ (BOOL)playNewMsgNotifyInMessageContent;
++ (void)playSendMsgNotify;
++ (void)showRecordDenied;
++ (BOOL)isSilkFile:(id)arg1;
++ (BOOL)isOpusFile:(id)arg1;
++ (id)GetQVIVoiceAnalysis;
+@end

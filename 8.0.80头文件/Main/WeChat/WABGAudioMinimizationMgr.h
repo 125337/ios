@@ -1,0 +1,94 @@
+@interface WABGAudioMinimizationMgr : MMUserService <IMinimizeTaskDelegateInterface, WABGAudioMinimizationViewModelDelegate, MMServiceProtocol>
+{
+    NSString * _showingId; // +0x8
+    NSString * _interruptedId; // +0x10
+    NSMutableDictionary * _infoMap; // +0x18
+    NSString * _minimizationCoverId; // +0x20
+    NSString * _interruptedIdByShiftIntoList; // +0x28
+}
+- (void)monitor_registerExtension;
+- (void)monitor_unregisterExtension;
+- (void)OnStartRecord:(unsigned int)arg1;
+- (void)OnEndRecord:(unsigned int)arg1;
+- (void)pauseMusic;
+- (void)resumeMusicPlay;
+- (void)onLivePusherStartPlay:(id)arg1;
+- (void)onLivePusherStopPlay:(id)arg1;
+- (void)onLivePlayerStartPlay:(id)arg1;
+- (void)onLivePlayerStopPlay:(id)arg1;
+- (void)onLivePlayerWaiting:(id)arg1;
+- (void)onLivePlayerError:(id)arg1;
+- (void)onPlayerStartPlay:(id)arg1;
+- (void)onPlayerPausePlay:(id)arg1;
+- (void)onVideoPlayerPlay:(id)arg1;
+- (void)onVideoPlayerWaiting:(id)arg1;
+- (void)onVideoPlayerError:(id)arg1;
+- (id)getWCPlayerViewFromInfo:(id)arg1;
+- (void)OnBeginPlaying:(id)arg1 success:(BOOL)arg2;
+- (void)OnEndPlaying:(id)arg1 isForceStop:(BOOL)arg2;
+- (void)notifyMusicPlayerPauseMusic;
+- (void)notifyMusicPlayerRestartMusic;
+- (void)onRemoteControlMusicShouldPlay;
+- (void)onRemoteControlMusicShouldStop;
+- (void)onMusicPlayInnerStatusChanged:(unsigned long long)arg1 musicInfo:(id)arg2 errInfo:(id)arg3;
+- (void)BeginInterruption;
+- (void)EndInterruption;
+- (void)onWCAudioSessionSetActive:(BOOL)arg1;
+- (void)onVoipWindowDidAppear;
+- (void)onVoipWindowDisappear;
+- (void)onVoipMaximized;
+- (void)onVoipMinimized;
+- (void)onMonoServiceVoipWillStart;
+- (void)onMonoServiceMultitalkWillStart;
+- (void)onMonoServiceWalkieTalkieWillStart;
+- (void)onMonoServiceDidEnd;
+- (void)onBeginMultiTalk;
+- (void)onMultiTalkMgrBeginToCleanStatus;
+- (void)onMultiTalkMaximized;
+- (void)onMultiTalkMinimized;
+- (void)onShowRecordOperateView;
+- (void)onHiddenRecordOperateView;
+- (BOOL)isBGAudioEnabled;
+- (void)updateBGAudioInfo:(id)arg1 forHost:(id)arg2;
+- (id)bgAudioInfo:(id)arg1;
+- (void)clearBGAudioInfoForHost:(id)arg1;
+- (void)prepareForMinimizationCoverStyle:(id)arg1;
+- (BOOL)updateState:(long long)arg1 forHost:(id)arg2;
+- (BOOL)show:(id)arg1;
+- (BOOL)dismiss:(id)arg1;
+- (id)currentBGAudioInfo;
+- (void)stopBGAudio;
+- (void)bgAudioInterrupted:(BOOL)arg1;
+- (BOOL)isInterrupted;
+- (BOOL)isInterruptedByShiftIntoList;
+- (BOOL)isPlaying;
+- (BOOL)isVoipWorking;
+- (BOOL)ui_showMinimizationView:(id)arg1;
+- (BOOL)ui_updateMinimizationView:(id)arg1;
+- (BOOL)ui_dismissMinimizationView:(id)arg1;
+- (void)resumeBGAudio:(id)arg1;
+- (void)pauseBGAudio:(id)arg1;
+- (void)onServiceInit;
+- (void)onServiceTerminate;
+- (BOOL)onEnterMinimizedTask:(id)arg1 openContext:(id)arg2 taskEnterScene:(unsigned int)arg3;
+- (void)onRemoveMinimizedTask:(id)arg1;
+- (void)onOutContentTask:(id)arg1 replacedByAnotherTaskData:(id)arg2;
+- (BOOL)isShow;
+- (void)onPlayerSourceWaiting:(id)arg1;
+- (void)onPlayerSourceError:(id)arg1;
+- (void)onPlayerSourcePlay:(id)arg1;
+- (void)onMiniAudioContentViewCloseButtonClicked:(id)arg1;
+- (void)onMiniAudioContentViewOuterContentClicked:(id)arg1;
+- (void)onMiniAudioContentViewPlayPauseButtonClicked:(id)arg1 isToPlay:(BOOL)arg2;
+- (id)showingId;
+- (void)setShowingId:(id)arg1;
+- (id)interruptedId;
+- (void)setInterruptedId:(id)arg1;
+- (id)infoMap;
+- (void)setInfoMap:(id)arg1;
+- (id)minimizationCoverId;
+- (void)setMinimizationCoverId:(id)arg1;
+- (id)interruptedIdByShiftIntoList;
+- (void)setInterruptedIdByShiftIntoList:(id)arg1;
+- (void).cxx_destruct;
+@end

@@ -1,0 +1,3 @@
+@interface WAJSEventHandler_shareAppMessageToSpecificContactForFakeNativeDirectly : WAJSEventHandler_shareAppMessageToSpecificContactDirectly
+- (void)handleJSEvent:(id)arg1;
+@end

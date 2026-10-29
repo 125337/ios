@@ -1,0 +1,232 @@
+@interface MyWCDB : NSObject
+{
+    WCTDatabase * m_db; // +0x8
+    int m_dataCodingType; // +0x10
+    WCTTable * m_tableDataItem; // +0x18
+    WCTTable * m_tableMessage; // +0x20
+    WCTTable * m_tableStrangerMessage; // +0x28
+    WCTTable * m_tableTimeline; // +0x30
+    WCTTable * m_tableHomePage; // +0x38
+    WCTTable * m_tableCover; // +0x40
+    WCTTable * m_tableBgImgLiked; // +0x48
+    WCTTable * m_tableIdOwner; // +0x50
+    WCTTable * m_tableTimelineGroupHint; // +0x58
+    WCTTable * m_tableTimelineFeedSegment; // +0x60
+    WCTTable * m_tableTimelineMicroMerchantFeed; // +0x68
+    WCTTable * m_tableMicroMerchantFeedRelation; // +0x70
+    WCTTable * m_tableMicroMerchantInteraction; // +0x78
+    WCTTable * m_tableStarGuideRecord; // +0x80
+    WCTTable * m_tableFinderShareRecord; // +0x88
+    WCTTable * m_tableNewLifeShareRecord; // +0x90
+}
++ (void)initialize;
+- (void)cleanupTimelineTableWithBlockOnceOp:(unsigned int)arg1 maxCleanPerLoop:(unsigned int)arg2 commitThreshold:(unsigned int)arg3 block:(id /* block */)arg4;
+- (BOOL)runCleanTask:(unsigned int)arg1 maxCleanPerLoop:(unsigned int)arg2 commitThreshold:(unsigned int)arg3;
+- (void)createIndexesForTimelineTableWithRowCountLimit:(unsigned long long)arg1 completionHandler:(id /* block */)arg2;
+- (void)updateMicroMerchantToTableIfNeed:(id)arg1 wsGroups:(id)arg2;
+- (void)deleteMicroMerchantFromTableIfNeed:(id)arg1 bottomID:(id)arg2 lastItemID:(id)arg3;
+- (void)modMicroMerchantDataItemIfNeeded:(id)arg1;
+- (BOOL)deleteMicroMerchantRelation:(id)arg1;
+- (BOOL)deleteMicroMerchantRelationWithRangeCondition:(const void *)arg1;
+- (BOOL)insertOrReplaceMicroMerchantRelation:(id)arg1 referenceTopDataItem:(id)arg2;
+- (BOOL)deleteMicroMerchanRelationOfGroup:(id)arg1;
+- (id)getMicroMerchantFeedsGroupWithDistinctGroupID:(id)arg1;
+- (BOOL)replaceMicroMerchantDataItems:(id)arg1 newWSGroup:(id)arg2;
+- (BOOL)replaceMicroMerchantDataItem:(id)arg1 referenceGroup:(id)arg2;
+- (BOOL)modMicroMerchantDataItem:(id)arg1;
+- (BOOL)deleteMicroMerchantDataItemById:(id)arg1;
+- (id)getMicroMerchantDataItemsWithFeedIds:(id)arg1;
+- (id)getAllFeedsInRelationTableOfGroupId:(id)arg1 containDel:(BOOL)arg2;
+- (BOOL)deleteMicroMerchantItemsOfGroup:(id)arg1;
+- (id)getMicroMerchantDataItemsWithFeedId:(id)arg1;
+- (id)getMicroMerchantFeedsGroupWithPartWsFeedIds:(id)arg1;
+- (id)getMicroMerchantFeedsGroupFromBottom:(id)arg1 toTop:(id)arg2;
+- (id)getDistinctGroupIDFromBottom:(id)arg1 toTop:(id)arg2;
+- (id)getDistinctGroupIDWithFeedIds:(id)arg1;
+- (BOOL)dropAllRelations;
+- (BOOL)dropAllMicroMerchantItems;
+- (BOOL)dropAllSegments;
+- (void)clearSoftDeletedMicroMerchantFeeds;
+- (BOOL)clearNoUseSegments:(id)arg1;
+- (id)extraAllFeedIds:(id)arg1;
+- (BOOL)createGroupHintTable;
+- (BOOL)insertGroupHint:(id)arg1;
+- (BOOL)updateGroupHint:(id)arg1;
+- (id)selectGroupHintWithFeedId:(id)arg1;
+- (BOOL)deleteGroupHint:(id)arg1;
+- (id)getMaxGroupHint;
+- (unsigned int)getMaxGroupHintID;
+- (BOOL)updateSegment:(id)arg1 insertSegments:(id)arg2 finishBlock:(id /* block */)arg3;
+- (id)getAllSegments:(unsigned int)arg1;
+- (id)selectSegmentOfMaxGroupID;
+- (id)init;
+- (void)dealloc;
+- (void)setupExptConfigure;
+- (BOOL)isUsingPBCoding;
+- (BOOL)initDB;
+- (void)closeDB;
+- (void)closeDBBeforeInit;
+- (void)clearAllTables;
+- (void)clearAllWCData;
+- (void)dropTables:(id)arg1;
+- (BOOL)createTables;
+- (BOOL)CreateMyWCAttrTable;
+- (BOOL)CreateMyWCMessageTable;
+- (BOOL)CreateStrangerMessageTable;
+- (BOOL)CreateWCTimeLineTable;
+- (id)internalCreateTimelineTable:(id)arg1;
+- (id)WCIndexTableNameForUser:(id)arg1;
+- (BOOL)CreateWCIndexTableForUser:(id)arg1;
+- (BOOL)CreateCoverTable;
+- (BOOL)CreateBgImgLiked;
+- (BOOL)CreateIdOwner;
+- (BOOL)CreateMicroMerchantTable;
+- (id)createTable:(Class)arg1 name:(id)arg2;
+- (id)getWCDataItemByItemID:(id)arg1;
+- (BOOL)setWCDataItem:(id)arg1 forItemID:(id)arg2;
+- (BOOL)deleteWCDataItemByItemID:(id)arg1;
+- (id)WCMessageFromDBMessage:(id)arg1;
+- (id)WCMessagesFromDBMessages:(id)arg1;
+- (id)getLatestMessage;
+- (id)getLatestReadMessage;
+- (id)getAllWCMessages;
+- (unsigned int)getUnReadMessageCount;
+- (id)getUnreadWCMessages;
+- (id)getUnReadMessagesLimit:(int)arg1;
+- (id)getWCMessagesFrom:(id)arg1 maxCount:(unsigned int)arg2;
+- (id)getRawWCMessagesForClearLimit:(int)arg1 unReadOnly:(BOOL)arg2;
+- (BOOL)addNewRawMessage:(id)arg1 hasRead:(BOOL)arg2;
+- (BOOL)setWCMessageRead:(id)arg1;
+- (BOOL)setWCMessageListRead:(id)arg1;
+- (BOOL)setWcMessageAllReadBeginWithId:(unsigned int)arg1;
+- (BOOL)setAllWCMessagesRead;
+- (BOOL)deleteMessage:(id)arg1;
+- (BOOL)deleteMessageByFeedId:(id)arg1;
+- (BOOL)deleteAllMessages;
+- (BOOL)addStrangerMessage:(id)arg1 toItem:(id)arg2;
+- (id)getStrangerMessagesOfItem:(id)arg1 partner:(id)arg2;
+- (id)WCIndexTableForUserWithTableName:(id)arg1;
+- (int)getMaxGroupHintInTable:(id)arg1;
+- (id)getTimelineRowDataByTtemID:(id)arg1 InTable:(id)arg2;
+- (id)getLatestTimelineRowDataInTable:(id)arg1;
+- (BOOL)updateTable:(id)arg1 WithDatas:(id)arg2 AfterItemID:(id)arg3;
+- (BOOL)updateTable:(id)arg1 WithDatas:(id)arg2 AfterItemID:(id)arg3 ToItemID:(id)arg4;
+- (BOOL)updateWCTimeLineTableWithDatas:(id)arg1 AfterItemID:(id)arg2 wsGroups:(id)arg3;
+- (BOOL)updateWCTimeLineTableWithDatas:(id)arg1 AfterItemID:(id)arg2 ToItemID:(id)arg3 wsGroups:(id)arg4;
+- (BOOL)updateMainTimelineTableWithDatas:(id)arg1 AfterItemID:(id)arg2 ToItemID:(id)arg3 wsGroups:(id)arg4;
+- (BOOL)updateWCIndexForUser:(id)arg1 WithDatas:(id)arg2 AfterItemID:(id)arg3;
+- (BOOL)updateWCIndexForUser:(id)arg1 WithDatas:(id)arg2 AfterItemID:(id)arg3 ToItemID:(id)arg4;
+- (BOOL)deleteAllTimelineTableData;
+- (BOOL)deleteAllIndexDataForUser:(id)arg1;
+- (id)getFirstDataItemFromTable:(id)arg1 AfterItemID:(id)arg2;
+- (id)getDataItemListFromTable:(id)arg1 afterItemID:(id)arg2 limit:(int)arg3;
+- (id)getFirstWCTimeLineDataItemAfterItemID:(id)arg1;
+- (id)getWCTimeLineDataItemListAfterItemID:(id)arg1 andMaxCount:(long long)arg2;
+- (unsigned int)getWCTimeLineDataItemCount:(id)arg1 minId:(id)arg2;
+- (unsigned int)getWCTimeLineDataItemCount;
+- (id)getWCTimeLineDataItemListBefore:(id)arg1 maxItemId:(id)arg2 maxCount:(long long)arg3;
+- (id)getLatestDataItem:(id)arg1;
+- (id)getDataItemDictionaryFromTable:(id)arg1 arrayItemID:(id)arg2;
+- (id)getWCTimeLineDataItemDictionaryByArrayItemID:(id)arg1;
+- (id)getWCTimeLineDataItemWithItemID:(id)arg1;
+- (id)getWCIndexDataItemListForUser:(id)arg1 AfterItemID:(id)arg2 andMaxCount:(long long)arg3;
+- (id)getWCIndexNextDataItemListForUser:(id)arg1 afterItemID:(id)arg2 maxCount:(long long)arg3;
+- (id)getWCIndexPreviousDataItemListForUser:(id)arg1 beforeItemID:(id)arg2 maxItemID:(id)arg3 maxCount:(long long)arg4;
+- (id)getNextDataItemListFromTable:(id)arg1 afterItemID:(id)arg2 maxCount:(long long)arg3;
+- (id)getPreviousDataItemListFromTable:(id)arg1 beforeItemID:(id)arg2 maxItemID:(id)arg3 maxCount:(long long)arg4;
+- (id)getWCIndexDataItemListForUser:(id)arg1 withItemID:(id)arg2;
+- (BOOL)deleteRowInTimelineByItemID:(id)arg1;
+- (BOOL)deleteRowInTimelineLimitCountWithOrderAsc:(long long)arg1;
+- (BOOL)deleteRowInWCIndexForUser:(id)arg1 ByItemID:(id)arg2;
+- (BOOL)deleteRowInWCIndexForUser:(id)arg1 AfterItemID:(id)arg2;
+- (id)getMaxID;
+- (BOOL)updateAllCacheWithDataItem:(id)arg1 useTransaction:(BOOL)arg2;
+- (BOOL)tryExecuteUpdateAgain:(const void *)arg1 toObject:(id)arg2 where:(const void *)arg3 afterReCreateTable:(id)arg4 userName:(id)arg5;
+- (id)tryGetDataItemByItemID:(id)arg1;
+- (id)getDataItemsByIds:(id)arg1;
+- (id)coverDataItemWithUsername:(id)arg1;
+- (BOOL)updateCoverWithDataItem:(id)arg1;
+- (BOOL)isBGImgLiked:(id)arg1 username:(id)arg2;
+- (void)setBGImgLiked:(id)arg1 username:(id)arg2;
+- (void)setBGImgUnliked:(id)arg1 username:(id)arg2;
+- (id)togetherTableNameForUsername:(id)arg1;
+- (id)togetherTableWithTableName:(id)arg1;
+- (BOOL)createTogetherTableForUsername:(id)arg1;
+- (id)internalCreateTogetherTableForUsername:(id)arg1;
+- (id)getTogetherDataItemsForUsername:(id)arg1 maxCount:(unsigned long long)arg2;
+- (BOOL)updateTogetherForUsername:(id)arg1 dataItems:(id)arg2;
+- (BOOL)deleteAllTogetherDataItemsForUsername:(id)arg1;
+- (id)getOwnerByItemID:(id)arg1;
+- (BOOL)setOwner:(id)arg1 withItemID:(id)arg2;
+- (void)updateMsgDelStat:(BOOL)arg1 forMsgs:(id)arg2;
+- (void)updateMsgDelStat:(BOOL)arg1 forSns:(id)arg2;
+- (void)updateMsgDelStat:(BOOL)arg1 forAdSns:(id)arg2;
+- (void)updateMsgDelStat:(BOOL)arg1 forMsg:(id)arg2 timeLimit:(unsigned int)arg3;
+- (void)updateMsgDelStat:(BOOL)arg1 forSnsObjID:(unsigned long long)arg2 timeLimit:(unsigned int)arg3;
+- (void)updateMsgDelStat:(BOOL)arg1 forAdSnsObj:(id)arg2 timeLimit:(unsigned int)arg3;
+- (id)_getTimelineDBObjectsForUsername:(id)arg1 withMaxCount:(long long)arg2;
+- (id)getTimelineDBObjectsForUsername:(id)arg1 withMaxCount:(long long)arg2;
+- (id)getTimelineDataItemsForUsername:(id)arg1 withMaxCount:(long long)arg2;
+- (id)getIndexInTimeline:(id)arg1;
+- (BOOL)recordWSInteractionType:(unsigned long long)arg1 dataItem:(id)arg2 time:(unsigned long long)arg3 isFold:(BOOL)arg4 scene:(unsigned long long)arg5;
+- (BOOL)clearWSInteractionWithUsernames:(id)arg1 isFold:(BOOL)arg2;
+- (BOOL)clearWSInteractionWithUsername:(id)arg1 isFold:(BOOL)arg2;
+- (BOOL)clearAllWSInteractions;
+- (id)getWSInteractionsWithUsername:(id)arg1 interactionType:(unsigned long long)arg2 minTime:(unsigned long long)arg3 maxTime:(unsigned long long)arg4 isFold:(BOOL)arg5;
+- (id)getWSInteractionWithType:(unsigned long long)arg1 isFold:(BOOL)arg2;
+- (id)getWSInteractionWithType:(unsigned long long)arg1 minTime:(unsigned long long)arg2 maxTime:(unsigned long long)arg3 isFold:(BOOL)arg4;
+- (id)getWSInteractionWithExpression:(Expression)arg1;
+- (id)createStarGuideRecordTableIfNeeded;
+- (id)getStarGuideRecordForDataItem:(id)arg1 scene:(long long)arg2;
+- (id)updateStarGuideRecordForDataItem:(id)arg1 scene:(long long)arg2 action:(long long)arg3;
+- (id)updateStarGuideRecordFromLocalDataItem:(id)arg1 toServerDataItem:(id)arg2;
+- (id)getPostShareRecordWithTable:(id)arg1 dataItem:(id)arg2 scene:(long long)arg3;
+- (id)updatePostShareRecordWithTable:(id)arg1 dataItem:(id)arg2 scene:(long long)arg3 action:(long long)arg4;
+- (id)updatePostShareRecordWithTable:(id)arg1 fromLocalDataItem:(id)arg2 toServerDataItem:(id)arg3;
+- (id)createFinderShareRecordTableIfNeeded;
+- (id)getFinderShareRecordForDataItem:(id)arg1 scene:(long long)arg2;
+- (id)updateFinderShareRecordForDataItem:(id)arg1 scene:(long long)arg2 action:(long long)arg3;
+- (id)updateFinderShareRecordFromLocalDataItem:(id)arg1 toServerDataItem:(id)arg2;
+- (id)createNewLifeShareRecordTableIfNeeded;
+- (id)getNewLifeShareRecordForDataItem:(id)arg1 scene:(long long)arg2;
+- (id)updateNewLifeShareRecordForDataItem:(id)arg1 scene:(long long)arg2 action:(long long)arg3;
+- (id)updateNewLifeShareRecordFromLocalDataItem:(id)arg1 toServerDataItem:(id)arg2;
+- (id)m_db;
+- (void)setM_db:(id)arg1;
+- (int)m_dataCodingType;
+- (void)setM_dataCodingType:(int)arg1;
+- (id)m_tableDataItem;
+- (void)setM_tableDataItem:(id)arg1;
+- (id)m_tableMessage;
+- (void)setM_tableMessage:(id)arg1;
+- (id)m_tableStrangerMessage;
+- (void)setM_tableStrangerMessage:(id)arg1;
+- (id)m_tableTimeline;
+- (void)setM_tableTimeline:(id)arg1;
+- (id)m_tableHomePage;
+- (void)setM_tableHomePage:(id)arg1;
+- (id)m_tableCover;
+- (void)setM_tableCover:(id)arg1;
+- (id)m_tableBgImgLiked;
+- (void)setM_tableBgImgLiked:(id)arg1;
+- (id)m_tableIdOwner;
+- (void)setM_tableIdOwner:(id)arg1;
+- (id)m_tableTimelineGroupHint;
+- (void)setM_tableTimelineGroupHint:(id)arg1;
+- (id)m_tableTimelineFeedSegment;
+- (void)setM_tableTimelineFeedSegment:(id)arg1;
+- (id)m_tableMicroMerchantFeedRelation;
+- (void)setM_tableMicroMerchantFeedRelation:(id)arg1;
+- (id)m_tableTimelineMicroMerchantFeed;
+- (void)setM_tableTimelineMicroMerchantFeed:(id)arg1;
+- (id)m_tableMicroMerchantInteraction;
+- (void)setM_tableMicroMerchantInteraction:(id)arg1;
+- (id)m_tableStarGuideRecord;
+- (void)setM_tableStarGuideRecord:(id)arg1;
+- (id)m_tableFinderShareRecord;
+- (void)setM_tableFinderShareRecord:(id)arg1;
+- (id)m_tableNewLifeShareRecord;
+- (void)setM_tableNewLifeShareRecord:(id)arg1;
+- (void).cxx_destruct;
+@end
+

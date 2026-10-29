@@ -1,0 +1,5 @@
+@interface _TtC6WeChat40LiteAppJsApiEmoticonOpenFullScreenSearch : LiteAppJsApi
+- (void)invokeJsApi:(id)arg1 param:(id)arg2 isFromView:(BOOL)arg3;
+- (id)init;
+@end
+

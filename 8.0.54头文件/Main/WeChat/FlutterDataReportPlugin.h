@@ -1,0 +1,6 @@
+@interface FlutterDataReportPlugin : NSObject <FlutterPlugin>
++ (void)registerWithRegistrar:(id)arg1;
+- (id)initWithRegistrar:(id)arg1 methodChannel:(id)arg2;
+- (void)handleMethodCall:(id)arg1 result:(id /* block */)arg2;
+@end
+

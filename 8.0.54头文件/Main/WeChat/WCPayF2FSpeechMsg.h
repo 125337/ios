@@ -1,0 +1,26 @@
+@interface WCPayF2FSpeechMsg : WCPaySynthesizeSpeechMsg
+- (id)getVoiceRequest;
+- (BOOL)setVoiceResponse:(id)arg1;
+- (unsigned int)getCgiCmd;
+- (BOOL)isSwitchOpen;
+- (id)frontPartSoundPath;
+- (id)soundNameOfSwitchOpen;
+- (id)soundNameOfSwitchClose;
+- (unsigned int)getReportSessionType;
+- (void)reportIdKeyGetVoiceReq;
+- (void)reportIdKeyPlaySoundSuccess;
+- (void)reportIdKeyPlaySoundFailed;
+- (void)reportIdKeyGetVoiceReqSuccess;
+- (void)reportIdKeyGetVoiceReqCgiError;
+- (void)reportIdKeyGetVoiceReqLocalNetWorkError;
+- (void)reportKVForegroundPlaySoundSuccess;
+- (void)reportKVPushSuccess;
+- (void)reportKVPlaySoundFail:(unsigned int)arg1;
+- (void)reportKVPlaySoundFail:(unsigned int)arg1 retCode:(long long)arg2;
+- (void)reportCgiCostTime:(unsigned int)arg1;
+- (void)reportKVScene:(unsigned int)arg1;
+- (void)reportKVPlayPrefixSound;
+- (void)reportSDKComposeSuccess:(id)arg1;
+- (void)reportSDKComposeFail:(unsigned int)arg1 packId:(id)arg2;
+@end
+

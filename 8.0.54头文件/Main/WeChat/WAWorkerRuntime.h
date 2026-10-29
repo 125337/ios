@@ -1,0 +1,3 @@
+@interface WAWorkerRuntime : WKWebView
+@end
+

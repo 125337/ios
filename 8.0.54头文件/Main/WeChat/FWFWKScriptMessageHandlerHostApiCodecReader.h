@@ -1,0 +1,3 @@
+@interface FWFWKScriptMessageHandlerHostApiCodecReader : FlutterStandardReader
+@end
+

@@ -1,0 +1,2 @@
+@interface WCUIParam : NSObject
+@end

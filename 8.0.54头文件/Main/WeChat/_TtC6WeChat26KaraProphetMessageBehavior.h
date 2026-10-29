@@ -1,0 +1,76 @@
+@interface _TtC6WeChat26KaraProphetMessageBehavior : _TtC6WeChat19KaraProphetBehavior <WCTTableCoding, KaraProphetBehaviorIdentifiable>
+{
+     identifier; // +0x0
+}
++ (const void *)objectRelationalMapping;
++ (const void *)allProperties;
++ (id)allBridgeProperties;
++ (id)__wcdbtyper;
++ (const void *)dateThatHappened;
++ (const void *)__wcdb_synthesize_0:(void *)arg1;
++ (id)swift_dateThatHappened;
++ (const void *)versionThatHappened;
++ (const void *)__wcdb_synthesize_1:(void *)arg1;
++ (id)swift_versionThatHappened;
++ (const void *)dateThatPredicted;
++ (const void *)__wcdb_synthesize_2:(void *)arg1;
++ (id)swift_dateThatPredicted;
++ (const void *)dateThatPrepared;
++ (const void *)__wcdb_synthesize_3:(void *)arg1;
++ (id)swift_dateThatPrepared;
++ (const void *)dateThatExtracted;
++ (const void *)__wcdb_synthesize_4:(void *)arg1;
++ (id)swift_dateThatExtracted;
++ (const void *)dateThatRecalled;
++ (const void *)__wcdb_synthesize_5:(void *)arg1;
++ (id)swift_dateThatRecalled;
++ (const void *)prediction;
++ (const void *)__wcdb_synthesize_6:(void *)arg1;
++ (id)swift_prediction;
++ (const void *)positive;
++ (const void *)__wcdb_synthesize_7:(void *)arg1;
++ (id)swift_positive;
++ (const void *)features;
++ (const void *)__wcdb_synthesize_8:(void *)arg1;
++ (id)swift_features;
++ (const void *)predictAnalysis;
++ (const void *)__wcdb_synthesize_9:(void *)arg1;
++ (id)swift_predictAnalysis;
++ (const void *)extractAnalysis;
++ (const void *)__wcdb_synthesize_10:(void *)arg1;
++ (id)swift_extractAnalysis;
++ (const void *)report;
++ (const void *)__wcdb_synthesize_11:(void *)arg1;
++ (id)swift_report;
++ (const void *)userInfo;
++ (const void *)__wcdb_synthesize_12:(void *)arg1;
++ (id)swift_userInfo;
++ (void)__wcdb_column_constraint_13:(void *)arg1;
++ (void)__wcdb_index_14:(void *)arg1;
++ (const void *)svrid;
++ (const void *)__wcdb_synthesize_15:(void *)arg1;
++ (id)swift_svrid;
++ (const void *)session;
++ (const void *)__wcdb_synthesize_16:(void *)arg1;
++ (id)swift_session;
++ (const void *)localID;
++ (const void *)__wcdb_synthesize_17:(void *)arg1;
++ (id)swift_localID;
++ (void)__wcdb_table_constraint_18:(void *)arg1;
++ (void)__wcdb_table_constraint_19:(void *)arg1;
++ (void)__wcdb_table_constraint_20:(void *)arg1;
++ (void)__wcdb_column_constraint_21:(void *)arg1;
++ (void)__wcdb_column_constraint_22:(void *)arg1;
++ (void)__wcdb_column_constraint_23:(void *)arg1;
++ (Expression)identified:(id)arg1;
+- (id)svrid;
+- (void)setSvrid:(id)arg1;
+- (id)session;
+- (void)setSession:(id)arg1;
+- (id)localID;
+- (void)setLocalID:(id)arg1;
+- (id)description;
+- (id)init;
+- (void).cxx_destruct;
+@end
+

@@ -1,0 +1,3 @@
+@interface _TtC6WeChat40WAMagicBrushFrameColdLaunchRuntimeLoader : _TtC6WeChat25WAColdLaunchRuntimeLoader
+@end
+

@@ -1,0 +1,3 @@
+@interface DiscoverEntranceSettingCellHandler_NearbyLife : DiscoverEntranceSettingAbstractCellHandler
+@end
+

@@ -1,0 +1,3 @@
+@interface WCFinderLiveHomePageSpecialColumnSectionViewModel : WCFinderLiveHomePageSectionViewModel
+@end
+

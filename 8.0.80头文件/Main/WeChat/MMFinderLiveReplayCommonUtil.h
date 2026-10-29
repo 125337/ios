@@ -1,0 +1,2 @@
+@interface MMFinderLiveReplayCommonUtil : NSObject
+@end

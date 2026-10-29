@@ -1,0 +1,13 @@
+@interface SettingSearchUtil : NSObject
++ (id)searchInIndexTree:(id)arg1 withKeyword:(id)arg2;
++ (void)searchNode:(id)arg1 keyword:(id)arg2 results:(id)arg3;
++ (_NSRange)searchKeyword:(id)arg1 withString:(id)arg2;
++ (id)findNodeInIndexTree:(id)arg1 byIdentifier:(id)arg2;
++ (id)allIdentifiersInIndexTree:(id)arg1;
++ (void)collectIdentifiersFromNode:(id)arg1 intoArray:(id)arg2;
++ (void)jumpWithIndexNode:(id)arg1 fromViewController:(id)arg2;
++ (void)performActionForNode:(id)arg1 withHostNode:(id)arg2 fromViewController:(id)arg3;
++ (void)highlightForNode:(id)arg1 withHostNode:(id)arg2 fromViewController:(id)arg3;
++ (void)ensureViewLoaded:(id)arg1;
++ (void)performSelector:(SEL)arg1 onTarget:(id)arg2;
+@end

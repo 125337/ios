@@ -1,0 +1,3 @@
+@interface MMMusicLivePopMsg : MMMusicLiveBaseMsg
+@end
+

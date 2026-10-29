@@ -1,0 +1,2 @@
+@interface ZZFLEXAngelViewChainModel : ZZFLEXAngelViewBaseChainModel
+@end

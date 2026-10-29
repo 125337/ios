@@ -1,0 +1,2 @@
+@interface CoordinateTool : NSObject
+@end

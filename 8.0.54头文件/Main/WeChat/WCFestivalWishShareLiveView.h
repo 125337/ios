@@ -1,0 +1,3 @@
+@interface WCFestivalWishShareLiveView : WCFinderShareLiveView
+@end
+

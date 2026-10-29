@@ -1,0 +1,24 @@
+@interface CircleToSearchMgr : MMUserService <MMMenuControllerExt, MMServiceProtocol>
+- (void)onServiceInit;
+- (void)onServiceClearData;
+- (void)onMenuControllerDidShow;
+- (void)asyncGenerateImageInfo:(id)arg1 andCompletion:(id /* block */)arg2;
+- (id)genImageFilePath;
+- (void)saveImageForUploading:(id)arg1 andCompletion:(id /* block */)arg2;
+- (void)uploadImageWithFilePath:(id)arg1 andCompletion:(id /* block */)arg2;
+- (id)savePartialImage:(id)arg1 withNormalizedRect:(CGRect)arg2;
+- (BOOL)isImageSatisfactoryWithPath:(id)arg1 andExisted:(BOOL *)arg2;
+- (id)getImageFromMessageWrap:(id)arg1 withDefault:(id)arg2;
+- (id)getImageFromMediaItem:(id)arg1 withDefault:(id)arg2;
+- (void)exposeWithScene:(unsigned long long)arg1 andEntrance:(unsigned long long)arg2;
+- (void)startCircleToSearchWithEntity:(id)arg1 onViewController:(id)arg2;
+- (void)startCircleToSearchOnViewController:(id)arg1 withImage:(id)arg2 andScene:(unsigned long long)arg3 andEntrance:(unsigned long long)arg4 andEntityBlock:(id /* block */)arg5;
+- (void)startCircleToSearchWithImage:(id)arg1 andScene:(unsigned long long)arg2 andEntrance:(unsigned long long)arg3 andEntityBlock:(id /* block */)arg4;
+- (BOOL)isEnabledForScene:(unsigned long long)arg1 andEntrance:(unsigned long long)arg2;
+- (id)businessNameForScene:(unsigned long long)arg1 andEntrance:(unsigned long long)arg2;
+- (int)preferredImageSize;
+- (float)preferredImageRatioLimit;
+- (float)preferredImageCompressionQuality;
+- (int)transferTimeoutSeconds;
+@end
+

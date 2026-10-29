@@ -1,0 +1,3 @@
+@interface FWFUIScrollViewHostApiCodecWriter : FlutterStandardWriter
+@end
+

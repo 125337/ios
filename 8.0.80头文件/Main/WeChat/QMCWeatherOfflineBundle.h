@@ -1,0 +1,34 @@
+@interface QMCWeatherOfflineBundle : NSObject
++ (id)sandboxBundleDirectory;
++ (id)_bundleKindForOnlineURL:(id)arg1;
++ (id)_cdnURLForBundleKind:(id)arg1;
++ (id)_effectiveZipURLForBundleKind:(id)arg1 zipURL:(id)arg2;
++ (id)_dirNameForBundleKind:(id)arg1;
++ (id)_patchVersionForBundleKind:(id)arg1;
++ (id)_trimmedCustomCacheRoot:(id)arg1;
++ (id)_cacheRootDirectoryForCustom:(id)arg1;
++ (id)_sandboxBundleDirectoryForBundleKind:(id)arg1 cacheRoot:(id)arg2;
++ (id)cdnURL;
++ (id)bundleStamp;
++ (id)_bundleStampForBundleKind:(id)arg1 zipURL:(id)arg2;
++ (id)stampPath;
++ (id)_stampPathForBundleKind:(id)arg1 cacheRoot:(id)arg2;
++ (id)indexPath;
++ (id)_indexPathForBundleKind:(id)arg1 cacheRoot:(id)arg2;
++ (id)localIndexURL;
++ (id)localIndexURLForOnlineURL:(id)arg1;
++ (id)localIndexURLForOnlineURL:(id)arg1 zipURL:(id)arg2;
++ (id)localIndexURLForOnlineURL:(id)arg1 zipURL:(id)arg2 cacheDirectory:(id)arg3;
++ (id)_localIndexURLForBundleKind:(id)arg1 zipURL:(id)arg2 cacheRoot:(id)arg3;
++ (void)ensureBundleAvailableWithLogger:(id /* block */)arg1;
++ (void)ensureBundleAvailableForOnlineURL:(id)arg1 logger:(id /* block */)arg2;
++ (void)ensureBundleAvailableForOnlineURL:(id)arg1 zipURL:(id)arg2 logger:(id /* block */)arg3;
++ (void)ensureBundleAvailableForOnlineURL:(id)arg1 zipURL:(id)arg2 cacheDirectory:(id)arg3 logger:(id /* block */)arg4;
++ (void)_ensureBundleAvailableForBundleKind:(id)arg1 zipURL:(id)arg2 cacheRoot:(id)arg3 logger:(id /* block */)arg4;
++ (void)_runUpdateIfNeededForBundleKind:(id)arg1 zipURL:(id)arg2 cacheRoot:(id)arg3 logger:(id /* block */)arg4;
++ (BOOL)_writeStampWithLogger:(id /* block */)arg1;
++ (BOOL)_writeStampForBundleKind:(id)arg1 zipURL:(id)arg2 cacheRoot:(id)arg3 logger:(id /* block */)arg4;
++ (id)_vendorScriptPathInDirectory:(id)arg1;
++ (BOOL)_patchBundleAtDirectory:(id)arg1 logger:(id /* block */)arg2;
++ (unsigned long long)_unzipFileAtPath:(id)arg1 toDirectory:(id)arg2 logger:(id /* block */)arg3 error:(id *)arg4;
+@end

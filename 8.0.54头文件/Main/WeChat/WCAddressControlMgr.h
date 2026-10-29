@@ -1,0 +1,14 @@
+@interface WCAddressControlMgr : WCBaseControlMgr <JSEventExt>
+- (id)init;
+- (unsigned int)startGetAddressControlLogic:(id)arg1;
+- (unsigned int)startEditAddressControlLogic:(id)arg1;
+- (unsigned int)startAddressControlLogic:(id)arg1 jsEvent:(id)arg2;
+- (unsigned int)startEditAddressControlLogic:(id)arg1 jsEvent:(id)arg2 AuthenticationStruct:(id)arg3;
+- (unsigned int)startAddressEntranceControlLogic:(id)arg1;
+- (unsigned int)startAddressEntranceControlLogic:(id)arg1 entryScene:(int)arg2 logicDelegate:(id)arg3;
+- (unsigned int)startGetLatestAddressControlLogic:(id)arg1 jsEvent:(id)arg2;
+- (void)jsEditAddress:(id)arg1;
+- (void)jsGetLatestAddresss:(id)arg1;
+- (unsigned int)startGetAddressLogic:(id)arg1 logicDelegate:(id)arg2;
+@end
+

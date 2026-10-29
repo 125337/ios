@@ -1,0 +1,2 @@
+@interface WCMomentsPrivacyContactSelectionCell : MMDetailDescriptionStyleTableViewCell
+@end

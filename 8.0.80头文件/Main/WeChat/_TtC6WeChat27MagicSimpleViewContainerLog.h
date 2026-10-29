@@ -1,0 +1,2 @@
+@interface _TtC6WeChat27MagicSimpleViewContainerLog : _TtCs12_SwiftObject
+@end

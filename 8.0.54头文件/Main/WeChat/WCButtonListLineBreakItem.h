@@ -1,0 +1,3 @@
+@interface WCButtonListLineBreakItem : WCButtonListItem
+@end
+

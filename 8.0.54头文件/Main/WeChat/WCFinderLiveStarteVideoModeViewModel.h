@@ -1,0 +1,3 @@
+@interface WCFinderLiveStarteVideoModeViewModel : WCFinderStarterLiveBaseViewModel
+@end
+

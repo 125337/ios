@@ -1,0 +1,3 @@
+@interface MMFinderLiveShopSettingCell : MMFinderLiveCommonSettingCell
+@end
+

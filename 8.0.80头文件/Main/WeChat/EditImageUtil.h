@@ -1,0 +1,34 @@
+@interface EditImageUtil : MMObject
++ (BOOL)editImageUndoRedoSwitchOn;
++ (CGRect)getCenterFrameWithAspectRatio:(double)arg1 inRect:(CGRect)arg2;
++ (void)adjustView:(id)arg1 withSize:(CGSize)arg2;
++ (void)savePhotoToSystemAlbum:(id)arg1;
++ (void)savePhotoToSystemAlbum:(id)arg1 completionBlock:(id /* block */)arg2;
++ (void)savePhotoToSystemAlbum:(id)arg1 exifExtraInfo:(id)arg2 completionBlock:(id /* block */)arg3;
++ (BOOL)isNeedSaveEditedPhoto;
++ (double)getNearByInt:(double)arg1;
++ (void)setAnchorPoint:(CGPoint)arg1 forView:(id)arg2;
++ (CGSize)getEditImageResultSizeIfLongImage:(CGSize)arg1;
++ (BOOL)isLongPressEntrance:(unsigned int)arg1;
++ (BOOL)isCropOnlyScene:(unsigned int)arg1;
++ (unsigned long long)convertImagePickerSceneToEditImageScene:(int)arg1;
++ (unsigned long long)pickerEditImageUIStyle:(int)arg1;
++ (BOOL)isCurrentCaptureViewToEditImageUIStyleModern:(unsigned long long)arg1;
++ (BOOL)isCurrentEditImageUIStyleModern:(unsigned long long)arg1;
++ (BOOL)isEditViewFullScreen:(unsigned int)arg1 editImageUIStyle:(unsigned long long)arg2;
++ (BOOL)isCurrentEditEntranceFromTimeLine:(unsigned int)arg1;
++ (BOOL)isCurrentEditEntranceFromStory:(unsigned int)arg1;
++ (BOOL)isCurrentEditEntranceFromTimeLineAndGame:(unsigned int)arg1;
++ (BOOL)isCurrentEditEntranceFromFinder:(unsigned int)arg1;
++ (BOOL)isPreviewScaleAspectToFill:(id)arg1 entranceType:(unsigned int)arg2;
++ (id)cropImageAccordingWithImage:(id)arg1;
++ (id)createBlurImageWithOriginalImage:(id)arg1 imageSize:(CGSize)arg2;
++ (id)genPreviewImageWithAsset:(id)arg1 atTime:(double)arg2;
++ (id)getPrimaryColorForEntranceType:(unsigned long long)arg1;
++ (id)getPrimaryColorForFromScene:(unsigned long long)arg1;
++ (CGSize)adjustRenderSize:(CGSize)arg1;
++ (id)dictionaryWithGPSInfoString:(id)arg1;
++ (CGSize)getAVAssetSizeWithAVAsset:(id)arg1;
++ (CGRect)previewFrameWithAVAsset:(id)arg1 baseSize:(CGSize)arg2;
++ (CGRect)previewFrameWithImage:(id)arg1 baseSize:(CGSize)arg2 maxImageSizeRatio:(double)arg3;
+@end

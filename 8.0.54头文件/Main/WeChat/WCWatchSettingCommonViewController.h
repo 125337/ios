@@ -1,0 +1,3 @@
+@interface WCWatchSettingCommonViewController : MMUIViewController
+@end
+

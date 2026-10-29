@@ -1,0 +1,3 @@
+@interface FlutterActionBarCallbackCodecWriter : FlutterStandardWriter
+@end
+

@@ -1,0 +1,3 @@
+@interface MMFinderLiveImageCarouselListViewModel : NSObject
+@end
+

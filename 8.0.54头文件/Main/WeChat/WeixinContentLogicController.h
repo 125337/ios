@@ -1,0 +1,147 @@
+@interface WeixinContentLogicController : BaseMsgContentLogicController <IQQMailExt, XMailBindMailControlLogicDelegate, OpenIMSucceedContactLogicLogicDelegate, WCTopicSearchViewControllerDelegate, ContactInfoViewControllerDelegate, IWCPayPluginTopMsgMgrExt, addContactToChatRoomDelegate, TipsViewDelegate, ITranslateMsgMgrExt>
+{
+    BOOL m_bTipsShow; // +0x108
+    OpenIMSucceedContactLogic * m_openIMSucceedContactLogic; // +0x110
+    C2CReportController * m_reportController; // +0x118
+    BOOL _bIgnoreShowBizContentSeletor; // +0x120
+    BOOL _bIsShowingPayPluginTopMsgBar; // +0x121
+    UIImageView * _toolView; // +0x128
+    XMailBindMailControlLogic * _bindMailControlLogic; // +0x130
+    WCTopicSearchViewController * _topicSearchVC; // +0x138
+    ChatUnavailableTipsView * _chatUnavailableTipsView; // +0x140
+    MMInputToolView * _inputToolView; // +0x148
+}
+- (void)onWillEnterRoom;
+- (id)GetMsg:(id)arg1 FromID:(unsigned int)arg2 Limit:(int)arg3 LeftCount:(unsigned int *)arg4;
+- (id)getMsgFromLocalId:(unsigned int)arg1 createTime:(unsigned int)arg2 sequence:(unsigned int)arg3 limit:(unsigned int)arg4;
+- (id)GetDownMsg:(id)arg1 FromID:(unsigned int)arg2 Limit:(int)arg3 LeftCount:(unsigned int *)arg4;
+- (id)getDownMsgFromLocalId:(unsigned int)arg1 createTime:(unsigned int)arg2 sequence:(unsigned int)arg3 limit:(unsigned int)arg4;
+- (void)ClearUnRead:(id)arg1 FromID:(unsigned int)arg2 ToID:(unsigned int)arg3;
+- (void)clearAllMsg;
+- (void)clearContactVerifyFlag;
+- (void)clearTransferCount;
+- (void)clearAACount;
+- (void)cleanExclusiveHbCount;
+- (void)clearUpdatableMsgNotify;
+- (void)DelMsg:(id)arg1 MsgList:(id)arg2 DelAll:(BOOL)arg3;
+- (void)AddMsg:(id)arg1 MsgWrap:(id)arg2;
+- (void)ResendMsg:(id)arg1 MsgWrap:(id)arg2;
+- (id)FormImageMsg:(id)arg1 withImage:(id)arg2;
+- (id)FormImageMsg:(id)arg1 withImage:(id)arg2 withData:(id)arg3 withImageInfo:(id)arg4;
+- (id)FormImageMsg:(id)arg1 withImage:(id)arg2 withData:(id)arg3;
+- (BOOL)CanSendImageMsg:(id)arg1;
+- (BOOL)CanSendVoiceMsg;
+- (BOOL)CanLongPressHeadImage;
+- (id)nameForHeadImageLongPressed:(id)arg1;
+- (BOOL)CanRemoteRecord;
+- (BOOL)canShowChatRoomInfo;
+- (BOOL)isToolViewHidden;
+- (void)CustomToolViewEX:(id)arg1 inputPresenter:(id)arg2;
+- (BOOL)HasCustomToolBar;
+- (id)GetRightBarButtonTitle;
+- (void)OpenContactInfo:(id)arg1;
+- (void)OpenContactInfo:(id)arg1 andScene:(unsigned int)arg2;
+- (BOOL)isOpenSingleInfo;
+- (void)OpenDetailInfo;
+- (void)deleteAllMsgByContact:(id)arg1;
+- (void)OnTagLink:(id)arg1 messageWrap:(id)arg2;
+- (void)ViewDidAppear;
+- (void)checkNeedContactVerify;
+- (BOOL)shouldPreventViewcontrollerAutorotate;
+- (void)newMessageFromAddContactToChatRoom:(id)arg1;
+- (void)OnChangeNotifyStatus:(id)arg1 withStatus:(BOOL)arg2;
+- (id)GetChatContact;
+- (BOOL)isQQMailPlugin;
+- (BOOL)isQQMailAppInstall;
+- (void)checkQQMailUnReadCount;
+- (id)getDefaultEnterMailAppTitle;
+- (void)initQQMailToolView;
+- (void)bringQQMailToolView2Front;
+- (void)ShowNewMail;
+- (void)onEnterMailAppBtnPress:(id)arg1;
+- (void)onJumpInstallMail;
+- (void)onXMailBindMailControlLogicSuccess:(id)arg1 mailAddr:(id)arg2;
+- (void)onXMailBindMailControlLogicCanceled:(id)arg1;
+- (void)OnGetMailUnreadCount:(int)arg1;
+- (void)Register;
+- (void)UnRegister;
+- (void)ViewWillInit;
+- (void)ViewDidInit;
+- (void)onWillPopFromNavigationController;
+- (void)onPerformAction:(id)arg1;
+- (void)ViewWillAppear;
+- (void)onExitRoom;
+- (void)triggerFinderReportAction;
+- (BOOL)isInMyContactList;
+- (void)checkAddFriend;
+- (void)checkChatUnavailableViewShow;
+- (BOOL)canReplyMsg;
+- (BOOL)shouldShowChatUnavailableTipsView;
+- (BOOL)isContactNeedToAddFriend;
+- (void)checkSecurityBannerShow;
+- (id)GetRightBarBtn;
+- (BOOL)isNeedCached;
+- (void)onClickShieldBrandMsg;
+- (void)HandleShieldBrandMsg;
+- (void)onClickReceiveBrandMsg;
+- (void)HandleReceiveBrandMsg;
+- (void)clickLinkToDealWithSysXml:(id)arg1 fromScene:(id)arg2;
+- (void)openProfileFromURL:(id)arg1 andScene:(unsigned int)arg2;
+- (id)getTargetProfileAntispamTicketFromURL:(id)arg1;
+- (id)getTargetProfileFromURL:(id)arg1;
+- (void)hadShowNewXmlSystemMessage:(id)arg1;
+- (void)onClickPatMessageLinkWithUrl:(id)arg1;
+- (void)jumpToSession:(id)arg1;
+- (void)showSucceedContactWindow:(id)arg1 isNewSucceedContact:(BOOL)arg2;
+- (id)getOpenIMSucceedContactLogic;
+- (void)openSucceedContactContactInfo:(id)arg1;
+- (void)jumpToOpenSucceedContactSession:(id)arg1;
+- (BOOL)isEnableTopicSearchInteraction;
+- (BOOL)isEnableTopicSearchShare;
+- (void)onClickTopicSearchEntry;
+- (void)showTagHalfScreenQueryViewController:(id)arg1;
+- (void)onTopicSearchResultSended:(id)arg1;
+- (void)onTopicSearchQuerySelected:(id)arg1 context:(id)arg2;
+- (void)onTopicSearchCancel:(id)arg1;
+- (void)onGrowTextViewDidShowMenuControllerWithMenuItemArr:(id)arg1;
+- (void)onGrowTextViewMenuItemClicked:(unsigned long long)arg1 growTextView:(id)arg2;
+- (id)baseContactToForwardSearchResult;
+- (BOOL)shouldHideToolViewWhenKeyboardHide;
+- (void)onAddContact;
+- (void)onSendVerifyMessage:(id)arg1;
+- (BOOL)mainSwitch_shouldHandleAppmsg;
+- (BOOL)inPageSwitch_shouldPreCreateAndUpdateAndTryReport;
+- (BOOL)shouldPreDownloadPageData;
+- (unsigned int)currPageAppmsgEnterType;
+- (unsigned int)currPageAppmsgReportScene;
+- (BOOL)supportWXKeyBoard;
+- (unsigned int)getBaseMsgContentViewScene;
+- (BOOL)shouldUseNewTipsNavBar;
+- (void)updateTopMessageInfo;
+- (void)onClickPayPluginTopMsgTipsBar:(id)arg1;
+- (void)onClickClosePayPluginTopMsgTipsBar:(id)arg1;
+- (void)onTopMsgTipsBarExpandView;
+- (void)onAddTopMsg:(id)arg1;
+- (void)setHasShowUnreadTip:(unsigned long long)arg1;
+- (void)onClickUnreadTip:(unsigned long long)arg1;
+- (void)onWillDisplayMsg:(id)arg1;
+- (void)DidAddMsg:(id)arg1;
+- (void)onPopFromNavigationController;
+- (void)onScrollViewDidEndDragging:(id)arg1 willDecelerate:(BOOL)arg2;
+- (id)toolView;
+- (void)setToolView:(id)arg1;
+- (id)bindMailControlLogic;
+- (void)setBindMailControlLogic:(id)arg1;
+- (BOOL)bIgnoreShowBizContentSeletor;
+- (void)setBIgnoreShowBizContentSeletor:(BOOL)arg1;
+- (id)topicSearchVC;
+- (void)setTopicSearchVC:(id)arg1;
+- (id)chatUnavailableTipsView;
+- (void)setChatUnavailableTipsView:(id)arg1;
+- (id)inputToolView;
+- (void)setInputToolView:(id)arg1;
+- (BOOL)bIsShowingPayPluginTopMsgBar;
+- (void)setBIsShowingPayPluginTopMsgBar:(BOOL)arg1;
+- (void).cxx_destruct;
+@end
+

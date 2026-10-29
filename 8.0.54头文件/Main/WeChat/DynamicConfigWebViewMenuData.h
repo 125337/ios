@@ -1,0 +1,3 @@
+@interface DynamicConfigWebViewMenuData : CustomWebViewMenuData
+@end
+

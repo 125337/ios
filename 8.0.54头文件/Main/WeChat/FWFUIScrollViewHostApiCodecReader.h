@@ -1,0 +1,3 @@
+@interface FWFUIScrollViewHostApiCodecReader : FlutterStandardReader
+@end
+

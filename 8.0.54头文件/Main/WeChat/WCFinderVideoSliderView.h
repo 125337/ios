@@ -1,0 +1,46 @@
+@interface WCFinderVideoSliderView : MMUIView
+{
+    AVAssetImageGenerator * _coverGenerator; // +0x8
+    MMUIView * _sliderBarView; // +0x10
+    UIImageView * _selectedView; // +0x18
+    unsigned long long _thumbCount; // +0x20
+    id /* block */ _selectedChangeBlock; // +0x28
+    double _keyFrameRate; // +0x30
+    AVAsset * _avAsset; // +0x38
+    UIImage * _speciallyImage; // +0x40
+    UIImpactFeedbackGenerator * _feedbackGenerator; // +0x48
+}
++ (id)resizeImageForCGImage:(CGImage *)arg1 size:(CGSize)arg2;
+- (id)initWithHeight:(double)arg1 maxWidth:(double)arg2;
+- (id)feedbackGenerator;
+- (void)setupGesture;
+- (void)setupSubViewsWithMaxWidth:(double)arg1;
+- (void)loadSliderByPlayerAsset:(id)arg1 keyFrameRate:(double)arg2 specialImage:(id)arg3 coverTimeStamp:(double)arg4 selectedChangeBlock:(id /* block */)arg5;
+- (void)handlePanGesture:(id)arg1;
+- (void)longPressSelectCoverGes:(id)arg1;
+- (void)debounceTriggerRefreshSelectedView;
+- (void)refreshSelectedView;
+- (BOOL)isSpeciallyImageSelected;
+- (id)getCurrentResult;
+- (void)setSelectedViewToSpecialImagePlace;
+- (void)setSelectedPlayTime:(double)arg1;
+- (id)coverGenerator;
+- (void)setCoverGenerator:(id)arg1;
+- (id)sliderBarView;
+- (void)setSliderBarView:(id)arg1;
+- (id)selectedView;
+- (void)setSelectedView:(id)arg1;
+- (unsigned long long)thumbCount;
+- (void)setThumbCount:(unsigned long long)arg1;
+- (id /* block */)selectedChangeBlock;
+- (void)setSelectedChangeBlock:(id /* block */)arg1;
+- (double)keyFrameRate;
+- (void)setKeyFrameRate:(double)arg1;
+- (id)avAsset;
+- (void)setAvAsset:(id)arg1;
+- (id)speciallyImage;
+- (void)setSpeciallyImage:(id)arg1;
+- (void)setFeedbackGenerator:(id)arg1;
+- (void).cxx_destruct;
+@end
+

@@ -1,0 +1,2 @@
+@interface WCFinderVideoProducerDataSource : WCFinderBaseDataSource
+@end

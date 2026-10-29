@@ -1,0 +1,3 @@
+@interface MMUIScreenEdgePanGestureRecognizer : UIScreenEdgePanGestureRecognizer
+@end
+

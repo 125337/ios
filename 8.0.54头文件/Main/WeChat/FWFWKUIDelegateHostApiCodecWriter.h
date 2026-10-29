@@ -1,0 +1,3 @@
+@interface FWFWKUIDelegateHostApiCodecWriter : FlutterStandardWriter
+@end
+

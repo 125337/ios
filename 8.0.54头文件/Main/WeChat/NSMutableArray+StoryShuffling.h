@@ -1,0 +1,31 @@
+@interface NSMutableArray (StoryShuffling)
+- (id)initWithNullableArray:(id)arg1;
+- (void)safeAddObjectsFromArray:(id)arg1;
+- (void)safeAddObject:(id)arg1;
+- (void)safeRemoveObject:(id)arg1;
+- (void)safeInsertObject:(id)arg1 atIndex:(unsigned long long)arg2;
+- (void)safeRemoveObjectAtIndex:(unsigned long long)arg1;
+- (void)safeReplaceObjectAtIndex:(unsigned long long)arg1 withObject:(id)arg2;
+- (id)firstObject;
+- (void)removeFirstObject;
+- (void)safeRemoveObjectsInRange:(_NSRange)arg1;
+- (void)safeAddObject:(id)arg1;
+- (void)safeRemoveObject:(id)arg1;
+- (void)safeInsertObject:(id)arg1 atIndex:(unsigned long long)arg2;
+- (void)safeRemoveObjectAtIndex:(unsigned long long)arg1;
+- (void)safeReplaceObjectAtIndex:(unsigned long long)arg1 withObject:(id)arg2;
+- (id)firstObject;
+- (void)removeFirstObject;
+- (void)sc_sortUsingComparator:(id /* block */)arg1;
+- (void)sc_sortWithOptions:(unsigned long long)arg1 usingComparator:(id /* block */)arg2;
+- (void)sc_moveObjectAtIndex:(unsigned long long)arg1 toIndex:(unsigned long long)arg2;
+- (void)threadSafeSyncAddObject:(id)arg1;
+- (void)threadSafeAddObject:(id)arg1;
+- (void)threadSafeRemoveObject:(id)arg1;
+- (id)threadSafeFirstObject;
+- (void)threadSafeRemoveFirstObject;
+- (void)threadSafeRemoveAllObjects;
+- (id)syncQueue;
+- (void)shuffle;
+@end
+

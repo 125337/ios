@@ -1,0 +1,67 @@
+@interface FavoritesItemDB : NSObject
+{
+    MyFavoritesDB * _mmDB; // +0x8
+}
+- (id)init;
+- (void)initDB:(id)arg1;
+- (BOOL)runTransaction:(id /* block */)arg1;
+- (BOOL)getFavoritesItemValue:(id)arg1 fromDBItem:(id)arg2;
+- (void)fillDBFavItem:(id)arg1 fromFavItem:(id)arg2;
+- (void)fillDBFavItem:(id)arg1 fromFavItem:(id)arg2 xml:(id)arg3;
+- (void)fillDBFavItem:(id)arg1 fromFavObject:(id)arg2;
+- (void)fillItemsArray:(id)arg1 withDBItems:(id)arg2;
+- (void)fillLegalItemsArray:(id)arg1 withDBItems:(id)arg2;
+- (BOOL)insertNewRowInFavoritesItem:(id)arg1 XML:(id)arg2;
+- (id)getDBItemById:(unsigned int)arg1;
+- (id)getFavoritesItemById:(unsigned int)arg1;
+- (id)getFavoritesItemByLocalId:(unsigned int)arg1;
+- (id)getFavoritesItemByLocalIdArr:(id)arg1;
+- (id)getFavoritesItemByFavIdArr:(id)arg1;
+- (id)getFavoritesItemBySourceId:(id)arg1;
+- (id)getFavoritesItemByStarBizKey:(id)arg1;
+- (id)getFavoritesItemsWithTagIdLimit:(int)arg1 offset:(int)arg2;
+- (BOOL)deleteFavoritesItemById:(unsigned int)arg1;
+- (BOOL)deleteFavoritesItemByLocalItemId:(unsigned int)arg1;
+- (BOOL)getUploadingItemList:(id)arg1;
+- (BOOL)getDownloadingItemList:(id)arg1;
+- (BOOL)getUploadFailedItemList:(id)arg1;
+- (BOOL)getDownloadFailedItemList:(id)arg1;
+- (BOOL)existBeforeAsyncUploadingItem;
+- (BOOL)getBeforeAsyncUploadingItem:(id)arg1;
+- (BOOL)updateItemInFavItemDB:(id)arg1 source:(id)arg2;
+- (BOOL)updateItemInFavItemDBByFavObject:(id)arg1;
+- (id)getAllCapacityType;
+- (id)getFavoritesItemsByUpdateSeqGreaterThan:(unsigned int)arg1;
+- (BOOL)getFirstPageFavoritesItemList:(id)arg1 byType:(int)arg2 byTabMode:(long long)arg3 currentUserName:(id)arg4 andPinTopFirst:(BOOL)arg5;
+- (BOOL)getNextPageFavoritesItemList:(id)arg1 byType:(int)arg2 byTabMode:(long long)arg3 currentUserName:(id)arg4 andCurMinUpdateTime:(unsigned int)arg5 andPinTopFirst:(BOOL)arg6 byCurMinPinTopTime:(unsigned int)arg7;
+- (BOOL)getFirstPageFavoritesByType:(id)arg1 byType:(int)arg2 andSortType:(int)arg3;
+- (BOOL)getNextPageFavoritesByType:(id)arg1 byType:(int)arg2 andSortType:(int)arg3 andMinDataSize:(unsigned long long)arg4 andUsedTimes:(unsigned int)arg5 andCurMinUpdateTime:(unsigned int)arg6;
+- (BOOL)getNeedBatchGetFavoritesItemList:(id)arg1 byType:(int)arg2 andMinUpdateTime:(unsigned int)arg3 byTabMode:(long long)arg4 currentUserName:(id)arg5;
+- (void)addDisableBatchGetFavId:(unsigned int)arg1;
+- (unsigned int)getNeedBatchGetFavoritesItemCount;
+- (BOOL)updateUpdateSeq:(unsigned int)arg1 ByFavId:(unsigned int)arg2;
+- (BOOL)updateItemUpdateTime:(unsigned int)arg1 ByLocalId:(unsigned int)arg2;
+- (BOOL)updateItemPinTopTimestamp:(unsigned int)arg1 ByLocalId:(unsigned int)arg2;
+- (int)getItemPinTopTimestampByLocalId:(unsigned int)arg1;
+- (BOOL)getAllFavoritesItems:(id)arg1;
+- (BOOL)getAllFavoritesItems:(id)arg1 byType:(int)arg2;
+- (BOOL)getAllFavoritesItemsInListScope:(id)arg1 byType:(int)arg2 byTabMode:(long long)arg3 currentUserName:(id)arg4;
+- (id)getAllStarredLocalIdToStarTypeMap;
+- (BOOL)hasAnyStarredFavorites;
+- (void)dumpAllFavoritesItemsForStarTypeDebug;
+- (id)checkBeforeAddItemByFavId:(unsigned int)arg1 andLocalId:(unsigned int)arg2;
+- (BOOL)getAsyncUploadingItemList:(id)arg1;
+- (BOOL)getAsyncUploadFailedItemList:(id)arg1;
+- (BOOL)getNeedCacheWebItem:(id)arg1;
+- (id)getAllNoteFavIdsByTabMode:(long long)arg1 currentUserName:(id)arg2;
+- (BOOL)updateItemLocalStatus:(id)arg1;
+- (BOOL)updateItemUsedTimes:(id)arg1;
+- (BOOL)getDeletedItemList:(id)arg1;
+- (unsigned int)getFavIndexByUpdateTime:(unsigned int)arg1;
+- (BOOL)getFavoritesItemList:(id)arg1 From:(unsigned int)arg2 Limit:(int)arg3;
+- (id)getFavoritesItemFromUpdateSeq:(unsigned int)arg1 Limit:(int)arg2;
+- (id)getUnsyncFavoritesItemFrom:(unsigned int)arg1 Limit:(int)arg2;
+- (unsigned int)getLastFavItemLocalId;
+- (id)getFavoritesItemListByTimeRange:(unsigned int)arg1 endTime:(unsigned int)arg2 types:(id)arg3 limit:(int)arg4;
+- (void).cxx_destruct;
+@end

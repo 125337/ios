@@ -1,0 +1,3 @@
+@interface WAMediaCastingUpnpServiceCallback : NSObject
+@end
+

@@ -1,0 +1,3 @@
+@interface _TtC6WeChat33WSNativeHotListHistorySettingItem : _TtC6WeChat26WSNativeHotListSettingItem
+@end
+

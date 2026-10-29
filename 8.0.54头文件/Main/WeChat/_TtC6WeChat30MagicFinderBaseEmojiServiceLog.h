@@ -1,0 +1,3 @@
+@interface _TtC6WeChat30MagicFinderBaseEmojiServiceLog : _TtCs12_SwiftObject
+@end
+

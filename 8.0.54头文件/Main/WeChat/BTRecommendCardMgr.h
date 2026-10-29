@@ -1,0 +1,47 @@
+@interface BTRecommendCardMgr : NSObject
++ (BOOL)isArticleStyleCardWithStyle:(unsigned int)arg1;
++ (BOOL)isFinderCardWithStyle:(unsigned int)arg1;
++ (BOOL)isMissedSubsCardWithStyle:(unsigned int)arg1;
++ (BOOL)needShowAllCellView:(unsigned int)arg1;
++ (unsigned int)maxVisibleAccountCount:(unsigned int)arg1;
++ (unsigned int)maxVisibleAppMsgCountPerAccount:(unsigned int)arg1;
++ (unsigned int)getCardTypeWithRecCardWrapper:(id)arg1;
++ (unsigned int)getCardTypeWithAdCanvasCard;
++ (unsigned int)getCardTypeWithRecCanvasCard;
++ (unsigned int)getCardTypeWithStyle:(unsigned int)arg1;
++ (unsigned int)getCardTypeWithRecoFlowStyle:(unsigned int)arg1;
++ (id)getCardIdFromRecCardWrapper:(id)arg1;
++ (id)getMainSessionTitleFromMsg:(id)arg1;
++ (id)getMainSessionTitleFromRecCardWrapper:(id)arg1;
++ (unsigned int)getMainSessionMediaTypeFromMsg:(id)arg1;
++ (unsigned int)getMainSessionMediaTypeFromRecCardWrapper:(id)arg1;
++ (BOOL)canHandleRecCard:(id)arg1;
++ (BOOL)canHandleRecArticleCard:(id)arg1;
++ (BOOL)shouldCheckSubscriptionByRecWrapper:(id)arg1;
++ (BOOL)canHandleMissedSubsRecCard:(id)arg1;
++ (BOOL)canHandleRecCardWrapper:(id)arg1;
++ (BOOL)canHandleCanvasRecCardWrapper:(id)arg1;
++ (BOOL)canHandleFinderRecCardWrapper:(id)arg1;
++ (BOOL)canHandleTLRecFinderCardData:(id)arg1;
++ (BOOL)isMissedSubsItemShowBigCoverWithRecMsgData:(id)arg1 itemIndex:(unsigned int)arg2;
++ (id)getCoverUrlForMissedSubsItemWithRecMsgData:(id)arg1 itemIndex:(unsigned int)arg2;
++ (BOOL)isFinderCardDataAllUserHasDeletedWithRecCardWrapper:(id)arg1;
++ (BOOL)isFinderCardDataNeedDeleteWithRecommendSectionData:(id)arg1;
++ (BOOL)isFinderCardDataNeedDeleteWithRecommendSectionData:(id)arg1 blockedFinderUserName:(id)arg2;
++ (BOOL)internalCheckIsFinderCardDataNeedDeleteWithRecommendSectionData:(id)arg1 blockedFinderUserName:(id)arg2;
++ (BOOL)isFinderCardDataContainMPInterestDataWithRecommendSectionData:(id)arg1;
++ (BOOL)enableFinderInterestCard:(BOOL)arg1;
++ (BOOL)isValidFinderInterestCardData:(id)arg1;
++ (id)getFinderMPInterestDataWithFromSessionIdInfo:(id)arg1 useBrandTimelineMsgMgrConfig:(BOOL)arg2;
++ (BOOL)isFinderCardDataContainMPInterestDataWithStyle:(unsigned int)arg1 subType:(int)arg2 finderCardDatas:(id)arg3 fromSessionIdInfo:(id)arg4;
++ (id)getFinderCardDataNeedUpdateIndexWithRecommendSectionData:(id)arg1;
++ (id)getFinderCardDataNeedUpdateIndexWithRecommendSectionData:(id)arg1 blockedFinderUserName:(id)arg2;
++ (BOOL)isBrandContactSubscribedWithRecFinderCardData:(id)arg1;
++ (BOOL)isFinderContactSubscribedWithRecFinderCardData:(id)arg1;
++ (BOOL)isContactSubscribedWithRecFinderCardData:(id)arg1;
++ (BOOL)isBrandContactDidBlockFinderWithRecFinderCardData:(id)arg1;
++ (id)getMainSessionTitleFromRecFinderCardWrapper:(id)arg1;
++ (unsigned int)getMainSessionMediaTypeFromRecFinderCardWrapper:(id)arg1;
++ (BOOL)canOpenLandScapeVideoPage:(id)arg1;
+@end
+

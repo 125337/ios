@@ -1,0 +1,3 @@
+@interface _TtC19WeXRVisionAssistantP33_C672C082C9B95AA6C44CBC5AD21652C619CurrentBundleFinder : _TtCs12_SwiftObject
+@end
+

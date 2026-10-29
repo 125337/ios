@@ -1,0 +1,166 @@
+@interface WCCommentListViewController : MMUIViewController <WCCommentListContentViewDelegate, IContactMgrExt, UITableViewDataSource, UITableViewDelegate, MMTableViewDelegate, IMsgExt, WCFacadeExt, WCActionSheetDelegate, MMRefreshTableFooterDelegate, WCCommentDetailViewControllerFBDelegate, WCImageFullScreeViewMgrExt, WCCommentListManageDelegate>
+{
+    MMTableView * _tableView; // +0x70
+    WCTimeLineFooterView * _footerView; // +0x78
+    NSMutableArray * _arrCommentList; // +0x80
+    NSMutableDictionary * _dicDataItems; // +0x88
+    NSMutableArray * _arrCommentListFromDB; // +0x90
+    unsigned int _autoGetMoreCount; // +0x98
+    BOOL _bUnreadOnly; // +0x9c
+    BOOL _bHasNullIDs; // +0x9d
+    BOOL _bHasMoreItems; // +0x9e
+    NSMutableDictionary * _dicCells; // +0xa0
+    NSMutableDictionary * _dicCellHeights; // +0xa8
+    unsigned int _fromScene; // +0xb0
+    unsigned int _totalUnreadCount; // +0xb4
+    unsigned int _clickLikeCount; // +0xb8
+    unsigned int _clickCommentCount; // +0xbc
+    unsigned long long _totalBrowseTime; // +0xc0
+    WCStatTimerHelper * _statTimeHelper; // +0xc8
+    NSMutableSet * updatingItemIDs; // +0xd0
+    unsigned long long _enterStartTime; // +0xd8
+    NSMutableDictionary * _clickArray; // +0xe0
+    BOOL _shouldShowMessagesByRelevance; // +0xe8
+    BOOL _isMutualFriendsInteractionReminderEnabled; // +0xe9
+    BOOL _isClickClearMsg; // +0xea
+    BOOL _isNewMessageMuteTipsEnabled; // +0xeb
+    BOOL _shouldShowMuteTips; // +0xec
+    WCMomentsPageContext * _pageContext; // +0xf0
+    id <WCCommentListManageDelegate> _delegate; // +0xf8
+    WCCommentEmotionFloatView * _commentEmotionView; // +0x100
+    UIView * _commentEmotionBgView; // +0x108
+    WCSNSMessage * _selectedMessage; // +0x110
+    WCImageView * _selectedImageView; // +0x118
+    NSMutableSet * _updatedItemIds; // +0x120
+    NSMutableSet * _deletedItemIds; // +0x128
+    NSString * _triggleMuteTipsItemId; // +0x130
+    WCCommentListTipsView * _commentListTipsView; // +0x138
+    long long _clickEmoCmtCount; // +0x140
+    long long _clickPicCmtCount; // +0x148
+    double _lastMeasuredTableWidth; // +0x150
+}
+- (id)init;
+- (void)dealloc;
+- (id)pageContext;
+- (void)markMessageAllRead;
+- (void)viewDidLoad;
+- (void)viewWillPush:(BOOL)arg1;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewDidLayoutSubviews;
+- (void)willDisappear;
+- (void)viewDidTransitionToNewSize;
+- (BOOL)showNavigationBarSepLine;
+- (void)reportBrowseMessageListInfo;
+- (id)createCommentJson:(id)arg1 isIgnored:(BOOL)arg2;
+- (id)getObjIDByWCMessage:(id)arg1;
+- (void)addWCMessagesWithArray:(id)arg1 MoreData:(BOOL)arg2;
+- (void)checkAndUpdateCommentEmoticonWithArr:(id)arg1;
+- (void)getData;
+- (void)getMoreData;
+- (void)initCommentListTipsView;
+- (void)initTableFooterView;
+- (void)initTableView;
+- (void)scrollViewDidScroll:(id)arg1;
+- (long long)tableViewStyle;
+- (void)onLoadMore;
+- (void)MMRefreshTableFooterDidTriggerRefresh:(id)arg1;
+- (id)getLoadMoreCell;
+- (void)updateCommentCache:(id)arg1;
+- (void)updateCacheBySnsObjDeleteMsg:(id)arg1;
+- (void)updateCacheBySnsAdNotInterestsMsg:(id)arg1;
+- (void)updateCacheByServerPushDeleteAdMsg:(id)arg1;
+- (void)updateEditInfo:(id)arg1 indexPath:(id)arg2;
+- (id)getRightestViewFor:(id)arg1;
+- (BOOL)isCellMarkedAsIgnoreNotification:(id)arg1;
+- (double)contentViewHeightExcludeCommentListTipsView;
+- (double)contentViewYExcludeCommentListTipsView;
+- (id)tableView:(id)arg1 cellForRowAtIndexPath:(id)arg2;
+- (double)tableView:(id)arg1 heightForRowAtIndexPath:(id)arg2;
+- (void)tableView:(id)arg1 accessoryButtonTappedForRowWithIndexPath:(id)arg2;
+- (long long)tableView:(id)arg1 numberOfRowsInSection:(long long)arg2;
+- (void)showMyWCListView;
+- (void)openWCCommentDetail:(id)arg1 imageViewForShow:(id)arg2;
+- (void)openWCCommentImageView:(id)arg1;
+- (void)openWCCommentDetail:(id)arg1 withDataItem:(id)arg2;
+- (BOOL)showSpringBubbleView:(id)arg1;
+- (void)showInvisibleTipsWithMessage:(id)arg1;
+- (void)tableView:(id)arg1 didSelectRowAtIndexPath:(id)arg2;
+- (void)clearList;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)tableView:(id)arg1 commitEditingStyle:(long long)arg2 forRowAtIndexPath:(id)arg3;
+- (void)tableView:(id)arg1 willBeginEditingRowAtIndexPath:(id)arg2;
+- (void)tableView:(id)arg1 didEndEditingRowAtIndexPath:(id)arg2;
+- (long long)tableView:(id)arg1 editingStyleForRowAtIndexPath:(id)arg2;
+- (void)onClearList:(id)arg1;
+- (void)onRestartUpload;
+- (void)onCommentDetailViewController:(id)arg1 reEditDataItem:(id)arg2;
+- (void)onDeleteData;
+- (void)onCommentListViewDataChanged:(id)arg1;
+- (void)onViewAnimationWillHide;
+- (void)onReveiceWCDeleteMessage:(id)arg1;
+- (void)onHeadImageClicked:(id)arg1;
+- (void)onHeadImageDoubleClicked:(id)arg1;
+- (void)onHeadAdSpecialClick:(id)arg1;
+- (void)onWCCommentEmotionViewSizeChange;
+- (void)commentListContentView:(id)arg1 didClickWCImage:(id)arg2;
+- (void)onWCCommentViewClickedForReport:(id)arg1;
+- (void)onWCCommentViewClickedForContent:(id)arg1;
+- (void)onSetWCMessageNotifyFinished:(long long)arg1 dataItemID:(id)arg2 opFlag:(BOOL)arg3;
+- (void)onDataItemDeleteFinished:(long long)arg1 dataItemID:(id)arg2;
+- (void)onModifyContact:(id)arg1;
+- (void)onUpdateDataItemDetailFinished:(long long)arg1 itemId:(id)arg2 dataItem:(id)arg3;
+- (id)commentListVCTitle;
+- (id)rightBarButtonItem;
+- (id)tableViewTailColor;
+- (long long)getWCCommentListCount:(long long)arg1;
+- (id)getWCMessagesWithDataArray:(id)arg1;
+- (long long)getCommentMessageListType:(id)arg1 dataItem:(id)arg2 moreData:(BOOL)arg3;
+- (void)addWCMessages:(id)arg1 forListType:(long long)arg2;
+- (BOOL)removeWCMessages:(id)arg1 indexPath:(id)arg2;
+- (void)clearCommentLists;
+- (void)displayMoreMessages:(id)arg1;
+- (void)updateArrSectionTitleType;
+- (void)clearAllCommentList;
+- (void)removeCommentMessage:(long long)arg1;
+- (void)updateMutualFriendsInteractionReminderState:(BOOL)arg1;
+- (void)reportMsgClickEvent:(id)arg1 feedId:(id)arg2;
+- (BOOL)bUnreadOnly;
+- (void)setBUnreadOnly:(BOOL)arg1;
+- (void)setPageContext:(id)arg1;
+- (BOOL)shouldShowMessagesByRelevance;
+- (void)setShouldShowMessagesByRelevance:(BOOL)arg1;
+- (BOOL)isMutualFriendsInteractionReminderEnabled;
+- (void)setIsMutualFriendsInteractionReminderEnabled:(BOOL)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)commentEmotionView;
+- (void)setCommentEmotionView:(id)arg1;
+- (id)commentEmotionBgView;
+- (void)setCommentEmotionBgView:(id)arg1;
+- (id)selectedMessage;
+- (void)setSelectedMessage:(id)arg1;
+- (id)selectedImageView;
+- (void)setSelectedImageView:(id)arg1;
+- (id)updatedItemIds;
+- (void)setUpdatedItemIds:(id)arg1;
+- (id)deletedItemIds;
+- (void)setDeletedItemIds:(id)arg1;
+- (id)triggleMuteTipsItemId;
+- (void)setTriggleMuteTipsItemId:(id)arg1;
+- (BOOL)isClickClearMsg;
+- (void)setIsClickClearMsg:(BOOL)arg1;
+- (BOOL)isNewMessageMuteTipsEnabled;
+- (void)setIsNewMessageMuteTipsEnabled:(BOOL)arg1;
+- (BOOL)shouldShowMuteTips;
+- (void)setShouldShowMuteTips:(BOOL)arg1;
+- (id)commentListTipsView;
+- (void)setCommentListTipsView:(id)arg1;
+- (long long)clickEmoCmtCount;
+- (void)setClickEmoCmtCount:(long long)arg1;
+- (long long)clickPicCmtCount;
+- (void)setClickPicCmtCount:(long long)arg1;
+- (double)lastMeasuredTableWidth;
+- (void)setLastMeasuredTableWidth:(double)arg1;
+- (void).cxx_destruct;
+@end

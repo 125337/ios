@@ -1,0 +1,30 @@
+@interface MMListenItem : WXPBGeneratedMessage
++ (id)parseFromBase64String:(id)arg1;
++ (id)createListenItem;
++ (id)listenItemFromSimplePlayableInfo:(id)arg1;
++ (void)initialize;
+- (id)toShareItem;
+- (BOOL)canShare;
+- (BOOL)isValid;
+- (id)uniqueListenId;
+- (id)generaetCover;
+- (id)generateTitle;
+- (id)authorNameForMusicInfo:(id)arg1;
+- (id)generateAuthorName;
+- (id)audioUrl;
+- (id)webUrl;
+- (int)generateDuration;
+- (BOOL)isMusic;
+- (BOOL)isMpAudio;
+- (BOOL)isFinderAudio;
+- (BOOL)isLocal;
+- (BOOL)isMusicLocal;
+- (BOOL)isWeAppAudio;
+- (BOOL)isAudio;
+- (id)uuid;
+- (id)musicUid;
+- (id)clientUUIDSetingWithInput:(id)arg1;
+- (id)broadcaseUid;
+- (BOOL)isPlayRateSupported;
+- (void)fullfillClientGenetatedInfo;
+@end

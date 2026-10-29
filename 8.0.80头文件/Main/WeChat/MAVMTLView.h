@@ -1,0 +1,2 @@
+@interface MAVMTLView : MTKView
+@end

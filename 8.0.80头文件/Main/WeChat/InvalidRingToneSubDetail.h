@@ -1,0 +1,2 @@
+@interface InvalidRingToneSubDetail : AbstractRingToneSubDetail
+@end

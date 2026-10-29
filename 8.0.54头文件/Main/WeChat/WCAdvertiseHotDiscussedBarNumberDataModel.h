@@ -1,0 +1,3 @@
+@interface WCAdvertiseHotDiscussedBarNumberDataModel : WCAdvertiseLikeNumberDataModel
+@end
+

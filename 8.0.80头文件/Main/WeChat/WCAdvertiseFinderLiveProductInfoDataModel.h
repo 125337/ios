@@ -1,0 +1,2 @@
+@interface WCAdvertiseFinderLiveProductInfoDataModel : WCAdvertiseCommonNumberRequestDataModel
+@end

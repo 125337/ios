@@ -1,0 +1,87 @@
+@interface BrandProfileBaseTabViewController : UITableViewController <BrandProfileMsgCellDelegate, BrandProfileTipsCellDelegate, MMRefreshTableFooterDelegate, MMImageLoaderObserver, BrandProfileTabVCProtocol>
+{
+    BizProfileV2Resp * _cacheItem; // +0x8
+    BrandProfileCgiContext * _cgiContext; // +0x10
+    NSMutableArray * _sectionDataList; // +0x18
+    NSMutableArray * _visibleViewModelList; // +0x20
+    NSMutableSet * m_setFastLoadTemplateType; // +0x28
+    WCTimeLineFooterView * _footerView; // +0x30
+    id <BrandProfileBaseTabViewControllerDelegate> _delegate; // +0x38
+    BrandProfileReporter * _reporter; // +0x40
+    BrandProfileEnterInfo * _bpeInfo; // +0x48
+}
+- (void)dealloc;
+- (id)init;
+- (void)viewDidLoad;
+- (void)loadCacheItem:(id)arg1;
+- (void)setupTableView;
+- (void)configTableView;
+- (void)setupFooterView;
+- (void)handleTipsWording;
+- (void)onFetchBizProfile:(id)arg1 resp:(id)arg2 action:(int)arg3 userInfo:(id)arg4;
+- (void)handleFirstPkgFail;
+- (void)handleFirstPkgResp:(id)arg1;
+- (void)handleNextPkgResp:(id)arg1;
+- (void)tableViewReloadData;
+- (id)getTipsWordingForResp:(id)arg1;
+- (id)getFooterWordingForResp:(id)arg1;
+- (BOOL)appendMsgList:(id)arg1;
+- (BOOL)appendGroupMsgList:(id)arg1 isFeature:(BOOL)arg2;
+- (void)advanceUpdateMPPageDataWithSectionData:(id)arg1;
+- (void)reportFeatureMsgExpose;
+- (void)updateSectionWidthInSectionDataList;
+- (BOOL)isExistInSectionDataList:(id)arg1;
+- (void)preDownloadCoverImageIfNeed:(id)arg1;
+- (double)calcuateSectionWidth;
+- (double)tableView:(id)arg1 heightForHeaderInSection:(long long)arg2;
+- (id)tableView:(id)arg1 viewForHeaderInSection:(long long)arg2;
+- (double)tableView:(id)arg1 heightForRowAtIndexPath:(id)arg2;
+- (void)tableView:(id)arg1 didSelectRowAtIndexPath:(id)arg2;
+- (long long)numberOfSectionsInTableView:(id)arg1;
+- (long long)tableView:(id)arg1 numberOfRowsInSection:(long long)arg2;
+- (id)tableView:(id)arg1 cellForRowAtIndexPath:(id)arg2;
+- (void)scrollViewDidEndDragging:(id)arg1 willDecelerate:(BOOL)arg2;
+- (void)scrollViewDidScrollToTop:(id)arg1;
+- (void)scrollViewDidEndDecelerating:(id)arg1;
+- (void)scrollViewDidScroll:(id)arg1;
+- (void)tableView:(id)arg1 willDisplayCell:(id)arg2 forRowAtIndexPath:(id)arg3;
+- (void)tableView:(id)arg1 didEndDisplayingCell:(id)arg2 forRowAtIndexPath:(id)arg3;
+- (void)handleMsgSectionDataWillDisplay:(id)arg1;
+- (void)openWebView:(id)arg1 extraInfo:(id)arg2 hasItemShowType:(BOOL)arg3 itemShowType:(unsigned int)arg4 fromFeature:(BOOL)arg5;
+- (id)genWebViewExtraInfoFromSourceMessage;
+- (void)MMRefreshTableFooterDidTriggerRefresh:(id)arg1;
+- (void)fetchProfileNextPkg;
+- (void)onReloadItemCellView:(id)arg1;
+- (void)onMsgSectionHeightChange:(id)arg1;
+- (void)onFooterUnfold:(id)arg1;
+- (void)onFeatureMsgUnfold:(id)arg1;
+- (id)getViewController;
+- (id)getBrandContact;
+- (void)onSelectItemViewModel:(id)arg1;
+- (void)internalOpenWebViewWithItemViewModel:(id)arg1;
+- (void)onWebUrlClicked:(id)arg1;
+- (void)updateTemplateFile;
+- (void)handleVisibleViewModelList;
+- (BOOL)isInVisibleViewModelList:(id)arg1;
+- (void)addToVisibleViewModelList:(id)arg1;
+- (void)removeFromVisibleViewModelList:(id)arg1;
+- (void)handleExposuredViewModel:(id)arg1;
+- (void)ImageDidLoadWithData:(id)arg1 Url:(id)arg2;
+- (void)ImageDidFail:(id)arg1;
+- (unsigned long long)tabType;
+- (int)cgiReqActionType;
+- (id)cgiRespMessageList:(id)arg1;
+- (int)cgiRespFuncFlag;
+- (void)setContentOffset:(CGPoint)arg1;
+- (id)tabTitle;
+- (id)viewController;
+- (void)setExternalGestureRecognizer:(id)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)reporter;
+- (void)setReporter:(id)arg1;
+- (id)bpeInfo;
+- (void)setBpeInfo:(id)arg1;
+- (void).cxx_destruct;
+@end
+

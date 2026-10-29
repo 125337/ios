@@ -1,0 +1,2 @@
+@interface BizAppImageContentMessageRecordViewModel : BizAppImageContentMessageViewModel
+@end

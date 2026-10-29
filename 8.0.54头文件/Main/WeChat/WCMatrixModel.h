@@ -1,0 +1,3 @@
+@interface WCMatrixModel : NSObject
+@end
+

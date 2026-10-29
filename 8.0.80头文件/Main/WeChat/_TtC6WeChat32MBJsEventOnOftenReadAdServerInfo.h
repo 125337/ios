@@ -1,0 +1,2 @@
+@interface _TtC6WeChat32MBJsEventOnOftenReadAdServerInfo : _TtCs12_SwiftObject
+@end

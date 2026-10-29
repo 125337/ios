@@ -1,0 +1,112 @@
+@interface ShakeMusicResultViewController : MMUIViewController <MMMusicOpenThirdAppHelperDelegate, MMMusicOpenThirdAppHelperDataSource, MMMusicForwardHandlerDelegate, MMMusicForwardHandlerDataSource, MMMusicFavHandlerDelegate, MMMusicFavHandlerDataSource>
+{
+    BOOL _shouldNotStopMusic; // +0x68
+    BOOL _shouldUseCustomPopAnimation; // +0x69
+    id /* block */ _onPopBlock; // +0x70
+    unsigned long long _openScene; // +0x78
+    MMWebImageView * _musicCoverBgImageView; // +0x80
+    MMUIButton * _closeButton; // +0x88
+    MMUILabel * _recognitionResultLabel; // +0x90
+    UIScrollView * _containerView; // +0x98
+    UIView * _cardContainerView; // +0xa0
+    ShakeMusicResultMediaView * _mediaView; // +0xa8
+    MMUILabel * _songNameLabel; // +0xb0
+    MMUILabel * _singerNameLabel; // +0xb8
+    MMWebImageView * _musicCoverImageView; // +0xc0
+    ShakeMusicPlayButton * _playIconContainerButton; // +0xc8
+    MMUIButton * _forwardButton; // +0xd0
+    MMUIButton * _favButton; // +0xd8
+    MMUIButton * _musicSourceContainerButton; // +0xe0
+    RichTextView * _musicSourceRichTextView; // +0xe8
+    ShakeMusicInfo * _shakeMusicInfo; // +0xf0
+    MMMusicInfo * _musicInfo; // +0xf8
+    MMMusicOpenThirdAppHelper * _openThirdAppHelper; // +0x100
+    MMMusicForwardHandler * _forwardHandler; // +0x108
+    MMMusicFavHandler * _favHandler; // +0x110
+}
+- (id)initWithShakeMusicInfo:(id)arg1;
+- (void)dealloc;
+- (void)viewDidLoad;
+- (BOOL)useTransparentNavibar;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewDidBePopedOrDismissed:(BOOL)arg1;
+- (void)viewDidLayoutSubviews;
+- (void)layoutInternal;
+- (void)layoutTopArea;
+- (void)layoutScrollView;
+- (void)layoutCardContainerView;
+- (void)layoutBottomArea;
+- (void)setupSubviews;
+- (void)loadData;
+- (id)mmNavigationController:(id)arg1 animationControllerForOperation:(long long)arg2 fromViewController:(id)arg3 toViewController:(id)arg4;
+- (id)musicCoverBgImageView;
+- (id)closeButton;
+- (id)recognitionResultLabel;
+- (id)containerView;
+- (id)cardContainerView;
+- (id)mediaView;
+- (id)songNameLabel;
+- (id)singerNameLabel;
+- (id)musicCoverImageView;
+- (id)playIconContainerButton;
+- (id)forwardButton;
+- (id)favButton;
+- (id)musicSourceContainerButton;
+- (id)musicSourceRichTextView;
+- (id)openThirdAppHelper;
+- (id)forwardHandler;
+- (id)favHandler;
+- (void)closeButtonDidClick;
+- (void)playIconViewDidClick;
+- (void)forwardButtonDidClick;
+- (void)favButtonDidClick;
+- (void)didOpenThirdApp;
+- (id)generateEmptyMVModel;
+- (id)musicInfo;
+- (id)getMusicShareItem:(id)arg1;
+- (void)mmMusicOpenThirdAppHelper:(id)arg1 onOpen3rdMusicAppWithType:(unsigned long long)arg2 source:(unsigned long long)arg3;
+- (void)open3rdMusicWebPage;
+- (id)mmMusicOpenThirdAppHelperGetShareItem:(id)arg1;
+- (void)mmMusicForwardHandlerOnStartLoading:(id)arg1;
+- (void)mmMusicForwardHandlerOnEndLoading:(id)arg1;
+- (void)mmMusicForwardHandlerOnShareActionSuccess:(id)arg1;
+- (void)mmMusicForwardHandler:(id)arg1 onShareToFriends:(id)arg2 withSource:(unsigned long long)arg3;
+- (void)mmMusicForwardHandler:(id)arg1 getForwardViewControllerAndPresent:(id)arg2;
+- (void)mmMusicForwardHandler:(id)arg1 onShareToWcWithForwardViewController:(id)arg2 andSource:(unsigned long long)arg3;
+- (id)mmMusicForwardHandlerGetMusicShareItem:(id)arg1;
+- (void)mmMusicFavHandlerOnStartLoading:(id)arg1;
+- (void)mmMusicFavHandlerOnEndLoading:(id)arg1;
+- (void)mmMusicFavHandlerOnAddFav:(id)arg1;
+- (id)mmMusicFavHandlerGetMusicShareItem:(id)arg1;
+- (id /* block */)onPopBlock;
+- (void)setOnPopBlock:(id /* block */)arg1;
+- (unsigned long long)openScene;
+- (void)setOpenScene:(unsigned long long)arg1;
+- (void)setMusicCoverBgImageView:(id)arg1;
+- (void)setCloseButton:(id)arg1;
+- (void)setRecognitionResultLabel:(id)arg1;
+- (void)setContainerView:(id)arg1;
+- (void)setCardContainerView:(id)arg1;
+- (void)setMediaView:(id)arg1;
+- (void)setSongNameLabel:(id)arg1;
+- (void)setSingerNameLabel:(id)arg1;
+- (void)setMusicCoverImageView:(id)arg1;
+- (void)setPlayIconContainerButton:(id)arg1;
+- (void)setForwardButton:(id)arg1;
+- (void)setFavButton:(id)arg1;
+- (void)setMusicSourceContainerButton:(id)arg1;
+- (void)setMusicSourceRichTextView:(id)arg1;
+- (id)shakeMusicInfo;
+- (void)setShakeMusicInfo:(id)arg1;
+- (void)setMusicInfo:(id)arg1;
+- (void)setOpenThirdAppHelper:(id)arg1;
+- (void)setForwardHandler:(id)arg1;
+- (void)setFavHandler:(id)arg1;
+- (BOOL)shouldNotStopMusic;
+- (void)setShouldNotStopMusic:(BOOL)arg1;
+- (BOOL)shouldUseCustomPopAnimation;
+- (void)setShouldUseCustomPopAnimation:(BOOL)arg1;
+- (void).cxx_destruct;
+@end
+

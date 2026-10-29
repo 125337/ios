@@ -1,0 +1,3 @@
+@interface MMFinderLiveTransitionContext : NSObject
+@end
+

@@ -1,0 +1,21 @@
+@interface WCFinderUnpublishCreatorTemplateCgi : WCFinderBaseCgi
+{
+    NSString * _finderUsername; // +0x8
+    NSString * _templateId; // +0x10
+    id /* block */ _successBlock; // +0x18
+    id /* block */ _failBlock; // +0x20
+}
+- (id)initWithFinderUsername:(id)arg1 templateId:(id)arg2 successBlock:(id /* block */)arg3 failBlock:(id /* block */)arg4;
+- (void)createRequest;
+- (void)didGetResponse:(id)arg1;
+- (void)finderCgiDidFailWithError:(id)arg1 response:(id)arg2;
+- (id)finderUsername;
+- (void)setFinderUsername:(id)arg1;
+- (id)templateId;
+- (void)setTemplateId:(id)arg1;
+- (id /* block */)successBlock;
+- (void)setSuccessBlock:(id /* block */)arg1;
+- (id /* block */)failBlock;
+- (void)setFailBlock:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end

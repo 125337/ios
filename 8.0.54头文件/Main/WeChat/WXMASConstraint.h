@@ -1,0 +1,68 @@
+@interface WXMASConstraint : NSObject
+{
+    BOOL _updateExisting; // +0x8
+    id <WXMASConstraintDelegate> _delegate; // +0x10
+}
+- (id)init;
+- (id /* block */)equalTo;
+- (id /* block */)mas_equalTo;
+- (id /* block */)greaterThanOrEqualTo;
+- (id /* block */)mas_greaterThanOrEqualTo;
+- (id /* block */)lessThanOrEqualTo;
+- (id /* block */)mas_lessThanOrEqualTo;
+- (id /* block */)priorityLow;
+- (id /* block */)priorityMedium;
+- (id /* block */)priorityHigh;
+- (id /* block */)insets;
+- (id /* block */)inset;
+- (id /* block */)sizeOffset;
+- (id /* block */)centerOffset;
+- (id /* block */)offset;
+- (id /* block */)valueOffset;
+- (id /* block */)mas_offset;
+- (void)setLayoutConstantWithValue:(id)arg1;
+- (id)with;
+- (id)and;
+- (id)addConstraintWithLayoutAttribute:(long long)arg1;
+- (id)left;
+- (id)top;
+- (id)right;
+- (id)bottom;
+- (id)leading;
+- (id)trailing;
+- (id)width;
+- (id)height;
+- (id)centerX;
+- (id)centerY;
+- (id)baseline;
+- (id)firstBaseline;
+- (id)lastBaseline;
+- (id)leftMargin;
+- (id)rightMargin;
+- (id)topMargin;
+- (id)bottomMargin;
+- (id)leadingMargin;
+- (id)trailingMargin;
+- (id)centerXWithinMargins;
+- (id)centerYWithinMargins;
+- (id /* block */)multipliedBy;
+- (id /* block */)dividedBy;
+- (id /* block */)priority;
+- (id /* block */)equalToWithRelation;
+- (id /* block */)key;
+- (void)setInsets:(UIEdgeInsets)arg1;
+- (void)setInset:(double)arg1;
+- (void)setSizeOffset:(CGSize)arg1;
+- (void)setCenterOffset:(CGPoint)arg1;
+- (void)setOffset:(double)arg1;
+- (void)activate;
+- (void)deactivate;
+- (void)install;
+- (void)uninstall;
+- (BOOL)updateExisting;
+- (void)setUpdateExisting:(BOOL)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (void).cxx_destruct;
+@end
+

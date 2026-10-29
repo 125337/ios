@@ -1,0 +1,3 @@
+@interface WCTableView : MMTableView
+@end
+

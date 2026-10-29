@@ -1,0 +1,31 @@
+@interface WCFinderFansListViewCell : MMMultiMenuTableViewCell
+{
+    UILabel * _nickName; // +0x40
+    WCFinderHeadImageView * _headImageView; // +0x48
+    UIView * _separator; // +0x50
+    UIImageView * _iconView; // +0x58
+    WCFinderUserRelationshipTagLabel * _userTagLabel; // +0x60
+}
++ (double)cellHeight;
+- (id)initWithStyle:(long long)arg1 reuseIdentifier:(id)arg2;
+- (void)setUpUI;
+- (void)prepareForReuse;
+- (void)updateWithContact:(id)arg1;
+- (void)updateUserTagWithContact:(id)arg1;
+- (void)showSeparator:(BOOL)arg1;
+- (void)setupRevertMenu;
+- (void)setupDeleteMenu;
+- (id)nickName;
+- (id)headImageView;
+- (id)separator;
+- (void)layoutSubviews;
+- (void)setNickName:(id)arg1;
+- (void)setHeadImageView:(id)arg1;
+- (void)setSeparator:(id)arg1;
+- (id)iconView;
+- (void)setIconView:(id)arg1;
+- (id)userTagLabel;
+- (void)setUserTagLabel:(id)arg1;
+- (void).cxx_destruct;
+@end
+

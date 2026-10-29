@@ -1,0 +1,2 @@
+@interface WxpayKitTestabilityHook : NSObject
+@end

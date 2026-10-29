@@ -1,0 +1,37 @@
+@interface VideoRingFileManager : NSObject
++ (id)GetRingMediaDir;
++ (id)GetDownloadRingMediaDir;
++ (id)GetDownloadRingCropedAudioFileDir;
++ (id)GetDownloadRingPathWithClientId:(id)arg1;
++ (id)RingIdForFriend:(id)arg1;
++ (id)GetFilePathForRingFile:(id)arg1;
++ (id)RingToneSoundNameForCaller:(id)arg1;
++ (id)GlobalRingToneSoundName;
++ (id)RingToneFilePathForCaller:(id)arg1;
++ (BOOL)verifySoundsForCaller:(id)arg1;
++ (void)verifyGlobalSounds;
++ (id)GetRingVibrateFileDir;
++ (id)GetRingVibrateUsingFileDir;
++ (id)GetRingVibrateTempFileDir;
++ (id)GetRingVibrateTempFilePathWithClientId:(id)arg1;
++ (id)GetRingVibrateUsingFilePathWithClientId:(id)arg1;
++ (id)GetRingVibrateFilePathWithClientId:(id)arg1;
++ (id)GetDefaultRingFileName;
++ (id)GetDefaultRingFilePath;
++ (BOOL)SetDefaultRing;
++ (BOOL)copyMsgRingToSoundsDir;
++ (id)GetGlobalRingFileName;
++ (id)GetGlobalRingFilePath;
++ (BOOL)RemoveGlobalRingFile;
++ (void)RemoveGlobalRingFileIfExistForReason:(id)arg1;
++ (BOOL)HasGlobalRingFile;
++ (BOOL)SetGlobalRingFromPath:(id)arg1;
++ (id)GetExclusiveRingFileNameForFriend:(id)arg1;
++ (id)GetExclusiveRingFilePathForFriend:(id)arg1;
++ (BOOL)RemoveExclusiveRingFileForFriend:(id)arg1;
++ (void)RemoveExclusiveRingFileIfExistForFriend:(id)arg1 reason:(id)arg2;
++ (BOOL)HasExclusiveRingFileForFriend:(id)arg1;
++ (BOOL)SetExclusiveRingForFriend:(id)arg1 FromPath:(id)arg2;
++ (void)CopyRingFile:(id)arg1 toEffectPathForRing:(id)arg2;
++ (unsigned long long)getFileNumOfSounds;
+@end

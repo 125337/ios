@@ -1,0 +1,33 @@
+@interface WAAgentClientReporter : NSObject
++ (void)reportEvent:(id)arg1 context:(id)arg2 eventId:(id)arg3 costTimeMs:(unsigned int)arg4 detailsJson:(id)arg5;
++ (void)reportSessionStart:(id)arg1;
++ (void)reportEnterChatPage:(id)arg1 from:(id)arg2 isColdLaunch:(BOOL)arg3;
++ (void)reportExitChatPage:(id)arg1 stayDuration:(unsigned int)arg2 exitTo:(id)arg3;
++ (void)reportExitSession:(id)arg1 totalDuration:(unsigned int)arg2 totalRounds:(unsigned int)arg3 exitReason:(id)arg4;
++ (void)reportChannelReadyStart:(id)arg1 eventId:(id)arg2 isColdLaunch:(BOOL)arg3 needsVoipJoin:(BOOL)arg4 needsBizLaunch:(BOOL)arg5;
++ (void)reportChannelReadyCompleted:(id)arg1 eventId:(id)arg2 costTimeMs:(unsigned int)arg3 isSuccess:(BOOL)arg4 errorCode:(id)arg5 errorMessage:(id)arg6;
++ (void)reportBizLaunchStart:(id)arg1 eventId:(id)arg2;
++ (void)reportBizLaunchCompleted:(id)arg1 eventId:(id)arg2 costTimeMs:(unsigned int)arg3 isSuccess:(BOOL)arg4 errorCode:(id)arg5 errorMessage:(id)arg6;
++ (void)reportNewMessage:(id)arg1 msgType:(id)arg2 msgContent:(id)arg3 msgContentId:(id)arg4 breakChat:(BOOL)arg5 from:(id)arg6 imageCount:(unsigned int)arg7;
++ (void)reportRespBubbleCreated:(id)arg1;
++ (void)reportRespStageUpdated:(id)arg1 eventId:(id)arg2 stageName:(id)arg3 thinkContent:(id)arg4 prevStageDurationMs:(unsigned int)arg5 isLast:(BOOL)arg6;
++ (void)reportRespCardReceived:(id)arg1 costTimeMs:(unsigned int)arg2 msgId:(id)arg3 componentName:(id)arg4;
++ (void)reportRespTextFirstToken:(id)arg1 costTimeMs:(unsigned int)arg2;
++ (void)reportRespTextCompleted:(id)arg1 costTimeMs:(unsigned int)arg2 msgContent:(id)arg3 msgContentId:(id)arg4 completionTokens:(unsigned int)arg5 msgContentLength:(unsigned int)arg6 isSuccess:(BOOL)arg7 errorCode:(id)arg8 errorMessage:(id)arg9;
++ (void)reportVoiceRecordStart:(id)arg1 eventId:(id)arg2;
++ (void)reportVoiceRecordReady:(id)arg1 eventId:(id)arg2 costTimeMs:(unsigned int)arg3;
++ (void)reportVoiceRecordEnd:(id)arg1 eventId:(id)arg2 costTimeMs:(unsigned int)arg3;
++ (void)reportAsrCompleted:(id)arg1 costTimeMs:(unsigned int)arg2 asrText:(id)arg3 isSuccess:(BOOL)arg4 errorCode:(id)arg5 errorMessage:(id)arg6;
++ (void)reportImageCompressStart:(id)arg1 eventId:(id)arg2 imageCount:(unsigned int)arg3;
++ (void)reportImageCompressCompleted:(id)arg1 eventId:(id)arg2 costTimeMs:(unsigned int)arg3 imageCount:(unsigned int)arg4 isSuccess:(BOOL)arg5 errorCode:(id)arg6 errorMessage:(id)arg7;
++ (void)reportImageUploadStart:(id)arg1 eventId:(id)arg2 imageCount:(unsigned int)arg3;
++ (void)reportImageUploadCompleted:(id)arg1 eventId:(id)arg2 costTimeMs:(unsigned int)arg3 imageCount:(unsigned int)arg4 totalSize:(unsigned int)arg5 isSuccess:(BOOL)arg6 errorCode:(id)arg7 errorMessage:(id)arg8;
++ (void)reportSuggestionShown:(id)arg1 suggestionCount:(unsigned int)arg2 trigger:(id)arg3;
++ (void)reportSuggestionClicked:(id)arg1 suggestion:(id)arg2 suggestionIndex:(unsigned int)arg3 suggestionCount:(unsigned int)arg4;
++ (void)reportVoipConnectStart:(id)arg1 eventId:(id)arg2 roomId:(id)arg3;
++ (void)reportVoipConnected:(id)arg1 eventId:(id)arg2 roomId:(id)arg3 costTimeMs:(unsigned int)arg4 isSuccess:(BOOL)arg5 errorCode:(id)arg6 errorMessage:(id)arg7;
++ (void)reportVoipDisconnected:(id)arg1 roomId:(id)arg2 durationMs:(unsigned int)arg3 disconnectReason:(id)arg4;
++ (void)reportError:(id)arg1 errorType:(id)arg2 errorCode:(id)arg3 errorMessage:(id)arg4;
++ (void)reportCBTSendMsgWithText:(id)arg1 imagePaths:(id)arg2 filePaths:(id)arg3 fileNames:(id)arg4 voipSessionID:(id)arg5 appBypassInfo:(id)arg6;
++ (void)reportCBTTextMsgWithEventType:(unsigned long long)arg1 viewModel:(id)arg2 content:(id)arg3 blueContent:(id)arg4 jumpAppid:(id)arg5 jumpPath:(id)arg6;
+@end

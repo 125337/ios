@@ -1,0 +1,31 @@
+@interface MMWebPrefetchResUtil : MMObject
++ (id)documentInfoWithDomain:(id)arg1 identifier:(id)arg2;
++ (unsigned int)documentStatusWithDomain:(id)arg1 identifier:(id)arg2;
++ (unsigned int)fileStatusWithFilePath:(id)arg1 respHeader:(id)arg2;
++ (id)dicForRespHeaderOfDocumentWithDomain:(id)arg1 identifier:(id)arg2;
++ (id)docHTMLStringWithDomain:(id)arg1 identifier:(id)arg2;
++ (id)reqHeaderForDocumentWithDomain:(id)arg1 identifier:(id)arg2;
++ (id)pathForDocumentWithDomain:(id)arg1 identifier:(id)arg2;
++ (id)pathForRespHeaderOfDocumentWithDomain:(id)arg1 identifier:(id)arg2;
++ (id)dirPathOfDocument;
++ (id)pathForComResWithUrl:(id)arg1;
++ (id)localPkgVersionListWithIdentifier:(id)arg1;
++ (id)pathForComResPkgWithPackageIdentifier:(id)arg1 version:(id)arg2;
++ (id)pathForComResPkgHeaderWithPackageIdentifier:(id)arg1 version:(id)arg2;
++ (id)tempDownloadPathForComResPkg:(id)arg1 url:(id)arg2;
++ (id)tempDownloadPathForComResPkgHeader:(id)arg1 url:(id)arg2;
++ (id)packageIdentifierFromUrl:(id)arg1;
++ (id)pathForComResRespHeaderWithUrl:(id)arg1;
++ (id)dicForRespHeaderWithPath:(id)arg1;
++ (id)fileNameForResWithUrl:(id)arg1;
++ (id)fileNameForTempDownloadPkg:(id)arg1;
++ (id)fileNameForResPkgWithUrl:(id)arg1;
++ (id)dirPathOfComResDownload;
++ (id)pathOfCacheDir;
++ (void)clearCacheIfExistWithDomain:(id)arg1 identifier:(id)arg2;
++ (void)clearAllPreloadResourceCache;
++ (id)valueInLowercaseForField:(id)arg1 withHeader:(id)arg2;
++ (unsigned int)maxCacheTimeWithRespHeader:(id)arg1;
++ (id)jsApiPermitionArrFromData:(id)arg1;
+@end
+

@@ -1,0 +1,2 @@
+@interface _TtC6WeChat35MBJsEventOnSnsTimelineFireworkEvent : _TtCs12_SwiftObject
+@end

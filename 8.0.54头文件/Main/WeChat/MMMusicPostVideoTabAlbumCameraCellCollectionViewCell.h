@@ -1,0 +1,3 @@
+@interface MMMusicPostVideoTabAlbumCameraCellCollectionViewCell : UICollectionViewCell
+@end
+

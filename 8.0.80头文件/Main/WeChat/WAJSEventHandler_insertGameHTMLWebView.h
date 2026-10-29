@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_insertGameHTMLWebView : WAJSEventHandler_insertHTMLWebView
+@end

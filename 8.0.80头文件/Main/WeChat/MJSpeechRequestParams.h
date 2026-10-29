@@ -1,0 +1,2 @@
+@interface MJSpeechRequestParams : NSObject
+@end

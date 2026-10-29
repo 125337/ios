@@ -1,0 +1,3 @@
+@interface QOfflineNation : QOfflineItem
+@end
+

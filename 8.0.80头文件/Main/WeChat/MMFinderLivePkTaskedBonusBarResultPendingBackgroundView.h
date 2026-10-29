@@ -1,0 +1,2 @@
+@interface MMFinderLivePkTaskedBonusBarResultPendingBackgroundView : MMFinderLivePkTaskedBonusBarBackgroundLowView <MMFinderLivePkTaskedBonusBarBackgroundView>
+@end

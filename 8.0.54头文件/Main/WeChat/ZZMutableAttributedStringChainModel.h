@@ -1,0 +1,66 @@
+@interface ZZMutableAttributedStringChainModel : NSObject
+{
+    NSMutableAttributedString * _object; // +0x8
+    id /* block */ _verticalGlypFormhWithRange; // +0x10
+}
+- (id /* block */)pingFangRegular;
+- (id /* block */)pingFangMedium;
+- (id /* block */)mediumWechatStd;
+- (id /* block */)regularWechatStd;
+- (id /* block */)mediumWechatSS;
+- (id /* block */)regularWechatSS;
+- (id)initWithObject:(id)arg1;
+- (id /* block */)append;
+- (id /* block */)insert;
+- (id /* block */)replace;
+- (id /* block */)remove;
+- (id /* block */)appendImage;
+- (id /* block */)appendString;
+- (id /* block */)appendAttachment;
+- (id /* block */)font;
+- (id /* block */)foregroundColor;
+- (id /* block */)backgroundColor;
+- (id /* block */)paragraphStyle;
+- (id /* block */)ligature;
+- (id /* block */)kern;
+- (id /* block */)strikethroughStyle;
+- (id /* block */)strikethroughColor;
+- (id /* block */)underlineStyle;
+- (id /* block */)underlineColor;
+- (id /* block */)strokeWidth;
+- (id /* block */)strokeColor;
+- (id /* block */)shadow;
+- (id /* block */)textEffect;
+- (id /* block */)baselineOffset;
+- (id /* block */)obliqueness;
+- (id /* block */)expansion;
+- (id /* block */)writingDirection;
+- (id /* block */)verticalGlyphForm;
+- (id /* block */)link;
+- (id /* block */)attachment;
+- (id /* block */)fontWithRange;
+- (id /* block */)foregroundColorWithRange;
+- (id /* block */)backgroundColorWithRange;
+- (id /* block */)paragraphStyleWithRange;
+- (id /* block */)ligatureWithRange;
+- (id /* block */)kernWithRange;
+- (id /* block */)strikethroughStyleWithRange;
+- (id /* block */)strikethroughColorWithRange;
+- (id /* block */)underlineStyleWithRange;
+- (id /* block */)underlineColorWithRange;
+- (id /* block */)strokeWidthWithRange;
+- (id /* block */)strokeColorWithRange;
+- (id /* block */)shadowWithRange;
+- (id /* block */)textEffectWithRange;
+- (id /* block */)baselineOffsetWithRange;
+- (id /* block */)obliquenessWithRange;
+- (id /* block */)expansionWithRange;
+- (id /* block */)writingDirectionWithRange;
+- (id /* block */)verticalGlyphFormWithRange;
+- (id /* block */)linkWithRange;
+- (id /* block */)attachmentWithRange;
+- (id)object;
+- (id /* block */)verticalGlypFormhWithRange;
+- (void).cxx_destruct;
+@end
+

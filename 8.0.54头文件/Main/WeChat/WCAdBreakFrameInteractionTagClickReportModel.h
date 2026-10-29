@@ -1,0 +1,3 @@
+@interface WCAdBreakFrameInteractionTagClickReportModel : WCAdChannelReportExtendInfoModel
+@end
+

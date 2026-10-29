@@ -1,0 +1,3 @@
+@interface MMUIControl : UIControl
+@end
+

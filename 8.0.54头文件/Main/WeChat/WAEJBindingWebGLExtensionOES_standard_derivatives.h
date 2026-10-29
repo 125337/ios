@@ -1,0 +1,3 @@
+@interface WAEJBindingWebGLExtensionOES_standard_derivatives : WAEJBindingWebGLExtension
+@end
+

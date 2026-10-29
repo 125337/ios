@@ -1,0 +1,3 @@
+@interface WCStoryBaseCGIObj : WCBaseCgi
+@end
+

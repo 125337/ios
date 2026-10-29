@@ -1,0 +1,30 @@
+@interface FinderBgmItem : WXPBGeneratedMessage <MMBGMDataReport, MMBGMSelectedMusicDataProtocol>
++ (void)initialize;
+- (void)setMusicReportType:(unsigned long long)arg1;
+- (unsigned long long)musicReportType;
+- (id)musicUrl;
+- (unsigned long long)musicStartTimeInMs;
+- (unsigned long long)songDurationInMs;
+- (unsigned long long)originalSongDurationInMs;
+- (BOOL)supportsTrim;
+- (void)setMusicStartTimeInMs:(unsigned long long)arg1;
+- (void)setSongDurationInMs:(unsigned long long)arg1;
+- (id)musicId;
+- (id)coverUrl;
+- (id)songName;
+- (id)songAuthorName;
+- (BOOL)playable;
+- (BOOL)isMusicLiked;
+- (BOOL)favableAndRecentAble;
+- (id)musicLyricInfos;
+- (BOOL)isEqualToMusicData:(id)arg1;
+- (id)recommendBuf;
+- (id)feedId;
+- (id)uniqueId;
+- (int)bgmItemType;
+- (id)description;
+- (id)queryWord;
+- (void)setQueryWord:(id)arg1;
+- (long long)musicPosIndex;
+- (void)setMusicPosIndex:(long long)arg1;
+@end

@@ -1,0 +1,15 @@
+@interface WCFinderTagGestureRecognizer : UITapGestureRecognizer
+{
+    unsigned long long _hashValue; // +0x8
+    id /* block */ _action; // +0x10
+}
++ (id)gestureWithAction:(id /* block */)arg1 hash:(unsigned long long)arg2;
+- (void)replaceBlock:(id /* block */)arg1;
+- (void)onTap:(id)arg1;
+- (unsigned long long)hashValue;
+- (void)setHashValue:(unsigned long long)arg1;
+- (id /* block */)action;
+- (void)setAction:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end
+

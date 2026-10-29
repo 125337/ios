@@ -1,0 +1,3 @@
+@interface WCFinderMediaSpecList : NSObject
+@end
+

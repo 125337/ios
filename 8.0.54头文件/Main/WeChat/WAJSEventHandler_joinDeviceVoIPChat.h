@@ -1,0 +1,3 @@
+@interface WAJSEventHandler_joinDeviceVoIPChat : WAJSEventHandler_joinVoIPChat
+@end
+

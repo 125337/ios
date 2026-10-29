@@ -1,0 +1,2 @@
+@interface MMLiveGamePromoteTipsView : MMNormalTipsView
+@end

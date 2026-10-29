@@ -1,0 +1,83 @@
+@interface CBTAsstNativeToCppCaller : NSObject
+{
+    TaskIdConvertor task_id_convertor; // +0x8
+    shared_ptr<chatbot::CBTAsstNativeToCppCallerCppCover> cpp_cover; // +0x80
+    weak_ptr<chatbot::CBTAsstNativeToCppCallerDispatcher> cpp_dispatcher; // +0x90
+}
++ (id)shareInstance;
++ (id)buildZidlObjForHolder:(const void *)arg1 svrIdentity:(const void *)arg2 refCntManager:(void *)arg3;
+- (shared_ptr<chatbot::CBTAsstNativeToCppCallerDispatcher>)getDispatcher;
+- (void)setDispatcher:(const void *)arg1;
+- (id)initForZidlPrivate;
+- (id)zidlObjToHolder;
+- (id)handleHomePageMenuItemClickEvent:(id)arg1 voipSessionID:(id)arg2;
+- (void)handleHomePageMenuExposureEvent:(id)arg1;
+- (void)adjustMemoryInfoEvent:(id)arg1 voipSessionID:(id)arg2;
+- (void)chatWithNotionEvent:(id)arg1 voipSessionID:(id)arg2;
+- (void)getVoiceListAsync:(id /* block */)arg1;
+- (void)getVoiceListAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)updateVoiceAsync:(id)arg1 type:(int)arg2 name:(id)arg3 completion:(id /* block */)arg4;
+- (void)updateVoiceAsync:(id)arg1 type:(int)arg2 name:(id)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (void)saveCompressedImageAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)saveCompressedImageAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)downloadAsstImageAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)downloadAsstImageAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)getModelListAsync:(id /* block */)arg1;
+- (void)getModelListAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)updateModelAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)updateModelAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)recallPushContentAsync:(int)arg1 contentType:(int)arg2 completion:(id /* block */)arg3;
+- (void)recallPushContentAsync:(int)arg1 contentType:(int)arg2 on:(id)arg3 completion:(id /* block */)arg4;
+- (id)getKVString:(id)arg1;
+- (void)syncKVToRemote:(id)arg1 value:(id)arg2;
+- (void)syncKVFromRemoteAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)syncKVFromRemoteAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (BOOL)getTTSReadEnabled;
+- (void)setTTSReadEnabled:(BOOL)arg1;
+- (void)getCommonConfigListAsync:(int)arg1 completion:(id /* block */)arg2;
+- (void)getCommonConfigListAsync:(int)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)updateCommonConfigAsync:(int)arg1 id:(id)arg2 completion:(id /* block */)arg3;
+- (void)updateCommonConfigAsync:(int)arg1 id:(id)arg2 on:(id)arg3 completion:(id /* block */)arg4;
+- (void)updatePrivacyEnableAsync:(int)arg1 enable:(BOOL)arg2 completion:(id /* block */)arg3;
+- (void)updatePrivacyEnableAsync:(int)arg1 enable:(BOOL)arg2 on:(id)arg3 completion:(id /* block */)arg4;
+- (void)fetchPrivacyEnableAsync:(id /* block */)arg1;
+- (void)fetchPrivacyEnableAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)fetchInviteInfoOnceAsync:(id /* block */)arg1;
+- (void)fetchInviteInfoOnceAsync:(id)arg1 completion:(id /* block */)arg2;
+- (id)getCachedInviteInfo;
+- (void)inviteUsersAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)inviteUsersAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)sendStarTransformSideInfo:(int)arg1 voipSessionID:(id)arg2 isWhiteList:(BOOL)arg3;
+- (void)sendXiaoweiTitleEasterEggSideInfo:(id)arg1;
+- (void)sendTtsTaskSideInfo:(id)arg1 voipSessionID:(id)arg2 aiQueryId:(id)arg3 msgId:(id)arg4 textSeq:(int)arg5 eof:(BOOL)arg6;
+- (void)recordStarTransformFirstTry:(int)arg1 isStar:(BOOL)arg2;
+- (int)trySendStarTransformSideInfo:(id)arg1;
+- (void)retryStarTransformSideInfo:(int)arg1 voipSessionID:(id)arg2;
+- (void)loadServerHistoryMessagesAsync:(id)arg1 pageContext:(id)arg2 isPre:(BOOL)arg3 completion:(id /* block */)arg4;
+- (void)loadServerHistoryMessagesAsync:(id)arg1 pageContext:(id)arg2 isPre:(BOOL)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (void)startSyncLocalMessagesToServerAsync:(id /* block */)arg1;
+- (void)startSyncLocalMessagesToServerAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)getImageRecordListByAnchorAsync:(id)arg1 scrollType:(int)arg2 upContext:(id)arg3 downContext:(id)arg4 sessionId:(id)arg5 query:(id)arg6 senderType:(int)arg7 followChatHistory:(BOOL)arg8 completion:(id /* block */)arg9;
+- (void)getImageRecordListByAnchorAsync:(id)arg1 scrollType:(int)arg2 upContext:(id)arg3 downContext:(id)arg4 sessionId:(id)arg5 query:(id)arg6 senderType:(int)arg7 followChatHistory:(BOOL)arg8 on:(id)arg9 completion:(id /* block */)arg10;
+- (void)deleteMessagesAsync:(id)arg1 checkedSvrIds:(id)arg2 dialogueIds:(id)arg3 completion:(id /* block */)arg4;
+- (void)deleteMessagesAsync:(id)arg1 checkedSvrIds:(id)arg2 dialogueIds:(id)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (void)getA2AChatListAsync:(id)arg1 limit:(int)arg2 getType:(int)arg3 customAgentName:(id)arg4 completion:(id /* block */)arg5;
+- (void)getA2AChatListAsync:(id)arg1 limit:(int)arg2 getType:(int)arg3 customAgentName:(id)arg4 on:(id)arg5 completion:(id /* block */)arg6;
+- (void)getAgentChatDetailAsync:(id)arg1 pullLast:(id)arg2 pullNext:(id)arg3 completion:(id /* block */)arg4;
+- (void)getAgentChatDetailAsync:(id)arg1 pullLast:(id)arg2 pullNext:(id)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (void)getCustomAgentListAsync:(id)arg1 limit:(int)arg2 fetchType:(int)arg3 completion:(id /* block */)arg4;
+- (void)getCustomAgentListAsync:(id)arg1 limit:(int)arg2 fetchType:(int)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (void)recallPushContentWithSessionAsync:(int)arg1 contentType:(int)arg2 sessionId:(id)arg3 completion:(id /* block */)arg4;
+- (void)recallPushContentWithSessionAsync:(int)arg1 contentType:(int)arg2 sessionId:(id)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (void)startChatHisSyncFromServer;
+- (void)listHistoryMessagesAsync:(id)arg1 pageContext:(id)arg2 clickedBubble:(id)arg3 scrollType:(int)arg4 types:(id)arg5 forceFromServer:(BOOL)arg6 completion:(id /* block */)arg7;
+- (void)listHistoryMessagesAsync:(id)arg1 pageContext:(id)arg2 clickedBubble:(id)arg3 scrollType:(int)arg4 types:(id)arg5 forceFromServer:(BOOL)arg6 on:(id)arg7 completion:(id /* block */)arg8;
+- (void)setExtraInfoValueAsync:(long long)arg1 key:(int)arg2 value:(id)arg3 completion:(id /* block */)arg4;
+- (void)setExtraInfoValueAsync:(long long)arg1 key:(int)arg2 value:(id)arg3 on:(id)arg4 completion:(id /* block */)arg5;
+- (id)getExtraInfoValueBySvrid:(long long)arg1 key:(int)arg2;
+- (void)clearAllMessagesAsync:(id /* block */)arg1;
+- (void)clearAllMessagesAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)dealloc;
+- (void).cxx_destruct;
+- (id).cxx_construct;
+@end

@@ -1,0 +1,35 @@
+@interface WCShareItemUtils : NSObject <SKStoreProductViewControllerDelegate>
++ (BOOL)isRegInChinaOrHKMO;
++ (BOOL)isForwardOpenExptEnabledForAppType:(long long)arg1;
++ (BOOL)isYuanbaoPromotionQuotaCheckEnabled;
++ (BOOL)isSystemShareOpenExptEnabledForAppType:(long long)arg1;
++ (BOOL)isOpenQQForward;
++ (BOOL)isOpenQQMailForward;
++ (BOOL)isOpenWorkBuddyForward;
++ (BOOL)isRecordExpandEnabled;
++ (unsigned long long)maxPasteItemCount;
++ (BOOL)isSystemShareAvailable;
++ (void)tryPreloadYuanbaoAdInfo;
++ (void)tryPreloadYuanbaoAdInfoWithMMKVThrottle:(BOOL)arg1;
++ (BOOL)isOpenSessionSelectForwardYuanbaoForOldUI;
++ (BOOL)isOpenSessionSelectForwardYuanbaoForNewUI;
++ (BOOL)isUseNewForwardToOtherAppUIForYuanbao;
++ (BOOL)isOpenSessionSelectForwardYuanbao;
++ (BOOL)isFoldWeWorkToOtherApp;
++ (BOOL)isOpenForwardUndownloadAsText;
++ (BOOL)isUseNewForwardToOtherAppUI;
++ (void)jumpToOtherApp:(long long)arg1 scene:(long long)arg2 provider:(id)arg3 legacyObjects:(id)arg4 params:(id)arg5 completionHandler:(id /* block */)arg6 cleanupHandler:(id /* block */)arg7;
++ (void)jumpToOtherApp:(long long)arg1 arrMsgWraps:(id)arg2 scene:(long long)arg3 params:(id)arg4 completionHandler:(id /* block */)arg5;
++ (void)jumpToOtherApp:(long long)arg1 arrMsgWraps:(id)arg2 scene:(long long)arg3 params:(id)arg4 isMergedForward:(BOOL)arg5 completionHandler:(id /* block */)arg6;
++ (void)jumpToYuanbaoWithContent:(id)arg1 scene:(long long)arg2 params:(id)arg3;
++ (void)jumpToYuanbaoWithFileName:(id)arg1 filePath:(id)arg2 scene:(long long)arg3 params:(id)arg4;
++ (void)jumpToYuanbaoWithCDNFileMessage:(id)arg1 scene:(long long)arg2 params:(id)arg3;
++ (void)jumpToYuanbaoWithFileMessage:(id)arg1 reportParams:(id)arg2;
++ (id)getUrlParamsWithScene:(long long)arg1;
++ (id)getGVersionWithScene:(long long)arg1;
++ (id)getMagicAdPosIdWithScene:(long long)arg1;
++ (void)jumpToYuanbaoWithScene:(long long)arg1 objects:(id)arg2 params:(id)arg3 completionHandler:(id /* block */)arg4;
++ (void)jumpToYuanbaoWithScene:(long long)arg1 objects:(id)arg2 params:(id)arg3 completionHandler:(id /* block */)arg4 cleanupHandler:(id /* block */)arg5;
++ (void)jumpToOtherApp:(long long)arg1 scene:(long long)arg2 objects:(id)arg3 params:(id)arg4 completionHandler:(id /* block */)arg5;
++ (void)jumpToOtherApp:(long long)arg1 scene:(long long)arg2 objects:(id)arg3 params:(id)arg4 completionHandler:(id /* block */)arg5 cleanupHandler:(id /* block */)arg6;
+@end

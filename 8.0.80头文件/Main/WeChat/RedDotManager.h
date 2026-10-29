@@ -1,0 +1,61 @@
+@interface RedDotManager : NSObject
+{
+    weak_ptr<zidl::ZClientInvoker> client_invoker_; // +0x8
+}
++ (id)shareInstance;
++ (id)buildZidlObjForHolder:(const void *)arg1 svrIdentity:(const void *)arg2;
+- (void)attachClientInvoker:(const void *)arg1;
+- (shared_ptr<zidl::ZClientInvoker>)getClientInvoker;
+- (void)zidlBuild;
+- (id)initForZidlPrivate;
+- (id)zidlObjToHolder;
+- (id)currentCtrlInfoAtPath:(id)arg1;
+- (id)currentCtrlInfoIgnoreAtPath:(id)arg1 ignoreNMFrequency:(BOOL)arg2;
+- (void)addNewRedDotCtrlInfo:(id)arg1;
+- (id)addNewRedDotCtrlInfoWithResult:(BOOL)arg1 ctrlInfo:(id)arg2;
+- (BOOL)syncCtrlInfo:(id)arg1;
+- (BOOL)disposeRedDotAtPath:(id)arg1 subReasonType:(int)arg2;
+- (void)disposeRedDotByTipsUuid:(id)arg1 subReasonType:(int)arg2;
+- (BOOL)disposeRedDotIgnoreClearTypeAtPath:(id)arg1;
+- (id)disposeGroupTipsWithGroupId:(id)arg1;
+- (id)getAllRedDotCtrlInfoAtPath:(id)arg1;
+- (id)getAllRedDotCtrlInfoAtType:(int)arg1;
+- (id)getAllRedDotCtrlInfo;
+- (id)getAllCurRedDotCtrlInfo;
+- (void)resetAllRedDotData;
+- (id)ctrlInfoWithType:(int)arg1;
+- (id)ctrlInfoWithTipsUuid:(id)arg1;
+- (int)showInfoTypeAtPath:(id)arg1;
+- (id)currentShowInfoAtPath:(id)arg1;
+- (int)ctrlInfoTypeAtPath:(id)arg1;
+- (BOOL)disposeRedDotByUuidOnly:(id)arg1;
+- (BOOL)clearAllRedDotInfo;
+- (BOOL)dropTable:(BOOL)arg1 dropWxTable:(BOOL)arg2;
+- (void)redDotInfoInvalidCheck;
+- (BOOL)shouldShowRedDotAtPath:(id)arg1;
+- (void)clearSameTypeCtrlInfoType:(int)arg1;
+- (id)clearCtrlInfoWithCondition:(id)arg1 notify:(BOOL)arg2;
+- (void)revokeRedDotByViewAction:(int)arg1 commentScene:(int)arg2;
+- (void)clearSameRevokeIdCtrlInfo:(id)arg1;
+- (void)saveRedDotInfoToLocal;
+- (void)clearRedDotMockInfo;
+- (id)clearRedDotByPathAndUuid:(id)arg1 tipsUuid:(id)arg2 notifyUI:(BOOL)arg3;
+- (id)clearShowInfoByPathAndUuid:(id)arg1 tipsUuid:(id)arg2 notifyUI:(BOOL)arg3 uniqueId:(id)arg4 force:(BOOL)arg5;
+- (BOOL)revokeRedDotPathInfo:(id)arg1 isOnlyWhiteList:(BOOL)arg2 whiteListTips:(id)arg3;
+- (id)revokeRedDotPathInfoWithResult:(id)arg1 isOnlyWhiteList:(BOOL)arg2 whiteListTips:(id)arg3;
+- (id)getRedDotCtrlInfoListWithRevokeId:(id)arg1;
+- (void)loadRedDotInfoFromDB:(id)arg1;
+- (id)loadRedDotInfoFromDBWithResult:(BOOL)arg1 finderUsername:(id)arg2;
+- (BOOL)updateOrInsertWXRedDotInfo:(id)arg1;
+- (BOOL)updateOrInsertWXRedDotInfoList:(id)arg1;
+- (BOOL)updateOrInsertFinderRedDotInfo:(id)arg1 ctrlInfo:(id)arg2;
+- (BOOL)updateOrInsertFinderRedDotInfoList:(id)arg1 ctrlInfoVector:(id)arg2;
+- (id)redDotDataByUsername:(id)arg1;
+- (BOOL)addSubAccountFinderRedDot:(id)arg1;
+- (void)disposeSubAccountFinderUsername:(id)arg1 reddotPath:(id)arg2;
+- (id)getCtrlInfoByFinderUsernameType:(id)arg1 type:(int)arg2;
+- (id)getCtrlInfoByFinderUsernamePath:(id)arg1 reddotPath:(id)arg2;
+- (void)dealloc;
+- (void).cxx_destruct;
+- (id).cxx_construct;
+@end

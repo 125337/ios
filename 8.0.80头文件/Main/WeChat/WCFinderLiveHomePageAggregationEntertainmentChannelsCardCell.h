@@ -1,0 +1,3 @@
+@interface WCFinderLiveHomePageAggregationEntertainmentChannelsCardCell : WCFinderLiveHomePageAggregationCardCell
++ (Class)cardClass;
+@end

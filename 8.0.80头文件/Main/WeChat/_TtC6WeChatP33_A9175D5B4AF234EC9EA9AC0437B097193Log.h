@@ -1,0 +1,2 @@
+@interface _TtC6WeChatP33_A9175D5B4AF234EC9EA9AC0437B097193Log : _TtCs12_SwiftObject
+@end

@@ -1,0 +1,122 @@
+@interface KindaBizMgr : MMUserService <CNetworkStatusExt, MMServiceProtocol>
+{
+    NSMutableArray * _globalSessionIdListeners; // +0x8
+    KindaAppModuleManager * _moduleManager; // +0x10
+    MMLocatingCoordinateLogic * _locatingLogic; // +0x18
+    KindaLiteMgr * _kindaLiteMgr; // +0x20
+    WXPLiteAppNetworkService * _networkService; // +0x28
+    unsigned long long _firstPreloadTimeMs; // +0x30
+    unsigned long long _loginSuccessTimeMs; // +0x38
+    unsigned long long _lastEnterForegroundTimeMs; // +0x40
+}
+- (id)init;
+- (void)dealloc;
+- (id)locatingLogic;
+- (void)handleApplicationNotification:(id)arg1;
+- (void)notifyKindaOnManualAuthOk;
+- (void)ReachabilityChange:(unsigned int)arg1;
+- (id)startUseCase:(id)arg1 data:(id)arg2 callback:(id)arg3 starter:(id)arg4;
+- (void)reportWxpayKitSplitNPS:(BOOL)arg1 url:(id)arg2;
+- (void)reportAppPaySplitFunnel:(long long)arg1 url:(id)arg2 data:(id)arg3;
+- (void)fillOpeimId:(id)arg1;
+- (id)startUseCase:(id)arg1 data:(id)arg2 callbackHandler:(id /* block */)arg3;
+- (id)startUseCase:(id)arg1 data:(id)arg2 callback:(id)arg3;
+- (id)startUseCase:(id)arg1 data:(id)arg2;
+- (BOOL)isUseCaseAlive:(id)arg1;
+- (void)popToUseCase:(id)arg1;
+- (void)notifySpecificUseCase:(id)arg1 data:(id)arg2;
+- (void)notifyAllUseCases:(id)arg1;
+- (BOOL)canHandleOpenUrl;
+- (void)startUITest;
+- (BOOL)isEnableScanPay;
+- (BOOL)isEnableTinyAppPay;
+- (BOOL)isEnableAppPay;
+- (BOOL)isEnableJSApiPay;
+- (BOOL)isEnableEmptyPrepayIdPay;
+- (BOOL)isEnableTransfer2BankPay;
+- (BOOL)isEnableHongbaoPay;
+- (BOOL)isEnableTransfer;
+- (BOOL)isEnableQrCodeReceivePay;
+- (BOOL)isEnableQrCodeReward;
+- (BOOL)isEnableGroupChatAA;
+- (BOOL)isEnableH5Pay;
+- (BOOL)isOfflineKindaReadyAbtestOn;
+- (BOOL)isEnableOfflinePay;
+- (void)updateOfflinePayTokenFromScene:(unsigned long long)arg1;
+- (void)checkIfNeedUpdateOfflinePayToken;
+- (void)updateOflinePayDefaultCard:(id)arg1 bankType:(id)arg2;
+- (void)checkIfNeedRequestUserBindqueryWhenUnBindCard:(id)arg1;
+- (BOOL)isOfflinePayAlive;
+- (BOOL)isEnableMobileFeePay;
+- (BOOL)isEnableFaceHongbaoPay;
+- (BOOL)isEnableOfflineCashier;
+- (BOOL)isEnableSaveBalance;
+- (BOOL)isEnableFetchBalance;
+- (BOOL)isEnableBalanceDetail;
+- (BOOL)isEnableLQTTransfer;
+- (BOOL)isEnableLQTDetail;
+- (BOOL)isEnablePaySecurity;
+- (BOOL)isEnableWeBankLoanPay;
+- (BOOL)isEnableFaceCheckCross;
+- (BOOL)isEnableTransferDelayFlutterCross;
+- (BOOL)isEnableNativePayLinkCross;
+- (BOOL)isEnableTransferToBankKinda;
+- (BOOL)isEnableTransferToBankMiniApp;
+- (BOOL)isEnableLargeFont;
+- (BOOL)isEnableKinda:(id)arg1;
+- (BOOL)localContainsKey:(id)arg1;
+- (BOOL)localCtrlEnableKinda:(id)arg1;
+- (BOOL)isPrefixDisableKinda:(id)arg1;
+- (id)getPrepayIdFromPackage:(id)arg1;
+- (id)getKindaPrePayPagePayeeDescByPayScene:(long long)arg1 andData:(id)arg2;
+- (id)getKindaNewCashierDescByPayScene:(long long)arg1 andData:(id)arg2;
+- (BOOL)isEnableKindaBindCard;
+- (BOOL)isInAnyUseCase;
+- (BOOL)isEnableKindaResetPwd;
+- (BOOL)isEnableSnsAppPay;
+- (BOOL)isSwitch2InWxAppPay:(id)arg1;
+- (BOOL)isPrepayIdIndicatesLiteApp:(id)arg1;
+- (BOOL)isQrCodeUrlIndicatesLiteApp:(id)arg1;
+- (BOOL)isEnableLiteAppUseCase:(id)arg1 data:(id)arg2;
+- (BOOL)isCloseAllLiteAppUseCase;
+- (BOOL)evaluateWxpayKitUseCase:(id)arg1 data:(id)arg2 entryGray:(id)arg3 report:(BOOL)arg4;
+- (BOOL)isEnableWxpayKitUseCase:(id)arg1 data:(id)arg2 entryGray:(id)arg3;
+- (BOOL)peekWxpayKitUseCase:(id)arg1 data:(id)arg2;
+- (BOOL)checkWxpayKitSnsPayConstraints:(id)arg1 data:(id)arg2;
+- (BOOL)isEnableLiteAppUseCase:(id)arg1;
+- (BOOL)isEnableLiteAppSnsPayUseCase:(id)arg1 data:(id)arg2;
+- (BOOL)isEnableLiteAppSnsPayByPayScene:(id)arg1 data:(id)arg2;
+- (BOOL)kindaLiteUseCaseExist;
+- (id)kindaLiteUseCaseSessionId;
+- (void)dispatchKitChildSceneStoreAction:(id)arg1 data:(id)arg2;
+- (void)preloadKindaLiteAtOnce;
+- (BOOL)isEnableOverseaWalletSuccPage;
+- (BOOL)isEnableWalletLock;
+- (void)onThirdPayCallback:(id)arg1;
+- (id)parameterWithURL:(id)arg1;
+- (void)notifyHKOfflineXmlMsg:(id)arg1;
+- (id)getCachedLocationInfoAndUpdate;
+- (id)getCachedLocationInfoAndUpdateForCashier;
+- (id)internalGetCacheLocationInfo;
+- (void)updateWCPayAddressCache:(id)arg1;
+- (void)updateLiteAppUseCaseGrayConfig:(id)arg1;
+- (BOOL)enableLiteAppUseCaseFromCgiConfig:(id)arg1;
+- (void)markFirstPreloadTimeIfNeeded:(unsigned long long)arg1;
+- (unsigned long long)firstPreloadTimeMs;
+- (void)markLoginSuccessTime:(unsigned long long)arg1;
+- (unsigned long long)loginSuccessTimeMs;
+- (unsigned long long)lastEnterForegroundTimeMs;
+- (id)globalSessionIdListeners;
+- (void)setGlobalSessionIdListeners:(id)arg1;
+- (id)moduleManager;
+- (void)setModuleManager:(id)arg1;
+- (void)setLocatingLogic:(id)arg1;
+- (id)kindaLiteMgr;
+- (void)setKindaLiteMgr:(id)arg1;
+- (id)networkService;
+- (void)setNetworkService:(id)arg1;
+- (void)setFirstPreloadTimeMs:(unsigned long long)arg1;
+- (void)setLoginSuccessTimeMs:(unsigned long long)arg1;
+- (void)setLastEnterForegroundTimeMs:(unsigned long long)arg1;
+- (void).cxx_destruct;
+@end

@@ -1,0 +1,2 @@
+@interface JSCustomWebViewMenuData : CustomWebViewMenuData
+@end

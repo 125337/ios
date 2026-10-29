@@ -1,0 +1,119 @@
+@interface WXGRoamBackupPackageBridge : NSObject <AffRoamProviderBase, WXGRoamBackendHandlerDelegate, WXGRoamBackupPackageBridgeDelegate, WXGRoamCloudHandlerDelegate, WXGRoamImportQueueDelegate>
+{
+    id <WXGRoamBackupPackageBridgeDelegate> _delegate; // +0x8
+    AffRoamProviderCallback * _affRoamCallback; // +0x10
+    NSMutableDictionary * _backupperMap; // +0x18
+    NSMutableDictionary * _taskMap; // +0x20
+    NSMutableDictionary * _deviceMap; // +0x28
+    NSMutableDictionary * _modelMap; // +0x30
+    NSMutableDictionary * _importQueueMap; // +0x38
+    NSMutableDictionary * _packageHandlerMap; // +0x40
+    WXGRoamBackendHandler * _backendHandler; // +0x48
+    WXGRoamCloudHandler * _cloudHandler; // +0x50
+    NSObject<OS_dispatch_queue> * _bridgeQueue; // +0x58
+    NSObject<OS_dispatch_queue> * _blockQueue; // +0x60
+    NSObject<OS_dispatch_queue> * _getPakageQueue; // +0x68
+    NSObject<OS_dispatch_queue> * _filterQueue; // +0x70
+    NSObject<OS_dispatch_queue> * _loadMediaQueue; // +0x78
+    NSOperationQueue * _getPackageOperationQueue; // +0x80
+    NSRecursiveLock * _mapLock; // +0x88
+}
++ (id)sharedInstance;
+- (void)setup;
+- (void)uinit;
+- (void)setAutoTestMode:(BOOL)arg1;
+- (id)getAutoTestPackage;
+- (id)getReportData:(unsigned long long)arg1;
+- (void)connectAsync:(id)arg1 callback:(id /* block */)arg2;
+- (void)connect:(id)arg1;
+- (void)disconnect:(id)arg1;
+- (void)getDeviceInfo:(id)arg1;
+- (void)setupManager;
+- (void)setAppBackupUIStateChanged:(BOOL)arg1;
+- (id)getStandAlonePackageInfo:(id)arg1;
+- (void)setPauseAutoBackupForTimes:(id)arg1 pauseTime:(unsigned long long)arg2;
+- (void)setAutoBackupLastSuccessTime:(id)arg1 lastSuccessTime:(unsigned long long)arg2;
+- (id)checkIncompleteTasks;
+- (void)setScheduleLevel:(int)arg1;
+- (id)getDebugInfo;
+- (void)notifyNetworkStateChanged:(BOOL)arg1 ssid:(id)arg2;
+- (void)notifyAppForegroundStateChanged:(BOOL)arg1;
+- (void)triggerAutoBackupCheck;
+- (void)cloudloadMediaForMessage:(id)arg1 localPath:(id)arg2 username:(id)arg3 dataID:(id)arg4 listModels:(id)arg5;
+- (void)setupAutoBackupEventWithModel:(id)arg1 checkDelay:(unsigned long long)arg2;
+- (void)getBackedUpConversationListWithModel:(id)arg1 fromTime:(unsigned long long)arg2 toTime:(unsigned long long)arg3 completion:(id /* block */)arg4;
+- (void)deleteBackupWithModel:(id)arg1 fromTime:(unsigned long long)arg2 toTime:(unsigned long long)arg3 deleteConvs:(id)arg4 deleteAll:(BOOL)arg5;
+- (void)prepareWithModel:(id)arg1 callback:(id /* block */)arg2;
+- (void)startBackupWithModel:(id)arg1 isAuto:(BOOL)arg2 callback:(id /* block */)arg3;
+- (void)startRestoreWithModel:(id)arg1 callback:(id /* block */)arg2;
+- (void)resumeWithModel:(id)arg1 callback:(id /* block */)arg2;
+- (void)pauseWithModel:(id)arg1 callback:(id /* block */)arg2;
+- (void)stopWithModel:(id)arg1 callback:(id /* block */)arg2;
+- (int)getTaskTypeWithModel:(id)arg1;
+- (id)getTaskErrorLogWithModel:(id)arg1;
+- (id)getTransferStatWithModel:(id)arg1;
+- (void)getAllPackageModels:(BOOL)arg1 isFirstTime:(BOOL)arg2;
+- (id)getPackageById:(unsigned long long)arg1;
+- (void)createPackageWithModels:(id)arg1;
+- (void)updatePackageWithModels:(id)arg1;
+- (void)deletePackageWithModels:(id)arg1;
+- (void)setCallback:(id)arg1;
+- (void)getRoamFileEncKeyAsync:(unsigned long long)arg1 encIds:(id)arg2 createNew:(BOOL)arg3;
+- (void)getAdamTunnelCryptoInfoAsync:(unsigned long long)arg1 cryptoMaterial:(id)arg2;
+- (void)getIlinkDeviceBindingSessionAsync:(unsigned long long)arg1 request:(id)arg2;
+- (void)getChatPackageAsync:(unsigned long long)arg1 packageId:(unsigned long long)arg2 conversationId:(id)arg3 fromTime:(unsigned long long)arg4 toTime:(unsigned long long)arg5 offset:(unsigned long long)arg6 limit:(int)arg7;
+- (void)insertChatPackageAsync:(unsigned long long)arg1 packageId:(unsigned long long)arg2 convId:(id)arg3 chatPackage:(id)arg4;
+- (void)getRoamBackupPackagesAsync:(unsigned long long)arg1 request:(id)arg2;
+- (void)setRoamBackupPackagesAsync:(unsigned long long)arg1 request:(id)arg2;
+- (void)getDeviceNetworkInfosAsync:(unsigned long long)arg1;
+- (void)getDeviceAvailableStorageSpaceAsync:(unsigned long long)arg1;
+- (void)getNetworkInfosAsync:(unsigned long long)arg1;
+- (void)filterRestoreMediaAsync:(unsigned long long)arg1 convId:(id)arg2 svrIdList:(id)arg3 mediaIdList:(id)arg4 mediaTypeList:(id)arg5;
+- (void)onRoamBackendGetEncrytKey:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamBackendGenNewEncrytKey:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamBackendBuildRelationSession:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamBackendGetDeviceNetworkInfo:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamBackendGetSeruceTunnelResponse:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamBackendGetRoamBackupPackagesGetResponse:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamBackendGetRoamBackupPackagesSetResponse:(id)arg1 success:(BOOL)arg2 invokeID:(unsigned long long)arg3;
+- (void)onRoamImportOneDirFinished:(unsigned long long)arg1;
+- (id)bridgeQueue;
+- (id)blockQueue;
+- (id)getPakageQueue;
+- (id)filterQueue;
+- (id)loadMediaQueue;
+- (id)getPackageOperationQueue;
+- (id)backendHandler;
+- (id)cloudHandler;
+- (void)roamTaskSubscribeEvent:(id)arg1;
+- (id)convertPackageToModel:(id)arg1;
+- (id)convertModelToPackage:(id)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)affRoamCallback;
+- (void)setAffRoamCallback:(id)arg1;
+- (id)backupperMap;
+- (void)setBackupperMap:(id)arg1;
+- (id)taskMap;
+- (void)setTaskMap:(id)arg1;
+- (id)deviceMap;
+- (void)setDeviceMap:(id)arg1;
+- (id)modelMap;
+- (void)setModelMap:(id)arg1;
+- (id)importQueueMap;
+- (void)setImportQueueMap:(id)arg1;
+- (id)packageHandlerMap;
+- (void)setPackageHandlerMap:(id)arg1;
+- (void)setBackendHandler:(id)arg1;
+- (void)setCloudHandler:(id)arg1;
+- (void)setBridgeQueue:(id)arg1;
+- (void)setBlockQueue:(id)arg1;
+- (void)setGetPakageQueue:(id)arg1;
+- (void)setFilterQueue:(id)arg1;
+- (void)setLoadMediaQueue:(id)arg1;
+- (void)setGetPackageOperationQueue:(id)arg1;
+- (id)mapLock;
+- (void)setMapLock:(id)arg1;
+- (void).cxx_destruct;
+@end
+

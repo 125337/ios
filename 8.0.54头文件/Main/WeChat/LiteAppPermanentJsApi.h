@@ -1,0 +1,3 @@
+@interface LiteAppPermanentJsApi : LiteAppJsApi
+@end
+

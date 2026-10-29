@@ -1,0 +1,2 @@
+@interface _TtC11MidasPayKit22ChannelSelectorFactory : _TtCs12_SwiftObject
+@end

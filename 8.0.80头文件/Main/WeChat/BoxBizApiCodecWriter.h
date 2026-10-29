@@ -1,0 +1,3 @@
+@interface BoxBizApiCodecWriter : FlutterStandardWriter
+- (void)writeValue:(id)arg1;
+@end

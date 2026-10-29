@@ -1,0 +1,2 @@
+@interface OMJBGMusicSegment : OMJClipSegment
+@end

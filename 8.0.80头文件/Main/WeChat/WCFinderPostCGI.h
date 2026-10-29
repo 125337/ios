@@ -1,0 +1,25 @@
+@interface WCFinderPostCGI : WCFinderBaseCgi
+{
+    BOOL _noNeedResponseInfo; // +0x8
+    WCFinderUploadTask * _task; // +0x10
+    id /* block */ _successBlock; // +0x18
+    id /* block */ _failBlock; // +0x20
+}
++ (id)sanitizedDescriptionForLogging:(id)arg1 mediaSyncCredential:(id)arg2;
++ (int)getPostSceneByTask:(id)arg1;
+- (id)initWithUploadTask:(id)arg1 successBlock:(id /* block */)arg2 failBlock:(id /* block */)arg3;
+- (void)createRequest;
+- (void)preCheckPostRequestValid:(id)arg1;
+- (void)start;
+- (void)didGetResponse:(id)arg1;
+- (void)finderCgiDidFailWithError:(id)arg1 response:(id)arg2;
+- (id)task;
+- (void)setTask:(id)arg1;
+- (BOOL)noNeedResponseInfo;
+- (void)setNoNeedResponseInfo:(BOOL)arg1;
+- (id /* block */)successBlock;
+- (void)setSuccessBlock:(id /* block */)arg1;
+- (id /* block */)failBlock;
+- (void)setFailBlock:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end

@@ -1,0 +1,3 @@
+@interface MMFinderLivePkTaskedBonusBarRewardBackgroundView : MMFinderLivePkTaskedBonusBarBackgroundFrenzyView <MMFinderLivePkTaskedBonusBarBackgroundView>
+- (void)updateLayoutToMatchContentView:(id)arg1;
+@end

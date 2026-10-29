@@ -1,0 +1,81 @@
+@interface FileDetailLogicController : MinimizeTaskBaseLogicController
+{
+    id <FileDetailLogicDelegate> _m_fileDetailLogicDelegate; // +0x8
+    NSString * _tmpFilePath; // +0x10
+}
+- (void)startDownload;
+- (void)stopDownload;
+- (void)checkIsFileExistInSvr;
+- (BOOL)OnPreviewFile:(unsigned int)arg1;
+- (void)symbolicateAndForward:(id)arg1;
+- (void)openInDiskUsageDetailViewController:(id)arg1;
+- (void)OnForwardToDevice:(id)arg1;
+- (void)OnAddToFavorites;
+- (id)generateFavoriteItem;
+- (void)onForwardToContact:(id)arg1;
+- (BOOL)isDownloading;
+- (BOOL)autoDownload;
+- (BOOL)canShowMsgForwardToDevice;
+- (void)customizeActionSheetInFirstRow:(id)arg1 secondRow:(id)arg2;
+- (id)genActionItem:(id)arg1 iconName:(id)arg2 iconColor:(id)arg3;
+- (void)addDebugActionsIn:(id)arg1;
+- (BOOL)performCustomizeAction:(id)arg1;
+- (BOOL)performCommonAction:(id)arg1;
+- (id)getToSaveUrl;
+- (void)OnOpenByApp:(id)arg1;
+- (void)OnOpenByWeApp:(id)arg1;
+- (void)OnScollToButtom;
+- (void)OnOpened;
+- (void)OnOpenByOtherAppWithHasOpen:(BOOL)arg1;
+- (BOOL)canAddToFavorites;
+- (unsigned int)GetPreviewType;
+- (id)GetForwardData;
+- (unsigned long long)GetTempSize;
+- (id)getFileIdentifier;
+- (unsigned long long)GetFileSize;
+- (id)GetFilePath;
+- (id)GetTmpFilePath;
+- (id)GetFileName;
+- (long long)getMsgSvrID;
+- (id)GetMsg;
+- (void)OnFileDetailVCDidAppear;
+- (unsigned int)getMsgUiDownloadStatus;
+- (unsigned int)isRealtimeUploadingStatus;
+- (BOOL)checkUpdateFileDetailViewController:(id)arg1 state:(unsigned int)arg2;
+- (void)startDownloadAppMsgUploading;
+- (void)tryRegisterMsgExt;
+- (void)shareToFriend;
+- (BOOL)forbidOperation;
+- (BOOL)isViewBePopedStopDownload;
+- (void)cancelGetAppMsgStateNotUpload;
+- (int)getFileExpiredDays;
+- (id)getMinimizeTaskData;
+- (id)getMusicLocalFileDataUnit;
+- (id)getHandOffItem;
+- (void)sendHandOffOpenCommand;
+- (void)reportMenuOp:(unsigned long long)arg1;
+- (void)reportMenuOp:(unsigned long long)arg1 fileName:(id)arg2 fileSize:(unsigned long long)arg3 fileType:(id)arg4;
+- (id)getMinimizeKey;
+- (id)pendingTaskContextWithGenerateType:(unsigned long long)arg1 fileVC:(id)arg2;
+- (BOOL)isMinimizeEnable;
+- (BOOL)configWithMinimizeData:(id)arg1;
+- (void)onRecoverTaskData:(id)arg1;
+- (BOOL)onEnterMinimizedTask:(id)arg1 openContext:(id)arg2 taskEnterScene:(unsigned int)arg3;
+- (void)onEnterRecentUsedTask:(id)arg1;
+- (void)onRemoveMinimizedTask:(id)arg1;
+- (id)getLastViewControllerOnLeaveTaskBeforeEnterAnother:(id)arg1;
+- (BOOL)onRetryAddPendingTaskAfterUserDeleteOneTask:(id)arg1;
+- (void)presentMinimizeViewController:(id)arg1 key:(id)arg2 openContext:(id)arg3;
+- (void)stopDownloadAppMsgByUser;
+- (BOOL)needShowLocateBtn;
+- (BOOL)onMsgLocate;
+- (BOOL)canShowSessionSourceButton;
+- (id)sessionSourceButtonTitle;
+- (void)pressSessionSourceButton;
+- (id)m_fileDetailLogicDelegate;
+- (void)setM_fileDetailLogicDelegate:(id)arg1;
+- (id)tmpFilePath;
+- (void)setTmpFilePath:(id)arg1;
+- (void).cxx_destruct;
+@end
+

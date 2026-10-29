@@ -1,0 +1,22 @@
+@interface MJMovieComposingSession : MJTemplateSession
+{
+    OMJMovieComposingSession * _movieComposingSession; // +0x8
+}
++ (id)createRenderView;
++ (id)getOrCreateMaterialManager;
++ (id)getOrCreateCamResourceManager;
++ (id)getOrCreateSpeechManager;
++ (id)getOrCreateProjectManager;
++ (id)getOrCreateDecorPackageManager;
++ (void)destroyCamResourceManager;
+- (BOOL)createMaasSession;
+- (BOOL)_createMovieComposingSession;
+- (void)teardownMovieComposingSessionWithCompletionHandler:(id /* block */)arg1;
+- (void)startupMovieComposingSessionWithCompletionHandler:(id /* block */)arg1;
+- (void)cleanUpMaasSessionWithCompletionHandler:(id /* block */)arg1;
+- (void)_tearDownMovieComposingSessionWithCompletionHandler:(id /* block */)arg1;
+- (void)_destroyMovieComposingSessionWithCompletionHandler:(id /* block */)arg1;
+- (id)movieComposingSession;
+- (void)setMovieComposingSession:(id)arg1;
+- (void).cxx_destruct;
+@end

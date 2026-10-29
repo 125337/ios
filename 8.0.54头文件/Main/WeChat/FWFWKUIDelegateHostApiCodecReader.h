@@ -1,0 +1,3 @@
+@interface FWFWKUIDelegateHostApiCodecReader : FlutterStandardReader
+@end
+

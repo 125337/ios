@@ -1,0 +1,2 @@
+@interface WCTimeLineAdFlipCardMediaCollectionViewCellView : UICollectionViewCell
+@end

@@ -1,0 +1,3 @@
+@interface _TtCC6WeChat17MagicBrandService20MagicBrandServiceLog : _TtCs12_SwiftObject
+@end
+

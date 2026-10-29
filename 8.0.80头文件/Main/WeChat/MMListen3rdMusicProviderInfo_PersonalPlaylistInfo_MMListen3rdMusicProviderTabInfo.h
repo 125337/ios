@@ -1,0 +1,3 @@
+@interface MMListen3rdMusicProviderInfo_PersonalPlaylistInfo_MMListen3rdMusicProviderTabInfo : WXPBGeneratedMessage
++ (void)initialize;
+@end

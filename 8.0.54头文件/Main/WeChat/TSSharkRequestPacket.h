@@ -1,0 +1,3 @@
+@interface TSSharkRequestPacket : TSRequestPacket
+@end
+

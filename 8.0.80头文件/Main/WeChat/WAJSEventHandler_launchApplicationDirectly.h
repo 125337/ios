@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_launchApplicationDirectly : WAJSEventHandler_launchApplication
+@end

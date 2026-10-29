@@ -1,0 +1,2 @@
+@interface DataReportEventData : AmoebaEventData
+@end

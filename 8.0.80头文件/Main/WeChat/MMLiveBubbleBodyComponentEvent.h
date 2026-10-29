@@ -1,0 +1,2 @@
+@interface MMLiveBubbleBodyComponentEvent : MMLiveBubbleBaseComponentEvent
+@end

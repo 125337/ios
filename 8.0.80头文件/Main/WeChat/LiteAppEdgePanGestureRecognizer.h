@@ -1,0 +1,2 @@
+@interface LiteAppEdgePanGestureRecognizer : UIScreenEdgePanGestureRecognizer <MMFlutterIgnoreDelayingGestureRecognizer>
+@end

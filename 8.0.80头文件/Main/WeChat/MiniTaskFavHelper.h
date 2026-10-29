@@ -1,0 +1,37 @@
+@interface MiniTaskFavHelper : NSObject
++ (void)registerMinimizeRemoveDualWriteHook;
++ (BOOL)canAddToFav:(id)arg1;
++ (BOOL)finderStarTaskTid:(id *)arg1 nonceId:(id *)arg2 fromTaskData:(id)arg3;
++ (id)finderStarVideoShadowFromLongVideoStar:(id)arg1;
++ (id)ensureFinderStarVideoShadowFromLongVideoStar:(id)arg1;
++ (BOOL)removeFinderStarVideoShadowForLongVideoStar:(id)arg1;
++ (void)removeLongVideoStarRecordsForTid:(id)arg1;
++ (void)removeLongVideoAssociatedMiniTasksForTid:(id)arg1;
++ (void)addMiniTaskToFav:(id)arg1 startLoading:(id /* block */)arg2 complete:(id /* block */)arg3;
++ (void)addFavItem:(id)arg1;
++ (id)thumbUrlOrSnapshotForTaskData:(id)arg1;
++ (BOOL)shouldWaitSnapshotForTaskData:(id)arg1;
++ (void)resumeDualWriteAfterSnapshot:(id)arg1 complete:(id /* block */)arg2;
++ (id)favItemFromWeAppMiniTask:(id)arg1;
++ (id)favItemFromLiteAppMiniTask:(id)arg1;
++ (id)favItemFromAskMiniTask:(id)arg1;
++ (id)favItemFromSearchMiniTask:(id)arg1;
++ (id)customNavBarParamsDictFromRawString:(id)arg1;
++ (id)searchLiteAppQueryJSONStringFromMinimizeData:(id)arg1 starBizKey:(id)arg2;
++ (void)silentlyAddMiniTaskToFavIfNeeded:(id)arg1 complete:(id /* block */)arg2;
++ (void)silentlyAddMiniTaskToFavIfNeeded:(id)arg1 skipSnapshotWait:(BOOL)arg2 complete:(id /* block */)arg3;
++ (void)silentlyAddFavItem:(id)arg1 starCreateTime:(unsigned int)arg2 starBizKey:(id)arg3 complete:(id /* block */)arg4;
++ (void)handleExistFavItem:(id)arg1 starBizKey:(id)arg2 reason:(id)arg3 complete:(id /* block */)arg4;
++ (void)handleNewFavItem:(id)arg1 starCreateTime:(unsigned int)arg2 starBizKey:(id)arg3 complete:(id /* block */)arg4;
++ (BOOL)shouldRunDeepDedupForFavItem:(id)arg1;
++ (void)deepDedupExistFavItemForNewItem:(id)arg1 starBizKey:(id)arg2 completion:(id /* block */)arg3;
++ (id)buildDedupIndexForFavItems:(id)arg1;
++ (id)dedupKeyForFavItem:(id)arg1 targetWebKey:(id)arg2;
++ (id)sourceIdForMiniTaskData:(id)arg1;
++ (id)favoritesItemForMiniTaskData:(id)arg1;
++ (id)miniTaskDataForFavoritesItem:(id)arg1;
++ (id)candidateBizNamesForFavoritesItem:(id)arg1;
++ (void)silentlyCancelStarFromMiniTask:(id)arg1;
++ (void)silentlyCancelStarFromFavoritesItem:(id)arg1;
++ (void)silentlyAddStarFromFavoritesItem:(id)arg1;
+@end

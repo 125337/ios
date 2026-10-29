@@ -1,0 +1,43 @@
+@interface WCFinderRedDotEntryRenderTool : NSObject
++ (id)renderRedDotContainerView:(id)arg1 entryScene:(unsigned long long)arg2 tEntry:(stEntryRow *)arg3 availableRect:(CGRect)arg4 truncatedWording:(id)arg5 bindReportView:(id)arg6;
++ (id)renderDSLRedDotWithDSLRender:(id)arg1 entryScene:(unsigned long long)arg2 containerView:(id)arg3 availableRect:(CGRect)arg4 truncatedWording:(id)arg5;
++ (id)getLightDarkColorFrom:(id)arg1;
++ (id)getLightDarkColorFromLightColor:(id)arg1 darkColor:(id)arg2;
++ (id)_pinRedDotInfo:(id)arg1 redDotAttr:(id)arg2 pinView:(id)arg3 availableRect:(CGRect)arg4 leftLine:(double)arg5 redDotContainerView:(id)arg6 globalAttr:(id)arg7 nodeIndex:(long long)arg8;
++ (BOOL)isDSLRenderViewFromContainerView:(id)arg1;
++ (void)addDSLPinView:(id)arg1 toContainerView:(id)arg2 nodeIndex:(long long)arg3;
++ (double)_getCurRedDotContainerViewDSLViewMaxRight:(id)arg1;
++ (id)_renderSingleAvatarNodeRedDotContainerView:(id)arg1 node:(id)arg2 availableRect:(CGRect)arg3 leftLine:(double)arg4 isOriginal:(BOOL)arg5 globalAttr:(id)arg6 nodeIndex:(long long)arg7;
++ (id)_renderAllNodeBy:(id)arg1 redDotContainerView:(id)arg2 availableRect:(CGRect)arg3 globalAttr:(id)arg4 isOriginal:(BOOL)arg5 renderConfig:(id)arg6;
++ (id)_renderGlobalAttrByRedDotContainerView:(id)arg1 availableRect:(CGRect)arg2 globalAttr:(id)arg3 leftLine:(double)arg4;
++ (void)layoutDSLRedDotBubble:(id)arg1 availableRect:(CGRect)arg2;
++ (CGSize)genTargetDSLRedDotBubbleSize:(id)arg1 leftPadding:(double)arg2 rightPadding:(double)arg3;
++ (double)getRenderRemainWidthByNodesArray:(id)arg1 availableRect:(CGRect)arg2 leftLine:(double)arg3 isOriginal:(BOOL)arg4 remainNodes:(id)arg5 capsuleBackgroundColor:(id)arg6;
++ (id)_renderAttributeTextNodeRedDotContainerView:(id)arg1 nodesArray:(id)arg2 availableRect:(CGRect)arg3 leftLine:(double)arg4 isOriginal:(BOOL)arg5 globalAttr:(id)arg6 nodeIndex:(long long)arg7 renderConfig:(id)arg8 isAllTextNode:(BOOL)arg9 remainNodes:(id)arg10;
++ (double)estimatePlaceWidthFromNodes:(id)arg1;
++ (id)_renderSingleTextNodeRedDotContainerView:(id)arg1 node:(id)arg2 availableRect:(CGRect)arg3 leftLine:(double)arg4 isOriginal:(BOOL)arg5 remainNodes:(id)arg6 globalAttr:(id)arg7 nodeIndex:(long long)arg8 renderConfig:(id)arg9;
++ (double)calcRichTextViewTargetWidthBy:(id)arg1 width:(double)arg2;
++ (id)renderDSLNodeRedDotContainerView:(id)arg1 entryScene:(unsigned long long)arg2 availableRect:(CGRect)arg3 dslRenderImpl:(id)arg4;
++ (id)_renderIgnoreDSLWidthLimitAsAllNodeBy:(id)arg1 redDotContainerView:(id)arg2 availableRect:(CGRect)arg3 globalAttr:(id)arg4 isOriginal:(BOOL)arg5 exceedWidth:(double)arg6;
++ (id)_renderAbbreviationAsAllNodeBy:(id)arg1 redDotContainerView:(id)arg2 availableRect:(CGRect)arg3 globalAttr:(id)arg4 isOriginal:(BOOL)arg5 exceedWidth:(double)arg6;
++ (BOOL)renderColorIsValid:(id)arg1;
++ (BOOL)renderIconIsValid:(id)arg1;
++ (id)getTextContentBy:(id)arg1 isOriginal:(BOOL)arg2 renderNodeModel:(id)arg3 renderConfig:(id)arg4 redDotContainerView:(id)arg5 availableRect:(CGRect)arg6;
++ (id)getAppendSuffixCharacter;
++ (id)genCommonRichTextViewByFontWeight:(int)arg1 fontSize:(double)arg2 widthLimit:(double)arg3;
++ (BOOL)isOriginalTextContainer:(id)arg1;
++ (BOOL)isThumbnailTextContainer:(id)arg1;
++ (id)renderImageIconRedDotContainerView:(id)arg1 entryScene:(unsigned long long)arg2 availableRect:(CGRect)arg3 showInfo:(id)arg4 truncatedWording:(id)arg5;
++ (id)_renderCapsuleContainerView:(id)arg1 entryScene:(unsigned long long)arg2 availableRect:(CGRect)arg3 showInfo:(id)arg4 truncatedWording:(id)arg5;
++ (id)_renderAttributeCellView:(id)arg1 entryScene:(unsigned long long)arg2 availableRect:(CGRect)arg3 showInfo:(id)arg4 truncatedWording:(id)arg5;
++ (void)configRedDotEntry:(stEntryRow *)arg1 atPath:(id)arg2;
++ (double)makeFindPageRedDotAlignmentWith:(id)arg1 entryCell:(id)arg2 reddotTextLabelX:(double)arg3 rightMargin:(double)arg4 reddotTextLabelMinX:(double)arg5 cellWidth:(double)arg6;
++ (void)resetRedDotContainerViewHeadImage:(id)arg1 entryScene:(unsigned long long)arg2;
++ (void)updateFinderRedDotAppearState:(BOOL)arg1;
++ (void)updateTargetRedDotAppearState:(BOOL)arg1 targetPath:(id)arg2;
++ (void)updateTargetRedDotAppearState:(BOOL)arg1 ctrlInfo:(id)arg2;
++ (id)shouldCheckExposeStateRedDotPathArray;
++ (int)getCurrentSyncUserScene;
++ (id)currentShowInfoAccessibilityLabel:(id)arg1;
+@end
+

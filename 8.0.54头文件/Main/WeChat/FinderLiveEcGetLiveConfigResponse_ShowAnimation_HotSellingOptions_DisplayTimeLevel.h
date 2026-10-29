@@ -1,0 +1,4 @@
+@interface FinderLiveEcGetLiveConfigResponse_ShowAnimation_HotSellingOptions_DisplayTimeLevel : WXPBGeneratedMessage
++ (void)initialize;
+@end
+

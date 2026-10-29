@@ -1,0 +1,48 @@
+@interface MMCPUtil : NSObject
++ (id)cpKeyForNickname:(id)arg1;
++ (BOOL)isNicknameUnsafe:(id)arg1;
++ (id)cpKeyForMessageWrap:(id)arg1;
++ (BOOL)isMessageWrapUnsafe:(id)arg1;
++ (id)cpKeyForWCTimeLineContent:(id)arg1;
++ (BOOL)isWCTimeLineContentUnsafe:(id)arg1;
++ (id)cpKeyForWCTimeLineLikeUsers:(id)arg1;
++ (BOOL)isWCTimeLineLikeUsersUnsafe:(id)arg1;
++ (id)cpKeyForWCTimeLineComment:(id)arg1;
++ (BOOL)isWCTimeLineCommentUnsafe:(id)arg1;
++ (id)cpKeyForWXPicConvert:(id)arg1;
++ (BOOL)isWXPicConvertUnsafe:(id)arg1;
++ (id)cpKeyForClientCheckKvReportCalculateMd5;
++ (id)cpKeyForClientCheckCgiReportCalculateMd5;
++ (id)cpKeyForCameraScanCombineLogic;
++ (BOOL)isCameraScanCombineLogicUnsafe;
++ (id)cpKeyForImageScanQRCode:(id)arg1;
++ (BOOL)isImageScanQRCodeUnsafe:(id)arg1;
++ (id)cpKeyForImageScanCodeOCRReport:(id)arg1;
++ (BOOL)isImageScanCodeOCRReportUnsafe:(id)arg1;
++ (id)cpKeyForTingImageClientId:(id)arg1;
++ (id)cpKeyForTingImageUrl:(id)arg1;
++ (id)cpKeyForCurrentVersionWithIdentifier:(id)arg1;
++ (BOOL)isCurrentVersionUnsafeWithIdentifier:(id)arg1;
++ (BOOL)isUnsafeWithKey:(id)arg1;
++ (void)increaseCrashCountWithKey:(id)arg1;
++ (void)decreaseCrashCountWithKey:(id)arg1;
++ (void)clearCrashCountWithKey:(id)arg1;
++ (id)cpKeyForOpenIMDesc:(id)arg1;
++ (id)cpKeyForHeadImage:(id)arg1;
++ (BOOL)isHeadImageUnsafe:(id)arg1;
++ (id)cpKeyForSignature:(id)arg1;
++ (BOOL)isSignatureUnsafe:(id)arg1;
++ (id)cpKeyForHelloMsg:(id)arg1 content:(id)arg2;
++ (BOOL)isHelloMsgUnsafe:(id)arg1 content:(id)arg2;
++ (id)cpKeyForChatRoomDisplayName:(id)arg1 userName:(id)arg2;
++ (BOOL)isChatRoomDisplayNameUnsafe:(id)arg1 userName:(id)arg2;
++ (BOOL)isChatRoomUnsafe:(id)arg1;
++ (id)cpKeyForWebviewURL:(id)arg1;
++ (BOOL)isWebviewURLUnsafe:(id)arg1;
++ (id)cpKeyForEmoticonMd5:(id)arg1;
++ (id)cpKeyForAnimateEmoji:(id)arg1;
++ (BOOL)isAnimateEmojiUnsafe:(id)arg1;
++ (id)cpKeyForSVGData:(id)arg1;
++ (BOOL)isSVGDataUnsafe:(id)arg1;
+@end
+

@@ -1,0 +1,40 @@
+@interface WCAccountPhoneVerifyUpViewController : WCAccountBaseViewController <MFMessageComposeViewControllerDelegate>
+{
+    id <WCAccountPhoneVerifyUpViewControllerDelegate> m_delegate; // +0x80
+    MMUILabel * _titleLabel; // +0x88
+    MMUILabel * _subtitleLabel; // +0x90
+    WCRedesignInfoItem * _editSmsInfoItem; // +0x98
+    WCRedesignInfoItem * _sendToInfoItem; // +0xa0
+    UIButton * _sendSmsButton; // +0xa8
+    UIButton * _sentAndNextButton; // +0xb0
+    NSDictionary * _storedTitleTextAttributes; // +0xb8
+    long long _storedBarStyle; // +0xc0
+}
+- (BOOL)useSheetView;
+- (BOOL)useRedesignStyle;
+- (void)initNavigationBar;
+- (void)viewDidLayoutSubviews;
+- (void)initView;
+- (void)saveNavigationSetting;
+- (void)recoverNavigationSetting;
+- (void)onSend;
+- (void)messageComposeViewController:(id)arg1 didFinishWithResult:(long long)arg2;
+- (void)setDelegate:(id)arg1;
+- (id)titleLabel;
+- (void)setTitleLabel:(id)arg1;
+- (id)subtitleLabel;
+- (void)setSubtitleLabel:(id)arg1;
+- (id)editSmsInfoItem;
+- (void)setEditSmsInfoItem:(id)arg1;
+- (id)sendToInfoItem;
+- (void)setSendToInfoItem:(id)arg1;
+- (id)sendSmsButton;
+- (void)setSendSmsButton:(id)arg1;
+- (id)sentAndNextButton;
+- (void)setSentAndNextButton:(id)arg1;
+- (id)storedTitleTextAttributes;
+- (void)setStoredTitleTextAttributes:(id)arg1;
+- (long long)storedBarStyle;
+- (void)setStoredBarStyle:(long long)arg1;
+- (void).cxx_destruct;
+@end

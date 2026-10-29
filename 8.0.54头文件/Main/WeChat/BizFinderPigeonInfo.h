@@ -1,0 +1,76 @@
+@interface BizFinderPigeonInfo : NSObject
+{
+    NSString * _fromSessionIdInfo; // +0x8
+    NSString * _objectId; // +0x10
+    NSString * _exportId; // +0x18
+    NSString * _nonceId; // +0x20
+    NSNumber * _mediaType; // +0x28
+    NSString * _encryptUsername; // +0x30
+    NSString * _reportInfo; // +0x38
+    NSNumber * _alignment; // +0x40
+    NSString * _title; // +0x48
+    NSString * _coverImgUrl; // +0x50
+    NSString * _nickName; // +0x58
+    NSString * _headImgUrl; // +0x60
+    NSNumber * _finderDuration; // +0x68
+    NSNumber * _finderHeight; // +0x70
+    NSNumber * _finderWidth; // +0x78
+    NSNumber * _finderCoverHeight; // +0x80
+    NSNumber * _finderCoverWidth; // +0x88
+    NSNumber * _finderMediaType; // +0x90
+    NSNumber * _currentPlayMs; // +0x98
+    NSNumber * _isLandscapeVideo; // +0xa0
+    FlutterStandardTypedData * _animatedImage; // +0xa8
+    BizRect * _animatedImageRect; // +0xb0
+}
++ (id)makeWithFromSessionIdInfo:(id)arg1 objectId:(id)arg2 exportId:(id)arg3 nonceId:(id)arg4 mediaType:(id)arg5 encryptUsername:(id)arg6 reportInfo:(id)arg7 alignment:(id)arg8 title:(id)arg9 coverImgUrl:(id)arg10 nickName:(id)arg11 headImgUrl:(id)arg12 finderDuration:(id)arg13 finderHeight:(id)arg14 finderWidth:(id)arg15 finderCoverHeight:(id)arg16 finderCoverWidth:(id)arg17 finderMediaType:(id)arg18 currentPlayMs:(id)arg19 isLandscapeVideo:(id)arg20 animatedImage:(id)arg21 animatedImageRect:(id)arg22;
++ (id)fromList:(id)arg1;
++ (id)nullableFromList:(id)arg1;
+- (id)toList;
+- (id)fromSessionIdInfo;
+- (void)setFromSessionIdInfo:(id)arg1;
+- (id)objectId;
+- (void)setObjectId:(id)arg1;
+- (id)exportId;
+- (void)setExportId:(id)arg1;
+- (id)nonceId;
+- (void)setNonceId:(id)arg1;
+- (id)mediaType;
+- (void)setMediaType:(id)arg1;
+- (id)encryptUsername;
+- (void)setEncryptUsername:(id)arg1;
+- (id)reportInfo;
+- (void)setReportInfo:(id)arg1;
+- (id)alignment;
+- (void)setAlignment:(id)arg1;
+- (id)title;
+- (void)setTitle:(id)arg1;
+- (id)coverImgUrl;
+- (void)setCoverImgUrl:(id)arg1;
+- (id)nickName;
+- (void)setNickName:(id)arg1;
+- (id)headImgUrl;
+- (void)setHeadImgUrl:(id)arg1;
+- (id)finderDuration;
+- (void)setFinderDuration:(id)arg1;
+- (id)finderHeight;
+- (void)setFinderHeight:(id)arg1;
+- (id)finderWidth;
+- (void)setFinderWidth:(id)arg1;
+- (id)finderCoverHeight;
+- (void)setFinderCoverHeight:(id)arg1;
+- (id)finderCoverWidth;
+- (void)setFinderCoverWidth:(id)arg1;
+- (id)finderMediaType;
+- (void)setFinderMediaType:(id)arg1;
+- (id)currentPlayMs;
+- (void)setCurrentPlayMs:(id)arg1;
+- (id)isLandscapeVideo;
+- (void)setIsLandscapeVideo:(id)arg1;
+- (id)animatedImage;
+- (void)setAnimatedImage:(id)arg1;
+- (id)animatedImageRect;
+- (void)setAnimatedImageRect:(id)arg1;
+- (void).cxx_destruct;
+@end
+

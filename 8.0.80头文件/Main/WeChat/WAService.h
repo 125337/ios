@@ -1,0 +1,2 @@
+@interface WAService : NSObject
+@end

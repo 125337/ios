@@ -1,0 +1,3 @@
+@interface WCPayRetrySendMsgResponse : NSObject
+@end
+

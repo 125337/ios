@@ -1,0 +1,30 @@
+@interface NSEShareDataUtil : NSObject
++ (id)appGroupID;
++ (id)containerURL;
++ (id)userDefaults;
++ (void)saveCurrentSpeechConfigId:(id)arg1;
++ (unsigned int)getLastMsgCreateTime;
++ (id)getNewSyncClientPubKey;
++ (void)saveNewSyncClientPubKey:(id)arg1;
++ (id)getNewSyncClientPubKeySignature;
++ (void)removeNewSyncClientPubKeySignature;
++ (void)saveNewSyncClientPubKey:(id)arg1 newSyncClientPubKeySignature:(id)arg2;
++ (id)getObjectForKey:(id)arg1;
++ (id)getNSEAppGroupRootDir;
++ (id)getPathOfSpeechPosDir;
++ (id)getNewSyncResultFilePath;
++ (id)getNSENewSyncKeyBuffPath;
++ (BOOL)syncUserDefaultData;
++ (id)libaryPath;
++ (id)getPathOfSoundsLibary;
++ (void)saveCurrentSpeechConfig:(id)arg1;
++ (void)clearSynthesizeSoundData;
++ (id)documentPath;
++ (id)logFolderPath;
++ (id)logFilePath;
++ (id)getPathOfIDKeyReportDataDir;
++ (id)getAllExtIdKeyReportFiles;
++ (void)handleShareExtIdKeyReportAfterAppActive;
++ (void)clearAllExtIdKeyReportFiles;
++ (id)getCurrentConfig;
+@end

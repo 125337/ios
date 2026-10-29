@@ -1,0 +1,3 @@
+@interface WARuntimeRunningStateMachine : WCStateMachine
+@end
+

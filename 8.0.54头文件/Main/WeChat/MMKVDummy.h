@@ -1,0 +1,3 @@
+@interface MMKVDummy : NSObject
+@end
+

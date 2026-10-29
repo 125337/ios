@@ -1,0 +1,12 @@
+@interface WCRedEnvelopesBaseViewController : WCBizBaseViewController <MMTableViewInfoDelegate, WCBaseInfoItemDelegate>
+{
+    WCRedEnvelopesControlData * m_data; // +0x80
+}
+- (void)viewDidLoad;
+- (void)viewWillLayoutSubviews;
+- (void)viewDidLayoutSubviews;
+- (void)setupWithData:(id)arg1;
+- (void)refreshViewWithData:(id)arg1;
+- (void).cxx_destruct;
+@end
+

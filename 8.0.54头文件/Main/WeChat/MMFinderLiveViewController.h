@@ -1,0 +1,1096 @@
+@interface MMFinderLiveViewController : MMLiveViewController <MMFinderLiveOperationViewDelegate, MMFinderLiveShopShelfViewDelegate, MMFinderLiveShopSettingsViewExt, RecentForwardScrollViewDelegate, MMFinderLiveMusicInfoSheetDelegate, WCFinderLiveStartLotteryViewControllerDelegate, WCFinderFeedBaseViewControllerProtocol, WCCanvasHalfScreenViewControllerDelegate, MMFinderLiveChooseLiveModeDelegate, WCCommitViewAnimationDelegate, MMImagePickerManagerDelegate, MMSightCameraViewControllerDelegate, WCFinderCameraViewControllerDelegate, WCFinderAdFeedbackPanelViewDelegate, WCFinderAdDislikeReasonPanelViewDelegate, WCFinderGameLiveListViewControllerDelegate, WCFinderLiveStarterViewControllerDelegate, MMLiveStarterViewControllerDelegate, MMLiveCompleteViewControllerDelegate, WCActionSheetDelegate, MMFinderLiveGloryIntroSheetDelegate, MMUIViewControllerExt, MMLiveFullScreenTipsViewDelegate, WCFinderLiveHalfScreenUtilControllerDelegate, MMLiveNameVerifyViewControllerDelegate, WCFinderTrumpetSelectViewControllerDelegate, MMLiveAudienceAccountIntroViewDelegate, MMLiveCameraOperationPanelDelegate, WCLiveContactActionSheetDelegate, MMWebViewDelegate, WCFinderLiveCompleteAgreementResultViewControllerDelegate, ForwardMessageLogicDelegate, RecentForwardScrollViewDelegate, MMFinderLiveBulletinViewControllerDelegate, MMWebViewPresetUIChildViewDelegate, MMLivePivotCollecitonViewZoomAnimatorExt, MMFinderLiveContentVMExt, MMFinderLivePayMgrExt, AVPictureInPictureControllerDelegate, WeAvatarLogicDelegate, MMWebPageSheetDelegate, MMFinderLiveSetQuickReplyViewDelegate, MMLiveRewardQuotaSettingSheetViewDelegate, IRecordPermissionCheckExt, WCFinderSelfContactExt, WCFinderSwitchExt, WCFinderHalfScreenProtocol, MMLiveMoreFunctionManagerDelegate, MMLiveRewardQuotaSettingViewDelegate, MMFinderLiveGiftWallIntroSheetDelegate, MMFinderLiveSwitchStreamGuidePanelDelegate, MMFinderLiveRealNameFriendLikeExt, MMFinderLiveMilestoneLotteryEvents, MMLiveBeautyBadgeCollectionExt, MMLiveRewardQuotaPolicySheetViewDelegate, MMFinderLiveNoticeLogicPluginExt, MMFinderLiveLogicDelegate, MMScrollActionSheetDelegate, MMFinderMenuActionDelegate, WCFinderLiveExt, MMFinderLiveFansGroupOperationReportDelegate, MMFinderLiveOperationViewDelegate, MMFinderLiveRewardSendingLogicForOperationDelegate>
+{
+    BOOL _isLiveClosed; // +0x68
+    BOOL _isLiveJoined; // +0x69
+    BOOL _isDismissed; // +0x6a
+    BOOL _lastAppearFullVCFromHomepageWithBottomPlayer; // +0x6b
+    BOOL _shouldUpdateTRTCCloudMixtureParams; // +0x6c
+    BOOL _isFinderLiveIdentityChangedInMinimizeMode; // +0x6d
+    BOOL _isManullyCloseMinimizeWindow; // +0x6e
+    BOOL _editingBulletin; // +0x6f
+    BOOL _canShowVideoBottomView; // +0x70
+    BOOL _hasShownSwitchStreamGuidePanel; // +0x71
+    BOOL _disableSnapshot; // +0x72
+    BOOL _isLiveAnchorPausedForOuter; // +0x73
+    BOOL _hasTryLoadECRoomConfig; // +0x74
+    BOOL _isPIPCheckStart; // +0x75
+    BOOL _isShowCompleteViewController; // +0x76
+    BOOL _hasOpenedWeAppInFullScreen; // +0x77
+    BOOL _shouldCloseSheetModeWeApp; // +0x78
+    BOOL _isFinderLiveAudienceMusicSheetOpen; // +0x79
+    BOOL _isVerifyLimitedLive; // +0x7a
+    BOOL _recoverNaviBarIfLiveVCDisappears; // +0x7b
+    unsigned int _lastLiveExtFlag; // +0x7c
+    unsigned int _joinLiveTime; // +0x80
+    unsigned int _preVerifyMode; // +0x84
+    unsigned int _curGameJoinTeamMode; // +0x88
+    unsigned int _lastFlvQualityTime; // +0x8c
+    int _promotionTime; // +0x90
+    WCFinderLiveCompleteViewController * _completeViewController; // +0x98
+    NSString * _finderUserName; // +0xa0
+    MMFinderLivePreviewRelatedOperationView * _previewRelatedOperationView; // +0xa8
+    NSMutableSet * _forbidGestureReasons; // +0xb0
+    WCFinderLiveBaseLogReporter * _reporter; // +0xb8
+    WCFinderLiveBaseLogReporter * _assistantReporter; // +0xc0
+    MMFinderLiveShopShelfView * _liveShopShelfView; // +0xc8
+    NSString * _lastAppearFullVCFromLiveRoom; // +0xd0
+    MMUIViewController * _lastWillDisappearVC; // +0xd8
+    unsigned long long _enterPrivacyBlockPanelTimestamp; // +0xe0
+    MMLivePauseTimer * _pauseTimer; // +0xe8
+    MMLiveFullScreenTipsView * _kickedOutTipsView; // +0xf0
+    MMLiveFullScreenTipsView * _privateJoinBlockView; // +0xf8
+    id /* block */ _forbidLiveActionCallback; // +0x100
+    WCFinderStarterLiveViewModel * _generalStarterVM; // +0x108
+    long long _lastSelectLiveAliasRole; // +0x110
+    long long _lastJoinLiveVisibleInfoSwitchType; // +0x118
+    NSString * _lastSelectFinderUserName; // +0x120
+    MMLiveAudienceAccountIntroView * _audienceAccountIntroView; // +0x128
+    MagicSclFrameSetView * _canvasView; // +0x130
+    SharePreConfirmView * _sharePreConfirmView; // +0x138
+    NSString * _gameFrameSetRootId; // +0x140
+    NSString * _gamePkgAppId; // +0x148
+    NSString * _gamePkgAppPath; // +0x150
+    NSString * _gamePkgUsername; // +0x158
+    MMFinderLiveCastViewModel * _liveCastViewModel; // +0x160
+    MMFinderLiveHandOffItem * _finderLiveHandoffItem; // +0x168
+    WCFinderLiveAudienceComodityLogReporter * _finderComodityLogReporter; // +0x170
+    MMFinderLiveWebPageSheetContainerCache * _webPageSheetContainerCache; // +0x178
+    MMPageSheetAdapter * _halfWebVCAdapter; // +0x180
+    id /* block */ _halfWebVCCloseAction; // +0x188
+    NSMutableDictionary * _uniqueKey2SheetParams; // +0x190
+    double _listenHalfScreenRatio; // +0x198
+    unsigned long long _recentShareIndex; // +0x1a0
+    MMFinderLiveChooseClarityLogic * _clarityLogic; // +0x1a8
+    WCBulletinInfo * _liveBulletin; // +0x1b0
+    MMFinderLiveSwitchStreamGuidePanel * _switchStreamGuidePanel; // +0x1b8
+    long long _flvQualityBadCount; // +0x1c0
+    long long _flvQualityBadCountThreshold; // +0x1c8
+    id <MMLiveMorphDismissTarget> _morphDismissTarget; // +0x1d0
+    MMFinderLiveSetQuickReplyView * _quickReplyView; // +0x1d8
+    long long _disableSnapshotFlag; // +0x1e0
+    MMLiveRewardQuotaSettingSheetView * _rewardQuotaSettingSheetView; // +0x1e8
+    MMLiveMoreFunctionManager * _moreFunctionManager; // +0x1f0
+    MMLiveAudienceMoreFunctionManager * _audienceMoreFunctionManager; // +0x1f8
+    MMFinderLiveMemberTipsFullScreenView * _memberTipsFullScreenView; // +0x200
+    MMWindowMgrObject * _stashWindowObj; // +0x208
+    id /* block */ _delayRotateBlock; // +0x210
+    MMFinderLiveGloryIntroSheet * _gloryIntroSheet; // +0x218
+    MMFinderLiveGiftWallIntroSheet * _giftWallIntroSheet; // +0x220
+    MMFinderLiveSuperfanForbidJoinLiveFullScreenView * _superfanForbidView; // +0x228
+    MMFinderLiveSuperfanInvalidRoleFullScreenView * _superfanSwitchRoleForbidView; // +0x230
+    MMFinderLiveSuperfanGroupPaymentHelper * _superfanPaymentHelper; // +0x238
+    MMLiveSquareGuideView * _guideView; // +0x240
+    NSArray * _pageArray; // +0x248
+    FinderLiveUserQuitLiveGuidePage * _quitLiveNavPage; // +0x250
+    FinderLiveUserQuitLiveGuidePage * _quitLiveFolPage; // +0x258
+    FinderLiveUserQuitLiveGuidePage * _quitLiveResPage; // +0x260
+    FinderLiveUserQuitLiveGuidePage * _quitLiveReserveNoticePage; // +0x268
+    WCFinderLiveHomePageViewController * _homePageVC; // +0x270
+    MMFinderLivePIPHandler * _pipHandler; // +0x278
+    NSMutableArray * _autoSafeAlertViewArray; // +0x280
+    MMLiveCdnStreamInfo * _lastCdnStreamInfo; // +0x288
+    WCFinderDataItem * _dataItem; // +0x290
+    WCLiveScrollActionSheet * _settingScrollActionSheet; // +0x298
+    WCLiveContactActionSheet * _liveContactActionSheet; // +0x2a0
+    WCFinderLiveHalfScreenUtilController * _verifyAndPolicyView; // +0x2a8
+    MMFinderLiveOnlineUserProfileView * _profileView; // +0x2b0
+    MMFinderLiveMusicInfoSheet * _musicInfoSheet; // +0x2b8
+    WCFinderGameLiveJumpGameGuideTipsViewController * _gameGuideTipsVC; // +0x2c0
+    id /* block */ _halfAdCanvasCloseAction; // +0x2c8
+    MMFinderLiveFansGroupOperationPanel * _fansGroupOperationPanel; // +0x2d0
+    MMFinderLiveAnchorCustomizeRewardSelectPanel * _anchorCustomizeRewardListPanel; // +0x2d8
+    MMFinderLiveSaveWishListPanel * _rewardWishOperationPanel; // +0x2e0
+    MMFinderLiveWishListDetailForAnchorPanel * _rewardWishDetailPanel; // +0x2e8
+    MMFinderLiveWishListDetailForAudiencePanel * _rewardWishPanel; // +0x2f0
+    NSTimer * _promotionTimer; // +0x2f8
+    id /* block */ _waittingPortraitBlock; // +0x300
+    id /* block */ _waittingLandscapeBlock; // +0x308
+    long long _shareScene; // +0x310
+    MMLiveAdFeedbackPanelView * _adFeedBackPanel; // +0x318
+    MMLiveAdDislikeReasonPanelView * _adDislikeReasonPanel; // +0x320
+    id /* block */ _halfCNYShareViewCloseAction; // +0x328
+}
++ (BOOL)checkIsTransientViewControllerIgnoredForMinimization:(id)arg1;
++ (BOOL)checkIsNoNeedShowLiveMinizeWindowPageListForPushByLiveRoomNavigationContoller:(id)arg1;
++ (BOOL)checkIsNoNeedShowLiveMinizeWindowPageListForOnlyFullPageWhenCreateByFullPage:(id)arg1;
+- (void)onMMLiveOperationConnectMic;
+- (void)onMMLiveOperationSwitchAudioRoomMode;
+- (void)onMMLiveOperationKTVSongButtonClicked;
+- (void)onMMLiveOperationViewDidJoinLiveRoom;
+- (void)onMMFinderLiveOperationClearScreenChanged:(BOOL)arg1;
+- (void)onMMFinderLiveOperationViewCommentTalkButtonDidTap;
+- (void)onMMFinderLiveOperationBlackListAddOrRemove:(id)arg1;
+- (void)onMMFinderLiveOperationViewMicTalkingStateChanged:(BOOL)arg1;
+- (void)onMMLiveActionButtonClicked;
+- (void)createAndShowLiveActionSheetWithRecentForward:(long long)arg1;
+- (void)onMMLiveOperationMuteButtonDidClick;
+- (void)onMMLiveOrientationButtonClicked;
+- (void)onMMLiveGlorySelfHeadImageClicked;
+- (void)onMMLiveGloryTipsHeadImageClicked;
+- (void)onMMLiveOperationUserHeadImageClicked:(id)arg1 userInfo:(id)arg2;
+- (void)onMMLiveOperationInviteFriendsBtnClicked;
+- (void)onActionSheetTipsPubbleClickWithName:(id)arg1;
+- (void)onMMLiveOperationLiveShoppingButtonClicked:(id)arg1;
+- (void)tryUseAddProductsToInterceptOpenShopShelfWithOpenAction:(id /* block */)arg1;
+- (void)openShopShelfWithProductID:(unsigned long long)arg1;
+- (void)openShopShelfWithGoods:(id)arg1 extraInfo:(id)arg2 shopSelfParams:(id)arg3;
+- (void)onMMFinderLiveShopShelfView:(id)arg1 addPreviousLiveGoodsFail:(id)arg2;
+- (void)reportOpenShopShelfWithGoodsItem:(id)arg1 extraInfo:(id)arg2;
+- (void)onMMFinderLiveShopShelfCloseWithReason:(long long)arg1;
+- (void)onBuyConcertTicketSuccess;
+- (void)onMMLiveOperationOpenRewardInstructionPage;
+- (void)onMMFinderLiveGoodsCellExpose:(id)arg1;
+- (void)onMMLiveOperationLiveGoodsTipViewClickedForAudience:(id)arg1 bubble:(id)arg2;
+- (void)onMMLiveOperationLiveProductSizeAssistantPanelClicked:(id)arg1;
+- (void)onMMLiveOperationLiveGoodsTipViewPurchaseBtnClickedForAudience:(id)arg1 bubble:(id)arg2;
+- (void)onMMLiveOperationLiveGoodsBubbleExposeForAudience:(id)arg1;
+- (void)onMMLiveOperationLiveGoodsTipViewClickedForAudienceWithAdItem:(id)arg1;
+- (void)onMMLiveOperationCreateLotteryBtnClicked:(BOOL)arg1;
+- (void)startLotteryViewControllerSaveLottery:(id)arg1;
+- (void)startLotteryViewControllerClose;
+- (void)checkAndCloseHalfScreenView;
+- (void)closeFansGroupPanels;
+- (void)onMMLiveOperationFindMoreLive;
+- (void)openMoreLiveFromMMLiveOperationWithTabId:(unsigned long long)arg1;
+- (void)onMMLiveOperationOpenRewardWishList;
+- (void)onMMLiveOperationSendRedPacket;
+- (void)onMMLiveOperationGotoBuyGiftPackets;
+- (void)onMMLiveOperationOpenFansGroupJoinPanel:(id)arg1 openScene:(unsigned long long)arg2;
+- (void)onMMLiveOperationFollow:(id)arg1;
+- (void)onMMLiveOperationTeamUpStartButtonClicked:(id)arg1 joinTeamMode:(unsigned int)arg2;
+- (void)onMMLiveOperationWAGameTeamUpStartButtonClicked:(id)arg1 joinTeamMode:(unsigned int)arg2;
+- (void)onMMLiveOperationInviteJoinTeamButtonClick:(id)arg1 launchParam:(id)arg2;
+- (void)onMMLiveOperationInviteRecjectJoinTeamButtonClick:(id)arg1;
+- (void)_fetchReplyGameJoinTeamInviteWithInvitaionId:(id)arg1 accept:(BOOL)arg2;
+- (void)onMMLiveOperationChooseJoinTeamMode:(unsigned int)arg1 curPayment:(unsigned int)arg2;
+- (void)onMMLiveOperationChooseGameJoinTeamViewBottomDescClick:(id)arg1;
+- (void)onMMLiveOperationMusicSongChanged:(id)arg1 musicItem:(id)arg2;
+- (void)onMMLiveOperationMusicDataItemClicked:(id)arg1 song:(id)arg2;
+- (void)onMMLiveOperationChangeAppSceneButtonClicked;
+- (void)showAudienceMusicHalfScreenPage:(id)arg1 song:(id)arg2;
+- (void)realShowAudienceMusicHalfScreenPage:(id)arg1 song:(id)arg2;
+- (void)onClickOpenMusicAppLabelWithSong:(id)arg1;
+- (void)realOpenQQMusicPageWithSongId:(id)arg1;
+- (void)onMMLiveMusicSettingReportActionType:(long long)arg1 songIdArr:(id)arg2;
+- (void)onMMLiveOperationChangeToPureAudioMode:(BOOL)arg1 completeBlock:(id /* block */)arg2;
+- (void)onMMLiveOperationAudioOnlyBackgroundImageChangeRequested;
+- (void)onMMLiveOperationResumeButtonClicked:(id)arg1 pauseType:(unsigned long long)arg2;
+- (void)onMMLiveOperationRecordScreen:(id)arg1 pauseType:(unsigned long long)arg2;
+- (void)onResumeForAnchorVerifyWithCaptchaPaused:(id)arg1;
+- (void)onMMLiveOperationVerifyTimeout:(id)arg1 pauseType:(unsigned long long)arg2;
+- (void)onMMLiveOperationPushWebViewController:(id)arg1;
+- (void)onMMLiveOperationPushWebViewController:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)onMMLiveOperationPushWebViewController:(id)arg1 fromNavVc:(id)arg2 closeCompletion:(id /* block */)arg3;
+- (void)onMMLiveOperationPushHalfWebViewControllerWithParams:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)onMMLiveOperationBannerPreloadHalfWebViewControllerWithParams:(id)arg1 preloadInterval:(unsigned int)arg2 uniqueKey:(id)arg3;
+- (void)onMMLiveOperationCancelPreloadHalfWebViewControllerWithParams:(id)arg1;
+- (void)onMMLiveOperationJumpToMoreLiveViewController:(id)arg1 isMultiMoreLive:(BOOL)arg2;
+- (void)onMMLiveOperationJumpToLiveFromBannerWithBannerInfo:(id)arg1;
+- (void)onMMLiveOperationJumpToAdFromBannerWithBannerInfo:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)onMMLiveOperationPushLiteAppFromBannerWithParams:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)onMMLiveOperationFallbackJumpFromBannerWithParams:(id)arg1;
+- (void)onMMLiveOperationJumpToWebsearchSheetFromBannerWithBannerInfo:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)onNotifyGiftNotificationViewClick:(id)arg1 rewardInfo:(id)arg2;
+- (void)onMMFinderLiveOperationViewUpdateMicUser:(id)arg1 micMuted:(BOOL)arg2;
+- (void)_innerClickNotifyBanner:(id)arg1 rewardInfo:(id)arg2 displayAsRewardInfo:(BOOL)arg3;
+- (void)onMMLiveOperationStopPauseTimer;
+- (void)onMMLiveOperationShareScreen;
+- (BOOL)onMMLiveOperationIsShareScreenBlocked;
+- (void)onMMFinderLiveOperationViewNeedJoinSuperfan;
+- (void)onMMLiveOperationBackToMiniGameButtonClicked;
+- (void)onMMLiveOperationPubbleTipAdActionClick:(id)arg1;
+- (void)onMMLiveOperationAudienceCouponBubbleActionButtonClick:(id)arg1;
+- (BOOL)handleCouponAction:(id)arg1 completion:(id /* block */)arg2;
+- (void)onMMFinderLiveOperationViewOpenAnchorFansGroupOperationPanel;
+- (void)openGoods:(id)arg1 withCoupon:(id)arg2;
+- (void)receiveCouponFor:(id)arg1 completion:(id /* block */)arg2;
+- (void)onMMLiveOperationShowAlertViewTitle:(id)arg1 actionBlock:(id /* block */)arg2;
+- (void)onMMLiveOperationPubbleTipArticleActionClick:(id)arg1 alertMsg:(id)arg2;
+- (void)onMMLiveOperationPubbleTipHonCoverActionClick:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)onMMLiveOperationPubbleTipJumpInfoActionClick:(id)arg1;
+- (void)onMMFinderLiveOperationViewOpenListenWithCompletionBlock:(id /* block */)arg1;
+- (void)onMMFinderLiveOperationViewRandomMicRequested;
+- (BOOL)onMMFinderLiveOperationViewRandomMicCapabilityRequested;
+- (void)onMMFinderLiveOperationViewCreateQuickNoticeRequestedWithReporter:(id)arg1;
+- (void)onMMLiveOperationPubbleTipJumpInfoShow:(id)arg1;
+- (void)onMMLiveOperationPubbleTipJumpInfoHide:(id)arg1;
+- (id)webPageSheetParamsFromJumpInfo:(id)arg1 showDislike:(BOOL)arg2 overrideCache:(BOOL)arg3;
+- (void)onMMLiveOperationPreloadWaApp:(id)arg1;
+- (BOOL)isNoNeedPreloadWebApp:(id)arg1;
+- (void)onMMLiveOperationConcertGetTicketButtonTapped;
+- (void)onMMFinderLiveGamePlayOperationPanelClickJump:(id)arg1;
+- (void)onScreenshotPosterRequestedWithLogic:(id)arg1;
+- (void)onMMLiveOperationShowStickerActionSheetRequestedWithCompletionBlock:(id /* block */)arg1;
+- (id)onMMLiveOperationStickerEditingActivatorContainerViewRequested;
+- (void)onMMLiveOperationViewCameraOperationPanelWillShow:(id)arg1;
+- (void)onMMLiveOperationPromotionBannerJumpInfoActionClick:(id)arg1;
+- (id)onMMLiveOperationGetCurrentChooseClarityDataItem;
+- (void)onMMLiveOperationClarityHeaderButtonClicked;
+- (void)onMMLiveOperationCastingHeaderButtonClicked;
+- (void)onMMFinderLiveOperationViewExitLocalAudioMode;
+- (void)onMMLiveOperationPaidCollectionButtonClicked:(id)arg1;
+- (void)onMMLiveOperationPaidCollectionVisibilyChanged:(BOOL)arg1;
+- (void)onStarterVCGamePlayOperationPanelClickJump:(id)arg1;
+- (void)onFinderLiveChooseLiveModeViewSelectItem:(id)arg1;
+- (void)switchAudioRoomSceneWithSelectedAudioModeSubItem:(id)arg1 connectMicConfirmed:(BOOL)arg2;
+- (void)receiveAllCouponBindTo:(id)arg1 completionBlock:(id /* block */)arg2;
+- (void)onMMFinderLivePurchaseButtonClicked:(id)arg1 visibleItem:(id)arg2 shopContext:(id)arg3;
+- (void)onMMFinderLiveCouponCardButtonClicked:(id)arg1 completion:(id /* block */)arg2;
+- (void)onMMFinderLiveGoodsItem:(id)arg1 visibleItem:(id)arg2 skuSelected:(id)arg3;
+- (void)onMMFinderLiveGoodsItem:(id)arg1 visibleItem:(id)arg2 willShowSKUForIndex:(unsigned long long)arg3;
+- (void)onMMFinderLiveWillShowMoreSKUsTailForGoods:(id)arg1 visibleItem:(id)arg2;
+- (void)onMMFinderLiveDidReleaseMoreSKUsTailForGoodsItem:(id)arg1 visibleItem:(id)arg2;
+- (void)onMMFinderLiveDidClickMoreSKUsTailForGoodsItem:(id)arg1 visibleItem:(id)arg2;
+- (void)onShouldShowMoreSKUsPageForGoodsItem:(id)arg1 visibleItem:(id)arg2;
+- (void)onMMFinderLiveAddToShoppingCartButtonClicked:(id)arg1;
+- (void)handleAddToShoppingCartSuccessForProductID:(unsigned long long)arg1 blockKey:(id)arg2;
+- (void)handleAddToShoppingCartFailWithErrorMessage:(id)arg1 blockKey:(id)arg2;
+- (void)onMMFinderLivePromoteStatusChanged:(id)arg1 promoteStatus:(BOOL)arg2;
+- (void)onMMFinderLiveAddGoodsButtonClicked:(id)arg1;
+- (void)onMMFinderLiveShopVIPClicked:(id)arg1;
+- (void)onMMFinderLiveFlashSaleClicked:(id)arg1;
+- (id)audienceLogReporter;
+- (void)onMMFinderLiveShopAssistantBtnClickedWithShopContext:(id)arg1;
+- (BOOL)shouldShowAccountRemindForShopContext:(id)arg1;
+- (void)showAccountRemindIfNeededForShopContext:(id)arg1 onNotCancel:(id /* block */)arg2;
+- (void)openPrivateMessage;
+- (void)invokeShopAssistantBtnClickedWithShopContext:(id)arg1;
+- (void)onMMFinderLiveGoodsItemSelected:(id)arg1 visibleItem:(id)arg2 isInMainPage:(BOOL)arg3 shopContext:(id)arg4;
+- (void)openGoodsDetail:(id)arg1 liveScene:(id)arg2 shopContext:(id)arg3 completion:(id /* block */)arg4;
+- (void)openGoodsReplayFromDetailPageFor:(id)arg1;
+- (void)onMMFinderLiveOpenReplayButtonClicked:(id)arg1;
+- (void)openGoodsReplayFor:(id)arg1 isFromDetailPage:(BOOL)arg2 tabName:(id)arg3;
+- (void)shareProductFromCurrentLiveRoom:(id)arg1;
+- (void)onMMFinderLiveAdsItemSelected:(id)arg1;
+- (void)onMMFinderLiveShopCouponItemUpdated:(id)arg1;
+- (void)onMMFinderLiveShopShelfRefreshed;
+- (void)onMMLiveOperationBeforeCreateGameFrameSet;
+- (void)hideViewsOnShowShopSettingsView;
+- (void)onReceivedJSControlShopShelfWithParams:(id)arg1;
+- (void)showViewsOnHideShopSettingsView;
+- (int)feedViewControllerScene;
+- (unsigned long long)feedViewerScene;
+- (void)navigateToGiftWallWithJumpInfo:(id)arg1 balance:(long long)arg2 wecoinBalanceUpdated:(BOOL)arg3 fromNav:(id)arg4 fromSheet:(id)arg5;
+- (void)navigateToLiveContactProfileSheetWithContact:(id)arg1 fromVC:(id)arg2;
+- (void)navigateToFullscreenAnchorProfilePage;
+- (void)onMMFinderLiveMusicInfoSheetDidAppear:(id)arg1;
+- (void)onMMFinderLiveMusicInfoSheetDidClose:(id)arg1;
+- (void)onMMFinderLiveMusicInfoSheetDidTapContent:(id)arg1;
+- (void)openTingWith:(id)arg1;
+- (void)onMMFinderLiveMusicInfoSheetDidQQMusicTips:(id)arg1;
+- (void)onCanvasHalfScreenViewControllerWillBeClosed;
+- (void)onCanvasHalfScreenViewControllerJumpToOthers;
+- (void)pushMembershipZoneWithAnchorUserName:(id)arg1;
+- (void)pushMembershipZoneViewControllerWithAnchorUserName:(id)arg1;
+- (void)pushMembershipIntroduceViewControllerWithAnchorUserName:(id)arg1;
+- (void)onFinishSendWithoutAnim:(id)arg1;
+- (void)showPerformanceAnalysisActionSheet;
+- (void)handlePerformAnalysisActionSheet:(id)arg1 didSelecteItem:(id)arg2;
+- (void)handlePerformBlurPowerModeActionSheet:(id)arg1 didSelecteItem:(id)arg2;
+- (void)handlePerformPAGRenderStatisticModeActionSheet:(id)arg1 didSelecteItem:(id)arg2;
+- (void)showBlurBtnPowerModeAdjustActionSheet;
+- (void)showPAGRenderStatisticModeAdjustActionSheet;
+- (void)debug_changeBannerDisplayAbility;
+- (void)debug_changeBannerAnimation;
+- (void)debug_changeGiftPagAnimation;
+- (void)debug_changeGiftNotificationAnimation;
+- (void)debug_changeLikeAnimation;
+- (void)debug_ChangeLivePixelDisplayAbility;
+- (void)debug_changeCommentNotifyAnimation;
+- (void)debug_changeEnhanceOptions;
+- (void)debug_closeBlurBtnPowerModeSwitch;
+- (void)debug_changeBlurBtnPowerModeAdjustStrategyLevel:(long long)arg1;
+- (void)debug_changeEnableCdnRenderPixelBuffer;
+- (void)startModifyCoverImage;
+- (void)showFinderCoverImagePickerView;
+- (void)showFinderSightPictureTakenView;
+- (void)setCoverAsFinderHeadURL;
+- (void)setCoverAsGameCoverURL;
+- (void)modifyLiveCoverImageWithURL:(id)arg1 width:(double)arg2 height:(double)arg3 completeBlock:(id /* block */)arg4;
+- (void)saveCoverImageToLocalPathWithCoverImage16Vs9:(id)arg1;
+- (void)saveCoverImageToLocalPathWithCoverImage4Vs3:(id)arg1 coverImage16Vs9:(id)arg2 coverImageOrigin:(id)arg3;
+- (void)clearLocalCoverImageFiles;
+- (void)uploadImage:(id)arg1 complection:(id /* block */)arg2;
+- (void)MMImagePickerManager:(id)arg1 didFinishPickingImageWithEditImageAttr:(id)arg2;
+- (void)MMImagePickerManager:(id)arg1 didFinishPickingSightWithInfo:(id)arg2;
+- (void)MMImagePickerManagerDidCancel:(id)arg1;
+- (void)MMImagePickerManager:(id)arg1 didFinishPickingAssetWithPostSession:(id)arg2;
+- (void)onSightCameraCancel:(id)arg1;
+- (void)onSightPictureTaken:(id)arg1 imageData:(id)arg2 withFrontCamera:(BOOL)arg3 editImageAttr:(id)arg4;
+- (void)showAudioOnlyBackgroundPicker;
+- (void)setAudioOnlyBackgroundImage:(id)arg1;
+- (void)setAudioOnlyBackgroundVideo:(id)arg1 fallbackImage:(id)arg2;
+- (BOOL)isFrontCamera;
+- (void)reportModifyCoverSuccess;
+- (void)reportModifyCoverRequest;
+- (void)checkAndExecAdsCallBackOnLiveClose;
+- (void)checkAndExecAdsCallBackWithAction:(long long)arg1;
+- (void)pushFeedbackWeb;
+- (void)onAdFeedbackBannerClick;
+- (void)onClickAdFeedbackPanelLeftButton;
+- (void)onClickAdFeedbackPanelCenterButton;
+- (void)onClickAdFeedbackPanelBottomButton;
+- (void)onClickAdFeedbackPanelMaskView;
+- (void)onClickAdDislikeReasonPanelRightTopButton;
+- (void)onClickAdDislikeReasonPanelLeftButton;
+- (void)onClickAdDislikeReasonPanelCenterButton;
+- (void)onClickAdDislikeReasonPanelRightButton;
+- (void)onClickAdDislikeReasonPanelBottomButton;
+- (void)onClickAdDislikeReasonPanelMaskView;
+- (id)initWithLiveTaskId:(id)arg1;
+- (void)initAbnormalState;
+- (void)initData;
+- (void)initNotifications;
+- (void)initUI;
+- (void)initOperationViewHideStatus;
+- (void)initLiveLogic;
+- (void)initReporter;
+- (void)registerExtension;
+- (void)unRegisterExtension;
+- (void)viewDidLoad;
+- (void)viewDidLayoutSubviews;
+- (void)viewDidTransitionToNewSize;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewDidAppear:(BOOL)arg1;
+- (BOOL)shouldAutoRecoverAnchorMainOrientationMask;
+- (void)autoRecoverAnchorMainOrientationMaskIfNeeded;
+- (void)autoRecoverAnchorMainOrientationMaskIfNeededIgnoreTopWindow:(BOOL)arg1;
+- (BOOL)forbidHiddenNavigationBarWillAppear;
+- (void)reLayoutIfNeededForOrientationChanged;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (void)dealloc;
+- (void)layoutUI;
+- (void)setHitTestRegion;
+- (void)layoutOperationView;
+- (void)layoutBlurView;
+- (void)layoutPreviewRelatedOperationView;
+- (void)layoutLiveView;
+- (void)liveViewWillBeAbnormallyDismissed;
+- (BOOL)shouldHideNavigationBar;
+- (unsigned long long)inner_supportedInterfaceOrientations;
+- (void)showView;
+- (void)onEndTransitionWithPreState:(long long)arg1;
+- (void)reloadDataForLiveShopShelfViewWithPullScene:(unsigned int)arg1;
+- (void)checkAndResumeLive;
+- (void)close;
+- (void)realClose;
+- (void)realClose:(BOOL)arg1;
+- (BOOL)shouldShowFollowConfirm;
+- (BOOL)shouldShowQuitLiveNoticeGuide;
+- (void)checkShowGameRankSetupTip;
+- (void)gameRankPopScene:(long long)arg1;
+- (void)setupGameRank;
+- (void)closeDirectly;
+- (void)closeDirectlyWithCompletion:(id /* block */)arg1;
+- (void)closeWithoutNavigation;
+- (void)exitAndClearLive;
+- (void)markReleaseUIAndLogic;
+- (void)didFinderLiveMoveToNewScene:(id)arg1;
+- (void)showKtvUserProfileWithContact:(id)arg1 finderContact:(id)arg2 highlightArea:(CGRect)arg3 highlightAreaCornerRadius:(double)arg4;
+- (void)showConnectedMicUserProfileWithMicUserInfo:(id)arg1 isAvatarTapped:(BOOL)arg2 highlightRect:(CGRect)arg3 highlightRectCornerRadius:(double)arg4;
+- (id)getLiveStateText;
+- (id)liveTask;
+- (id)finderLiveTaskId;
+- (void)setIsLiveClosed:(BOOL)arg1;
+- (id)redPacketLogic;
+- (id)onlineUserLogic;
+- (id)finderLiveView;
+- (id)finderOperationView;
+- (id)operationViewModel;
+- (id)finderLiveLogic;
+- (BOOL)hasOpenedWeAppInHalfScreen;
+- (id)currentOpenedWeAppInHalfScreen;
+- (id)currentOpenedWeAppID;
+- (id)currentOpenedWAWebViewController;
+- (BOOL)isGameLiveCreated;
+- (BOOL)isMiniGameLiveCreate;
+- (BOOL)isMiniGameLiveReturnedToGame;
+- (BOOL)isFromQRCode;
+- (void)handleEnterRoomActionIfNeeded:(unsigned long long)arg1;
+- (void)doEnterRoomAction;
+- (void)preJoinLive;
+- (void)updateEnterSessionId:(BOOL)arg1;
+- (void)onJoinLive:(id)arg1;
+- (void)loadECRoomConfigIfNever;
+- (id)specialLiveViewModel;
+- (void)onLiveClosed:(id)arg1 source:(unsigned long long)arg2;
+- (void)onFinderDataItemUpdated;
+- (void)onShowAlertFromAppMsg:(id)arg1;
+- (void)onShowToastFromAppMsg:(id)arg1;
+- (void)onAnchorPayGameSettedValueChanged;
+- (void)onSwitchUserRoleBeforeConnectingMic;
+- (void)onSwitchUserRoleBeforeOpeningRedPacket;
+- (void)onMMFinderLiveLogicRequestOpenWebUrl:(id)arg1;
+- (void)onGetAnchorStatus;
+- (void)onKickedOut;
+- (void)onShowErrorPage:(id)arg1;
+- (void)onShowForbidLiveViewWithError:(id)arg1;
+- (void)closeForForbid;
+- (void)onShowWarnPage:(id)arg1 isMiniGameLive:(BOOL)arg2;
+- (void)onNeedAutoSwipe:(id)arg1;
+- (void)closeLiveOnTeenagerBlockWithError:(id)arg1;
+- (void)onMMLivePaymentTrialCountDown:(unsigned int)arg1;
+- (void)onMMLiveOperationPayButtonClicked;
+- (void)openPaymentSettingSheetView;
+- (void)onLiveAppearingChanged;
+- (void)openLiveCommentManage;
+- (void)openLiveMoreFuntion:(double)arg1 fromSrc:(long long)arg2;
+- (void)updateLiveMoreFunctionOperationView;
+- (void)startLoadingWhenSwitchChanged;
+- (void)moreFunctionOperationViewStartLoading;
+- (void)moreFunctionOperationViewStopLoading;
+- (void)moreFunctionOperationViewComple:(BOOL)arg1 enable:(BOOL)arg2 errorStr:(id)arg3 forceUpdate:(BOOL)arg4;
+- (id)moreFunctionManager;
+- (id)audienceMoreFunctionManager;
+- (void)setupRedDotBlocksForMoreFunctionManager:(id)arg1;
+- (void)operationViewDidSelect:(unsigned long long)arg1 item:(id)arg2;
+- (void)operationViewDidPushVC:(id)arg1 naviBarHidden:(BOOL)arg2 item:(id)arg3;
+- (void)moreFunctionOperationViewWillDisappear;
+- (void)onLiveMoreFunctionWillOpen;
+- (void)updateRewardAmountMoneyWithItem:(id)arg1;
+- (void)onMMLiveRewardQuotaSettingViewChooseRewardQuota:(unsigned int)arg1;
+- (void)updateRewardAmounSwitch:(BOOL)arg1 rewardQuota:(unsigned long long)arg2;
+- (void)innerUpdateRewardAmounSwitch:(BOOL)arg1 rewardQuota:(unsigned long long)arg2;
+- (void)onMMLiveRewardQuotaPolicySheetViewCancelButtonClicked;
+- (void)onMMLiveRewardQuotaPolicySheetViewProtocolCheckBoxClicked;
+- (void)onMMLiveRewardQuotaPolicySheetViewActionButtonClicked:(unsigned long long)arg1 verifyUrl:(id)arg2 secverifyId:(id)arg3 userInfo:(id)arg4;
+- (void)onPurchaseChargeableLiveWithError:(id)arg1 taskId:(id)arg2;
+- (void)onBugCoinWithError:(id)arg1 taskId:(id)arg2;
+- (void)onNewSyncModUserInfoExt:(id)arg1;
+- (BOOL)shouldSupportInteractiveTransition;
+- (BOOL)shouldInvokeInteractiveTransition;
+- (BOOL)isPIPHandlerCreated;
+- (BOOL)isFinderVideoSceneForbidInteractiveTransitionInCurrentLive;
+- (void)onInteractiveTransitionToMinimizationDidBegin;
+- (BOOL)shouldSupportLiveSwitchingWithGestureRecognizer:(id)arg1;
+- (BOOL)shouldSupportSpecialLiveAnimatorGestureRecognizer:(id)arg1;
+- (BOOL)checkGestureRecognizer:(id)arg1 shouldResponsedByView:(id)arg2 withSafeMargin:(double)arg3;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (id)afterOrientationPortrait;
+- (id)afterOrientationPortraitIfIsAnchorMainLandscapeLive;
+- (void)performBlockAfterOrientationPortrait:(id /* block */)arg1;
+- (unsigned long long)getSupportedOrientationMaskForSecondaryVC;
+- (BOOL)shouldUseCustomPresent;
+- (BOOL)isAnchorLandscapeLiveInLandsacpeOrientation;
+- (void)performBlockAfterOrientationPortrait:(id /* block */)arg1 ignoreTopWindowOrientation:(BOOL)arg2;
+- (void)performBlock:(id /* block */)arg1 afterAutoRotateToOrientation:(long long)arg2 ignoreTopWindowOrientation:(BOOL)arg3;
+- (BOOL)needHandleWaitingRotateBlockWhenLiveVCUnPresented;
+- (void)clearCurrentBlock;
+- (void)performBlockAfterPortrait;
+- (void)performBlockAfterLandscape;
+- (void)forceRotateToOrientation:(long long)arg1;
+- (void)forceRotateToOrientation:(long long)arg1 ignoreTopWindowOrientation:(BOOL)arg2;
+- (void)dismissActionSheetWindowIfNeeded;
+- (void)stashTopWindowIfNeeded;
+- (void)unStashWindowIfNeeded;
+- (BOOL)checkAnchorMainOrientationMaskSupportRotateIfNeeded:(long long)arg1;
+- (void)onCurrAnchorMainShouldSupportOrientationMaskChanged:(unsigned long long)arg1;
+- (void)changePresentedViewControllersOverrideOrientationMask:(unsigned long long)arg1;
+- (void)scrollActionSheetWillDismiss:(id)arg1;
+- (void)scrollActionSheetDidAppeared:(id)arg1;
+- (void)reportCustomEvent:(unsigned int)arg1;
+- (void)scrollActionSheet:(id)arg1 didSelecteItem:(id)arg2;
+- (id)clarityLogic;
+- (id)getRecentClarityChooseFromCache;
+- (void)onClarityChooseEntranceSelectWithScene:(unsigned long long)arg1;
+- (void)onLiveTask:(id)arg1 cdnPlayEventId:(int)arg2 params:(id)arg3;
+- (void)changeToOtherAppScene;
+- (void)shareToChatShowingChatroomsOnly:(BOOL)arg1 withShareScene:(long long)arg2;
+- (void)saveCertPicToAlumn;
+- (void)shareToMomentWithShareScene:(long long)arg1;
+- (void)shareToTextState;
+- (void)shareToActivityTextState;
+- (void)onCastingEntranceSelect;
+- (void)startCasting;
+- (void)openRecordActionSheetView;
+- (void)gotoPackageRecordViewController;
+- (void)gotoLotteryWinRecordViewController;
+- (void)gotoSingleLiveLotteryRecordViewController;
+- (void)gotoTrumpetSelectViewController:(unsigned long long)arg1;
+- (void)gotoLiveQrCode;
+- (void)onMMLiveAudienceAccountIntroViewChooseButtonClicked;
+- (void)onMMLiveAudienceAccountIntroViewEnterLiveButtonClicked;
+- (BOOL)showAudienceAccountIntroViewIfNeededBeforeConnectingMic;
+- (void)showAudienceAccountIntroViewBeforeOpeningRedPacket;
+- (void)showLiveStarterViewController;
+- (id)createCompleteViewController;
+- (void)showCompleteViewController:(id)arg1;
+- (void)invokeShowCompleteViewController:(id)arg1;
+- (void)showActionSheetForCommentItemFromAudience:(id)arg1;
+- (void)showActionSheetForCommentItemFromAnchor:(id)arg1;
+- (void)createSettingScrollSheet:(BOOL)arg1 liveShareScene:(long long)arg2;
+- (void)markExposeForAllSheetItem;
+- (void)showActionSheetForShare;
+- (void)showActionSheetForBottomMore;
+- (void)openWebViewController:(id)arg1 startPortrait:(BOOL)arg2 closeCompletion:(id /* block */)arg3;
+- (void)openWebViewController:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)openWebViewController:(id)arg1 fromNav:(id)arg2 closeCompletion:(id /* block */)arg3;
+- (void)openWebViewController:(id)arg1 closeCompletion:(id /* block */)arg2 showMinimizeWindow:(BOOL)arg3;
+- (id)createWebPageSheetNavWithParams:(id)arg1 preload:(BOOL)arg2;
+- (void)preloadHalfWebViewControllerWithParams:(id)arg1 preloadInterval:(unsigned int)arg2 uniqueKey:(id)arg3;
+- (void)cancelPreloadHalfWebViewControllerWithParams:(id)arg1;
+- (void)openHalfWebViewControllerWithParams:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)openWebPageSheetWithParams:(id)arg1 closeCompletion:(id /* block */)arg2;
+- (void)checkScreenCaptureState;
+- (unsigned long long)systemCapabilityAuthScene;
+- (void)fetchAndShowConcertTicketInStyle:(unsigned long long)arg1 force:(BOOL)arg2;
+- (void)checkAndSetAudioModuleActive;
+- (void)jumpFromLiveWith:(id)arg1;
+- (void)openProductFromExternalSourceIfNeed;
+- (void)adapterClickMoreToShare:(id)arg1 webPageSheet:(id)arg2 showDislikeItem:(BOOL)arg3;
+- (void)dismissHalfWebViewController:(BOOL)arg1;
+- (void)webPageSheetWillDismiss:(id)arg1;
+- (BOOL)canEnableMoreOperationWithLiveContact:(id)arg1 andFinderContact:(id)arg2;
+- (void)showLiveUserProfileWithLiveContact:(id)arg1 disableCommentDef:(unsigned long long)arg2 commentItem:(id)arg3;
+- (void)showLiveUserProfileWithLiveContact:(id)arg1 disableCommentDef:(unsigned long long)arg2 isSendPrivateMsgEnable:(BOOL)arg3 isFinderLiveAliasRole:(BOOL)arg4;
+- (void)showLiveUserProfileWithLiveContact:(id)arg1 disableCommentDef:(unsigned long long)arg2 isSendPrivateMsgEnable:(BOOL)arg3 isFinderLiveAliasRole:(BOOL)arg4 openProfilePageSheet:(BOOL)arg5 userInfo:(id)arg6;
+- (void)setActionCallbacksForOpenParameter:(id)arg1 withFinderContact:(id)arg2 withIsAudienceCommentEnable:(BOOL)arg3 withOpenProfileScene:(unsigned long long)arg4;
+- (id)createOperationViewWithTaskId:(id)arg1;
+- (id)createPreviewRelatedOperationViewWithTaskId:(id)arg1;
+- (id)createComplaintExtraQuery;
+- (void)complaintEntry;
+- (void)complainWithEntrance:(long long)arg1 extraData:(id)arg2 extraQuery:(id)arg3;
+- (void)makeFinderLiveHandoffItem;
+- (void)sendFinderLiveOpenHandoff;
+- (void)sendFinderLiveAddHandoff;
+- (void)sendFinderLiveDeleteHandoff;
+- (void)banOrOpenComment:(BOOL)arg1;
+- (void)banOrOpenLike:(BOOL)arg1;
+- (void)banOrOpenGloryList:(BOOL)arg1;
+- (void)banOrOpenHiddenAudienceName:(BOOL)arg1;
+- (void)enableAnchorRealTimeDataPanel:(BOOL)arg1;
+- (void)enableAnchorProductQuestion:(BOOL)arg1;
+- (void)banOrOpenReward:(BOOL)arg1;
+- (void)banOrOpenGameTeamUp:(BOOL)arg1;
+- (void)onForbidClickDoneButton;
+- (void)onLoadingStop;
+- (void)updateCurrOrientation;
+- (void)changeCurrOrientation:(long long)arg1;
+- (void)checkAndPeformBlockAfterAutoRotateImmediately:(BOOL)arg1;
+- (void)onLiveTaskShowLiveAdvertisement:(id)arg1 liveAdId:(id)arg2;
+- (void)onLiveTaskHideLiveAdvertisement:(id)arg1 liveAdId:(id)arg2 prevAdScene:(unsigned long long)arg3;
+- (void)onLiveTaskDidShowLiveAdvertisement:(id)arg1 liveAdId:(id)arg2;
+- (void)willRotate:(id)arg1;
+- (void)handleUIOrientationChanged:(id)arg1;
+- (void)performBlockAfterAutoRotateIfNeeded;
+- (void)didChangeScreenCapture:(id)arg1;
+- (id)toAnchorReporter;
+- (id)toAudienceReporter;
+- (id)toAssistantReporter;
+- (id)finderComodityLogReporter;
+- (void)onBecomeActive;
+- (void)onResignActive;
+- (void)onEnterBackground;
+- (void)onEnterForeground;
+- (void)startPIPHandle;
+- (void)createPIPHandler;
+- (void)handleForBeginSysInterruption;
+- (void)handleForEndSysInterruption;
+- (void)handleForMainOrAssistantAnchorExit:(long long)arg1;
+- (void)restoreVideoAndAudioWhilePrepareResumeLive;
+- (void)handleForMainOrAssistantAnchorRestore:(long long)arg1;
+- (unsigned long long)transferExitAndRestoreSceneToExitState:(long long)arg1;
+- (void)openStreamProfile:(id)arg1;
+- (void)openRewardGiftView:(id)arg1 preferredGiftId:(id)arg2 sendingHint:(id)arg3;
+- (id)getCurrentVC;
+- (void)showForbidLiveViewWithTitleLabel:(id)arg1 withDescLabel:(id)arg2 hasLinkLabel:(BOOL)arg3 errorPage:(id)arg4 andActionCallback:(id /* block */)arg5;
+- (void)showPrivateJoinBlockView;
+- (void)showLiveMemberTipsFullScreenView:(id)arg1;
+- (void)handleSuperfanJoinLiveError:(id)arg1;
+- (void)showSuperfanForbidJoinView:(id)arg1;
+- (void)onClickJoinSuperfan;
+- (void)joinSuperfanGroup;
+- (void)openJoinFansGroupPanel;
+- (void)handleJoinSuperfanSuccess;
+- (void)gotoWebPageFromSuperfanPaymentView:(id)arg1;
+- (void)showSuperfanRoleForbidJoinView:(id)arg1;
+- (void)trySharingWithBlock:(id /* block */)arg1;
+- (void)trySharingToTextStateWithBlock:(id /* block */)arg1;
+- (void)gotoChatViewVCWithContact:(id)arg1 liveContactExtInfo:(id)arg2;
+- (void)gotoFinderPOITopicListPage;
+- (void)gotoFinderPOITopicListPage:(id)arg1;
+- (void)gotoFinderSubscribeProfile;
+- (void)gotoFinderBrandLiveSubscribeProfile;
+- (void)gotoBizProfile:(id)arg1;
+- (id)currentLiveRoomButtonDisplayInfo;
+- (void)gotoGameViewController:(id)arg1;
+- (void)gotoProfileUserViewController:(id)arg1;
+- (void)gotoWXProfileUserViewController:(id)arg1;
+- (void)switchLiveAliasRoleTypeIfIdentityChanged;
+- (void)sendJoinGameRequestWithLaunchParams:(id)arg1;
+- (void)openTrumpetSelectViewController;
+- (void)openTrumpetSelectViewController:(unsigned long long)arg1;
+- (void)retryJoinLiveAfterPayForLive;
+- (void)hideMiniGameApp;
+- (void)onMMLiveOperationClose;
+- (BOOL)checkPauseByVerify:(id)arg1;
+- (BOOL)checkPreVerifyModeIsPendingRemoveLimit;
+- (void)pauseByVerify:(id)arg1;
+- (void)resumeForVerifyConfirm;
+- (void)preparePauseLive;
+- (void)pauseLive;
+- (void)pauseLiveCompletion:(id /* block */)arg1;
+- (void)prepareResumeLiveWithToast:(BOOL)arg1;
+- (void)roomResetStateBeforeResumeLive:(BOOL)arg1;
+- (void)prepareResumeLive;
+- (void)showRemoveLiveLimitedToast:(id /* block */)arg1;
+- (void)showPrepareResumeLiveCountdownToast;
+- (void)resumeLive;
+- (void)showPauseViewWithType:(unsigned long long)arg1;
+- (void)showPauseViewWithType:(unsigned long long)arg1 accumulatedTime:(long long)arg2;
+- (void)doShowPauseViewWithType:(unsigned long long)arg1;
+- (void)hidePauseViewWithType:(unsigned long long)arg1;
+- (void)doHidePauseView;
+- (void)startPauseTimerWithAccumulatedTime:(long long)arg1;
+- (void)adjustPauseTimerWithAccumulatedTime:(long long)arg1;
+- (void)stopPauseTimer;
+- (void)pausePauseTimer;
+- (void)resumePauseTimer;
+- (void)onFinderTrumpetSelectViewLiveOpenRrivacyIdentityWillChange:(unsigned int)arg1 scene:(unsigned long long)arg2;
+- (void)onFinderTrumpetSelectViewLiveIdentityWillChange:(unsigned int)arg1 scene:(unsigned long long)arg2;
+- (void)onFinderTrumpetSelectViewLiveIdentityDidChanged:(unsigned int)arg1 scene:(unsigned long long)arg2;
+- (void)onChangeSelectedFinderUsername:(id)arg1;
+- (void)finderLiveIdentityChange;
+- (void)finderLiveIdentityWillChange:(unsigned int)arg1;
+- (void)finderLiveIdentityPrivacySettingChange;
+- (void)onGetFinderLiveBanComment:(id)arg1 enableComment:(BOOL)arg2 forUserName:(id)arg3;
+- (void)onGetFinderLiveNoSenseBanComment:(id)arg1 enableComment:(BOOL)arg2 forUserName:(id)arg3;
+- (void)onGetFinderContact:(id)arg1 contact:(id)arg2;
+- (void)onGetFinderLiveMessage:(id)arg1 taskId:(id)arg2 onlineContacts:(id)arg3 msgList:(id)arg4 finderLiveInfo:(id)arg5 onlineCount:(unsigned int)arg6 liveInfoEnable:(BOOL)arg7 liveClosed:(BOOL)arg8 liveExtFlag:(unsigned int)arg9 onlineViewCount:(unsigned int)arg10 ktvPlayerCount:(unsigned int)arg11 nextRequestInterval:(unsigned int)arg12 currentLikeCount:(unsigned long long)arg13 liveGameData:(id)arg14 respContext:(id)arg15;
+- (void)onFinderLiveAudioOnlyBackgroundChanged:(id)arg1;
+- (void)onFinderLiveReplayStopgapChanged:(id)arg1 forTaskId:(id)arg2;
+- (void)onTopComment:(id)arg1 taskId:(id)arg2;
+- (void)onGetFinderLiveAudienceActionInfoWithTaskId:(id)arg1 audienceActionInfo:(id)arg2;
+- (void)onGetGuideFollowAdInfoWithTaskId:(id)arg1 info:(id)arg2;
+- (void)onGetGiftWallInfoWithTaskId:(id)arg1 info:(id)arg2;
+- (void)onGetFinderLiveAudienceGiftWallTopOneInfoWithTaskId:(id)arg1 topOneInfo:(id)arg2;
+- (void)setupGameLiveCanvasService;
+- (void)stopGameLiveCanvasViewIfNeed;
+- (void)updateGameLiveBottomView:(id)arg1;
+- (void)onGetFinderLiveGameLiveTeamUpInfoWithTaskId:(id)arg1 appMsgGameTeamInfo:(id)arg2;
+- (void)onFinderLiveGameInvitationWithTaskId:(id)arg1 invitationInfo:(id)arg2;
+- (void)onJoinGameTeamMeetRequirementWithTaskId:(id)arg1 joinGameTeamMode:(unsigned int)arg2 joinGameLaunchParam:(id)arg3;
+- (void)sendJoinGameRequestWithOirginLaunchParams:(id)arg1 teamInfo:(id)arg2 mmkv:(id)arg3;
+- (void)onJoinGameTeamMeetRequirementWithTaskId:(id)arg1 joinGameTeamMode:(unsigned int)arg2 joinGameWAGameJumpInfo:(id)arg3;
+- (void)onFinderLiveIdentitySynced:(id)arg1 liveIdentity:(unsigned int)arg2;
+- (void)onPauseGameLive;
+- (void)onResumeGameLive;
+- (void)onMMLiveStarterViewControllerRequestMinimize;
+- (void)onMMLiveStarterViewControllerRedDotExposedAtPathArray:(id)arg1;
+- (void)onMMLiveStarterViewControllerRedDotExposedAtPath:(id)arg1;
+- (void)onMMLiveStarterViewControllerRedDotClickedAtPath:(id)arg1;
+- (id)mmLiveStarterViewControllerRedDotShowInfoAtPath:(id)arg1;
+- (id)mmLiveStarterViewControllerRedDotCtrlInfoAtPath:(id)arg1;
+- (id)mmLiveStarterViewControllerAllRedDotCtrlInfoAtPath:(id)arg1;
+- (void)mmLiveStarterViewControllerClearRedDotReportCacheWithPrefix:(id)arg1;
+- (void)onMMLiveStarterViewControllerAddGoods;
+- (void)onMMLiveStarterViewControllerPrefetchShopShelf;
+- (void)onMMLiveStarterViewControllerSelectRoomsForRedPacket:(id)arg1;
+- (void)onMMLiveStarterViewControllerShowMusicSettingPanelWithDelegate:(id)arg1;
+- (void)onMMLiveStarterViewControllerShowSongListPanelWithDelegate:(id)arg1;
+- (void)onMMLiveStarterViewControllerShowFansGroupPanel:(id)arg1;
+- (void)onMMLiveStarterViewControllerShowAnchorCustomizeRewardListPanel;
+- (void)onMMLiveStarterViewControllerShowCreateWishPanel;
+- (void)onMMLiveStarterViewControllerShowPromoteManagePanel:(id)arg1;
+- (void)onMMLiveStarterViewControllerShowLiveNotice:(id)arg1;
+- (void)onMMLiveStarterViewControllerCreateLive:(id)arg1;
+- (void)onMMLiveStarterViewControllerUserCancelLive;
+- (void)showFansGroupOperationPanel:(id)arg1;
+- (void)showAnchorCustomizeRewardListPanel;
+- (void)onSelfCreatedFansGroupSuperFanEnabledChanged;
+- (void)showRewardWishOperationPanel;
+- (void)openConnectMicSettingPanel;
+- (void)showRewardSaveWishListPanel:(id)arg1;
+- (BOOL)showRewardWishDetailPanel;
+- (BOOL)createRewardWishDetailPanel;
+- (void)showRewardQuotaSettingSheetView:(id /* block */)arg1;
+- (void)onWeAvatarEvent:(id)arg1 data:(id)arg2;
+- (void)onWeAvatarSEI:(id)arg1 data:(id)arg2;
+- (void)onWeAvatarPreload:(id)arg1;
+- (void)onWeAvatarReady:(id)arg1 isOpen:(BOOL)arg2;
+- (void)onMMLiveRewardQuotaSettingSheetView:(id)arg1 openHelpWebviewSheetWithURL:(id)arg2;
+- (void)onBeginRewardQuotaSettingFromRewardQuotaAlert:(id)arg1;
+- (void)onBeginRewardQuotaExceededFaceVerifyFromRewardQuotaAlert:(id)arg1 faceVerifyCompleteBlock:(id /* block */)arg2;
+- (void)onBeginRewardQuotaExceededFlowSignVerifyFromRewardQuotaPolicySheet:(id)arg1 flowSignVerifyCompleteBlock:(id /* block */)arg2;
+- (void)onMMLiveStarterViewControllerDidClickRotate;
+- (void)mmLiveStarterViewControllerInvokeForceRotateToOrientation:(long long)arg1 ignoreTopWindowOrientation:(BOOL)arg2;
+- (void)onMMLiveStarterViewControllerResetForcePortraitForExtend;
+- (void)onMMGameLiveStarterViewControllerShowMusicSettingPanelWithDelegate:(id)arg1;
+- (void)didClickCustomLink:(id)arg1;
+- (void)doPresentCommentAssistantVC;
+- (void)didClickSendFlashSale:(id)arg1;
+- (void)sendFlashSaleForComment:(id)arg1;
+- (id)currentLiveGraphics;
+- (void)onMMGameLiveStarterViewControllerSelectRoomsForRedPacket:(id)arg1;
+- (void)onMMGameLiveStarterViewControllerShowFansGroupPanel:(id)arg1;
+- (void)onLiveAnchorStatus:(id)arg1 changeTo:(id)arg2;
+- (BOOL)isAnchorJoinGameSpecialGift:(id)arg1;
+- (void)onExitLiveSuccessWithLiveTaskId:(id)arg1;
+- (void)onLiveTask:(id)arg1 liveClosed:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 enterLiveRoom:(id)arg2;
+- (void)onLiveTask:(id)arg1 exitLiveRoom:(long long)arg2 error:(id)arg3;
+- (void)onLiveTask:(id)arg1 switchRoleType:(int)arg2 errMsg:(id)arg3;
+- (void)onLiveTask:(id)arg1 networkLocalQuality:(id)arg2 remoteQuality:(id)arg3;
+- (void)onLiveTask:(id)arg1 userVoiceVolume:(id)arg2 totalVolume:(long long)arg3 isSelfAnchorUserTalking:(BOOL)arg4;
+- (void)handlePureAudioModeChanged:(BOOL)arg1;
+- (void)onLiveTask:(id)arg1 isPureAudioModeChangedTo:(BOOL)arg2 isPureAudioDisplayModeValueChanged:(BOOL)arg3 showTip:(BOOL)arg4;
+- (void)onLiveTask:(id)arg1 isAudienceLocalAudioModeChangedTo:(BOOL)arg2 isPureAudioDisplayModeValueChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 localAudioModeStateChangedTo:(unsigned long long)arg2;
+- (void)onLiveTask:(id)arg1 audioRoomSceneChangedTo:(unsigned long long)arg2;
+- (void)onLiveTask:(id)arg1 flvNetworkQualityUpdated:(long long)arg2 hasChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 anchorIsTalking:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 liveViewConnectMicStateChanged:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 micMutedDidChange:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 didChangeViewCapturing:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 updateLiveDescription:(id)arg2;
+- (void)onLiveTask:(id)arg1 isAssistantValueChanged:(BOOL)arg2;
+- (void)onExtendFromCollapseAnimationDidEndWithLiveTask:(id)arg1;
+- (void)onExtendAnimationDidEndWithLiveTask:(id)arg1;
+- (void)onDismissMinimizeWindowDidEnd:(id)arg1;
+- (void)onMinimizeInteractiveWillEnd:(id)arg1;
+- (void)onCollapseAnimationWillStart:(id)arg1;
+- (void)onShowMinimizeWindowWillStart:(id)arg1;
+- (void)onMinimizeWindowWillDisplay:(id)arg1;
+- (void)onMinimizeWindowDidHide:(id)arg1;
+- (void)switchToLowBitrateStreamIfNeed;
+- (void)onMMFinderLiveConnectMicLayoutModeDidChangeFrom:(unsigned long long)arg1 toLayoutMode:(unsigned long long)arg2;
+- (void)onShowLiveHalfScreenViewFromScene:(long long)arg1 forcePortrait:(BOOL)arg2;
+- (void)onShowConnectedMicUserProfileWithMicUserInfo:(id)arg1 isAvatarTapped:(BOOL)arg2 highlightRect:(CGRect)arg3 highlightRectCornerRadius:(double)arg4;
+- (void)onMMFinderLiveOperationViewShowKtvUserProfileRequestedByUserView:(id)arg1 highlightArea:(CGRect)arg2 highlightAreaCornerRadius:(double)arg3;
+- (void)onConnectedMicUserListUpdated;
+- (void)onLiveTask:(id)arg1 micUsersInfoChanged:(id)arg2;
+- (unsigned long long)onMMLiveOperationGetDisplayingLivePauseViewType;
+- (void)onLiveTaskLandScapeEnabledChanged:(id)arg1;
+- (void)onLiveTaskSwitchCdnPlayerViewFinished:(id)arg1;
+- (void)onLiveTask:(id)arg1 multiAngleCdnPlayerViewCountUpdated:(unsigned long long)arg2 andCurrentIndex:(unsigned long long)arg3;
+- (void)onLiveTask:(id)arg1 currentDisplayingCdnPlayerViewIndexUpdated:(unsigned long long)arg2 andProgress:(double)arg3;
+- (void)onLiveTask:(id)arg1 willStartMultiAngleSwitchAnimationWithDuration:(double)arg2 currentProgress:(double)arg3 switchToNext:(BOOL)arg4;
+- (void)onLiveTask:(id)arg1 minimizeWindowDidClosed:(BOOL)arg2 pipMode:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 cdnPlayerItemDecodeTypeChanged:(id)arg2;
+- (void)viewDidBePushOrPresent:(BOOL)arg1;
+- (void)viewDidBePopedOrDismissed:(BOOL)arg1;
+- (void)MMUIViewControllerDidAppear:(id)arg1;
+- (void)MMUIViewControllerWillAppear:(id)arg1;
+- (void)MMUIViewControllerWillDisppear:(id)arg1;
+- (void)MMUIViewControllerDidDisappear:(id)arg1;
+- (void)tryResumeLiveForAudienceWhenMMUIViewControllerDidDisappear:(id)arg1;
+- (void)checkPivotVCIsAbnormallyDismissed:(id)arg1;
+- (BOOL)needEnableCurrentLiveForAbnormalCheck;
+- (void)showLiveInMinimizedWindow:(id)arg1;
+- (void)dismissLiveMinimizedWindow:(id)arg1;
+- (void)onLiveTaskMinimizedWindowDismiss:(id)arg1;
+- (id)pollingFetchRequestBufferByCmdId:(long long)arg1;
+- (id)instantDiscountActivityPollingFetchRequest;
+- (id)getPollingFetchRequestBufferModelForCmdIDUpdateBulletScreen;
+- (void)onWCFinderLiveHalfScreenConfirmButtonClicked:(long long)arg1;
+- (void)onOpenStreamProfileButtonClicked:(id)arg1;
+- (void)onOpenRewardGiftViewButtonClicked:(id)arg1;
+- (void)onSwitchToConnectMicAnchorLiveClicked:(id)arg1;
+- (void)actionSheetWillDismiss:(long long)arg1;
+- (void)onContactClick:(id)arg1 index:(unsigned long long)arg2;
+- (void)clickRFItemCallBack:(id)arg1;
+- (void)relayoutScrollSheet;
+- (void)onDoneForwardForForwardViewWithContentVM:(id)arg1 isCertificateType:(BOOL)arg2;
+- (void)onDoneForwardMessageWithContentVM:(id)arg1 andUserArray:(id)arg2 isCertificateType:(BOOL)arg3;
+- (void)onForwardSharePreConfirmSend:(id)arg1 wxUsernameArray:(id)arg2;
+- (void)onForwardSharePreConfirmCancelled:(id)arg1;
+- (void)onFinishPublishingTextState:(id)arg1;
+- (id)getCurrentViewController;
+- (void)OnForwardMessageSend:(id)arg1;
+- (void)OnForwardMessageCancel:(id)arg1;
+- (void)OnForwardMessageSelectSession:(id)arg1;
+- (BOOL)isFollowState;
+- (void)reportAnchorShareAction;
+- (void)reportShareActionWithEid:(id)arg1 isExpose:(BOOL)arg2 source:(int)arg3;
+- (void)onMMFinderLiveBulletinViewControllerTapDone:(id)arg1;
+- (void)onEditBulletin;
+- (void)onReportFansGroupOperationActionType:(long long)arg1;
+- (void)onReportFansGroupNoticeActionType:(long long)arg1 notice:(id)arg2 level:(unsigned long long)arg3 imageUrl:(id)arg4 visibility:(long long)arg5;
+- (void)onLivePivotForbidScrollPanGestureEnd;
+- (void)updateAfterZoomOut;
+- (void)updateBeforeZoomIn;
+- (void)updateAfterZoomIn;
+- (void)minimizeLiveClick;
+- (void)quickReplyEditClick;
+- (void)quickReplyComplete:(id)arg1 showToast:(BOOL)arg2 hasContent:(BOOL)arg3;
+- (void)onLiveModPannel:(id)arg1;
+- (void)quickReplyShowErrorType:(int)arg1 errorMsg:(id)arg2;
+- (void)showQuickReplySuccessToast:(BOOL)arg1 showToast:(BOOL)arg2;
+- (id)quickReplyView;
+- (void)onShareToGroupRequestedByGroupPanel;
+- (void)onInvokeToShowCommentChatRoomCreateGuideView;
+- (void)updateNoSenseCommentDisable:(BOOL)arg1 userName:(id)arg2;
+- (void)dislikeActionSheetClick;
+- (void)dislikeLiveRoom;
+- (void)OnRecordPermissioned;
+- (void)OnRecordDenied;
+- (void)OnRecordDeniedByWeChat;
+- (void)willForceChangeOrientation;
+- (void)didForceChangeOrientation;
+- (void)markOrientationFlag;
+- (void)clearOrientaionFlag;
+- (id)adFeedBackPanel;
+- (id)adDislikeReasonPanel;
+- (void)onMMLiveFullScreenTipsViewClose;
+- (void)onMMLiveOperationScrollEnterSqaureButtonClick:(id)arg1;
+- (void)navigateToFootageReplayWithModel:(id)arg1 navigationController:(id)arg2;
+- (void)onGetFlashSaleInfo:(id)arg1;
+- (void)onGetGuideInfo:(id)arg1;
+- (void)onMMLiveCompleteViewControllerDidAppear;
+- (void)reportAudienceOperation:(id)arg1;
+- (void)showSquareGuideView;
+- (void)onMMFinderLiveSwitchStreamGuidePanelSwitchToLocalAudioModeWithPanel:(id)arg1;
+- (void)onMMFinderLiveSwitchStreamGuidePanelSwitchVideoStreamWithPanel:(id)arg1;
+- (void)listenHalfScreenMoveProgress:(double)arg1 heightRatio:(double)arg2;
+- (unsigned long long)listenHalfScreenOption;
+- (id)getCurTargetRatioValue;
+- (void)onMediaServicesWereLost:(id)arg1;
+- (void)onMediaServicesWereReset:(id)arg1;
+- (void)onAVCameraCaptureError:(id)arg1;
+- (void)onMatrixPerfWarning:(id)arg1;
+- (void)hookPageSheetShowInLiveRoom;
+- (void)setOpViewAccessibilityElementsHidden:(BOOL)arg1;
+- (void)removePageSheetHook;
+- (void)showGloryIntroSheet;
+- (void)showGloryIntroSheetWithEntry:(int)arg1;
+- (void)onMMFinderLiveGloryIntroSheetConfirm:(id)arg1;
+- (void)onMMFinderLiveGloryIntroSheetCancel:(id)arg1;
+- (void)showGiftWallIntroSheetWithGift:(id)arg1;
+- (void)onMMFinderLiveGiftWallIntroSheetConfirm:(id)arg1;
+- (void)onMMFinderLiveGiftWallIntroSheetCancel:(id)arg1;
+- (void)onMMFinderLiveGiftWallIntroClickGift:(id)arg1;
+- (void)closeWithIsActionSheetItem:(BOOL)arg1;
+- (BOOL)checkGoLiveSquare;
+- (BOOL)checkGoFollowReserve:(BOOL)arg1 isAudience:(BOOL)arg2 block:(id /* block */)arg3;
+- (BOOL)quitLiveSelector:(BOOL)arg1 isAudience:(BOOL)arg2 block:(id /* block */)arg3;
+- (void)checkAndInitSquareGuide;
+- (BOOL)checkQuitLivePageShowExpired:(long long)arg1 pageShowTimeKey:(id)arg2 pageShowDateKey:(id)arg3;
+- (BOOL)shouldShowGuideConfirm;
+- (void)onGetFinderLiveAppMsgShopInfoWithTaskId:(id)arg1 shopInfo:(id)arg2;
+- (void)setUpUnifiedEntryLiveModeWithFinderLiveTask:(id)arg1 starterVM:(id)arg2 isGameEnter:(BOOL)arg3;
+- (void)onUpdateStarterVMWithFinderLiveTask:(id)arg1 starterVM:(id)arg2 isGameEnter:(BOOL)arg3;
+- (void)onFinderLiveBubbleShowWithNoticeInfo:(id)arg1;
+- (void)onFinderLiveBubbleDismissNoticeBubble;
+- (void)onFinderLiveRealNameFriendLikeBubbleShow;
+- (void)onFinderLiveRealNameFriendLikeBubbleRequestDismiss;
+- (void)onFinderLiveRealNameFriendLikeRequestShowFriendLikeGuide:(long long)arg1 sendReason:(unsigned long long)arg2;
+- (void)onFinderLiveRealNameFriendLikeBubbleLikeStateChanged:(BOOL)arg1;
+- (void)onMMFinderLiveMilestoneLotteryFollowSuccess;
+- (void)onWebViewDidBecomeUnresponsible:(id)arg1;
+- (id)webViewFailToLoad:(id)arg1 Error:(id)arg2;
+- (void)initializeBeautyBadges;
+- (void)addBeautyBadgeWithRedDotManager:(id)arg1 paths:(id)arg2 type:(unsigned long long)arg3 groupId:(id)arg4;
+- (void)removeBeautyBadgeWithRedDotManager:(id)arg1 leafPath:(id)arg2;
+- (void)onActiveBeautyBadgesChangedInCollection:(id)arg1;
+- (id)completeViewController;
+- (void)setCompleteViewController:(id)arg1;
+- (id)finderUserName;
+- (id)previewRelatedOperationView;
+- (void)setPreviewRelatedOperationView:(id)arg1;
+- (id)forbidGestureReasons;
+- (id)reporter;
+- (void)setReporter:(id)arg1;
+- (id)assistantReporter;
+- (void)setAssistantReporter:(id)arg1;
+- (id)liveShopShelfView;
+- (void)setLiveShopShelfView:(id)arg1;
+- (BOOL)isLiveClosed;
+- (BOOL)isLiveJoined;
+- (void)setIsLiveJoined:(BOOL)arg1;
+- (unsigned int)lastLiveExtFlag;
+- (void)setLastLiveExtFlag:(unsigned int)arg1;
+- (id)lastAppearFullVCFromLiveRoom;
+- (void)setLastAppearFullVCFromLiveRoom:(id)arg1;
+- (id)lastWillDisappearVC;
+- (void)setLastWillDisappearVC:(id)arg1;
+- (BOOL)isDismissed;
+- (void)setIsDismissed:(BOOL)arg1;
+- (BOOL)lastAppearFullVCFromHomepageWithBottomPlayer;
+- (void)setLastAppearFullVCFromHomepageWithBottomPlayer:(BOOL)arg1;
+- (unsigned int)joinLiveTime;
+- (void)setJoinLiveTime:(unsigned int)arg1;
+- (BOOL)shouldUpdateTRTCCloudMixtureParams;
+- (void)setShouldUpdateTRTCCloudMixtureParams:(BOOL)arg1;
+- (BOOL)isFinderLiveIdentityChangedInMinimizeMode;
+- (void)setIsFinderLiveIdentityChangedInMinimizeMode:(BOOL)arg1;
+- (BOOL)isManullyCloseMinimizeWindow;
+- (void)setIsManullyCloseMinimizeWindow:(BOOL)arg1;
+- (unsigned long long)enterPrivacyBlockPanelTimestamp;
+- (void)setEnterPrivacyBlockPanelTimestamp:(unsigned long long)arg1;
+- (id)pauseTimer;
+- (void)setPauseTimer:(id)arg1;
+- (id)kickedOutTipsView;
+- (void)setKickedOutTipsView:(id)arg1;
+- (id)privateJoinBlockView;
+- (void)setPrivateJoinBlockView:(id)arg1;
+- (unsigned int)preVerifyMode;
+- (void)setPreVerifyMode:(unsigned int)arg1;
+- (BOOL)editingBulletin;
+- (void)setEditingBulletin:(BOOL)arg1;
+- (id /* block */)forbidLiveActionCallback;
+- (void)setForbidLiveActionCallback:(id /* block */)arg1;
+- (id)generalStarterVM;
+- (void)setGeneralStarterVM:(id)arg1;
+- (long long)lastSelectLiveAliasRole;
+- (void)setLastSelectLiveAliasRole:(long long)arg1;
+- (long long)lastJoinLiveVisibleInfoSwitchType;
+- (void)setLastJoinLiveVisibleInfoSwitchType:(long long)arg1;
+- (id)lastSelectFinderUserName;
+- (void)setLastSelectFinderUserName:(id)arg1;
+- (id)audienceAccountIntroView;
+- (void)setAudienceAccountIntroView:(id)arg1;
+- (id)canvasView;
+- (void)setCanvasView:(id)arg1;
+- (BOOL)canShowVideoBottomView;
+- (void)setCanShowVideoBottomView:(BOOL)arg1;
+- (unsigned int)curGameJoinTeamMode;
+- (void)setCurGameJoinTeamMode:(unsigned int)arg1;
+- (id)sharePreConfirmView;
+- (void)setSharePreConfirmView:(id)arg1;
+- (id)gameFrameSetRootId;
+- (void)setGameFrameSetRootId:(id)arg1;
+- (id)gamePkgAppId;
+- (void)setGamePkgAppId:(id)arg1;
+- (id)gamePkgAppPath;
+- (void)setGamePkgAppPath:(id)arg1;
+- (id)gamePkgUsername;
+- (void)setGamePkgUsername:(id)arg1;
+- (id)liveCastViewModel;
+- (void)setLiveCastViewModel:(id)arg1;
+- (id)finderLiveHandoffItem;
+- (void)setFinderLiveHandoffItem:(id)arg1;
+- (void)setFinderComodityLogReporter:(id)arg1;
+- (id)webPageSheetContainerCache;
+- (void)setWebPageSheetContainerCache:(id)arg1;
+- (id)halfWebVCAdapter;
+- (void)setHalfWebVCAdapter:(id)arg1;
+- (id /* block */)halfWebVCCloseAction;
+- (void)setHalfWebVCCloseAction:(id /* block */)arg1;
+- (id)uniqueKey2SheetParams;
+- (void)setUniqueKey2SheetParams:(id)arg1;
+- (double)listenHalfScreenRatio;
+- (void)setListenHalfScreenRatio:(double)arg1;
+- (unsigned long long)recentShareIndex;
+- (void)setRecentShareIndex:(unsigned long long)arg1;
+- (void)setClarityLogic:(id)arg1;
+- (id)liveBulletin;
+- (void)setLiveBulletin:(id)arg1;
+- (BOOL)hasShownSwitchStreamGuidePanel;
+- (void)setHasShownSwitchStreamGuidePanel:(BOOL)arg1;
+- (id)switchStreamGuidePanel;
+- (void)setSwitchStreamGuidePanel:(id)arg1;
+- (long long)flvQualityBadCount;
+- (void)setFlvQualityBadCount:(long long)arg1;
+- (long long)flvQualityBadCountThreshold;
+- (void)setFlvQualityBadCountThreshold:(long long)arg1;
+- (unsigned int)lastFlvQualityTime;
+- (void)setLastFlvQualityTime:(unsigned int)arg1;
+- (id)morphDismissTarget;
+- (void)setMorphDismissTarget:(id)arg1;
+- (void)setQuickReplyView:(id)arg1;
+- (long long)disableSnapshotFlag;
+- (void)setDisableSnapshotFlag:(long long)arg1;
+- (BOOL)disableSnapshot;
+- (void)setDisableSnapshot:(BOOL)arg1;
+- (BOOL)isLiveAnchorPausedForOuter;
+- (void)setIsLiveAnchorPausedForOuter:(BOOL)arg1;
+- (id)rewardQuotaSettingSheetView;
+- (void)setRewardQuotaSettingSheetView:(id)arg1;
+- (BOOL)hasTryLoadECRoomConfig;
+- (void)setHasTryLoadECRoomConfig:(BOOL)arg1;
+- (void)setMoreFunctionManager:(id)arg1;
+- (void)setAudienceMoreFunctionManager:(id)arg1;
+- (id)memberTipsFullScreenView;
+- (void)setMemberTipsFullScreenView:(id)arg1;
+- (id)stashWindowObj;
+- (void)setStashWindowObj:(id)arg1;
+- (id /* block */)delayRotateBlock;
+- (void)setDelayRotateBlock:(id /* block */)arg1;
+- (id)gloryIntroSheet;
+- (void)setGloryIntroSheet:(id)arg1;
+- (id)giftWallIntroSheet;
+- (void)setGiftWallIntroSheet:(id)arg1;
+- (id)superfanForbidView;
+- (void)setSuperfanForbidView:(id)arg1;
+- (id)superfanSwitchRoleForbidView;
+- (void)setSuperfanSwitchRoleForbidView:(id)arg1;
+- (id)superfanPaymentHelper;
+- (void)setSuperfanPaymentHelper:(id)arg1;
+- (id)guideView;
+- (void)setGuideView:(id)arg1;
+- (id)pageArray;
+- (void)setPageArray:(id)arg1;
+- (id)quitLiveNavPage;
+- (void)setQuitLiveNavPage:(id)arg1;
+- (id)quitLiveFolPage;
+- (void)setQuitLiveFolPage:(id)arg1;
+- (id)quitLiveResPage;
+- (void)setQuitLiveResPage:(id)arg1;
+- (id)quitLiveReserveNoticePage;
+- (void)setQuitLiveReserveNoticePage:(id)arg1;
+- (id)homePageVC;
+- (void)setHomePageVC:(id)arg1;
+- (BOOL)isPIPCheckStart;
+- (void)setIsPIPCheckStart:(BOOL)arg1;
+- (id)pipHandler;
+- (void)setPipHandler:(id)arg1;
+- (id)autoSafeAlertViewArray;
+- (void)setAutoSafeAlertViewArray:(id)arg1;
+- (id)lastCdnStreamInfo;
+- (void)setLastCdnStreamInfo:(id)arg1;
+- (BOOL)isShowCompleteViewController;
+- (void)setIsShowCompleteViewController:(BOOL)arg1;
+- (id)dataItem;
+- (void)setDataItem:(id)arg1;
+- (BOOL)hasOpenedWeAppInFullScreen;
+- (void)setHasOpenedWeAppInFullScreen:(BOOL)arg1;
+- (BOOL)shouldCloseSheetModeWeApp;
+- (void)setShouldCloseSheetModeWeApp:(BOOL)arg1;
+- (id)settingScrollActionSheet;
+- (void)setSettingScrollActionSheet:(id)arg1;
+- (id)liveContactActionSheet;
+- (void)setLiveContactActionSheet:(id)arg1;
+- (id)verifyAndPolicyView;
+- (void)setVerifyAndPolicyView:(id)arg1;
+- (id)profileView;
+- (void)setProfileView:(id)arg1;
+- (id)musicInfoSheet;
+- (void)setMusicInfoSheet:(id)arg1;
+- (id)gameGuideTipsVC;
+- (void)setGameGuideTipsVC:(id)arg1;
+- (BOOL)isFinderLiveAudienceMusicSheetOpen;
+- (void)setIsFinderLiveAudienceMusicSheetOpen:(BOOL)arg1;
+- (id /* block */)halfAdCanvasCloseAction;
+- (void)setHalfAdCanvasCloseAction:(id /* block */)arg1;
+- (id)fansGroupOperationPanel;
+- (void)setFansGroupOperationPanel:(id)arg1;
+- (id)anchorCustomizeRewardListPanel;
+- (void)setAnchorCustomizeRewardListPanel:(id)arg1;
+- (id)rewardWishOperationPanel;
+- (void)setRewardWishOperationPanel:(id)arg1;
+- (id)rewardWishDetailPanel;
+- (void)setRewardWishDetailPanel:(id)arg1;
+- (id)rewardWishPanel;
+- (void)setRewardWishPanel:(id)arg1;
+- (id)promotionTimer;
+- (void)setPromotionTimer:(id)arg1;
+- (int)promotionTime;
+- (void)setPromotionTime:(int)arg1;
+- (BOOL)isVerifyLimitedLive;
+- (void)setIsVerifyLimitedLive:(BOOL)arg1;
+- (id /* block */)waittingPortraitBlock;
+- (void)setWaittingPortraitBlock:(id /* block */)arg1;
+- (id /* block */)waittingLandscapeBlock;
+- (void)setWaittingLandscapeBlock:(id /* block */)arg1;
+- (BOOL)recoverNaviBarIfLiveVCDisappears;
+- (void)setRecoverNaviBarIfLiveVCDisappears:(BOOL)arg1;
+- (long long)shareScene;
+- (void)setShareScene:(long long)arg1;
+- (void)setAdFeedBackPanel:(id)arg1;
+- (void)setAdDislikeReasonPanel:(id)arg1;
+- (id /* block */)halfCNYShareViewCloseAction;
+- (void)setHalfCNYShareViewCloseAction:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end
+

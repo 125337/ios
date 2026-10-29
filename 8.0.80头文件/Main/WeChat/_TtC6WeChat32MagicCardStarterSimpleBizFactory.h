@@ -1,0 +1,2 @@
+@interface _TtC6WeChat32MagicCardStarterSimpleBizFactory : _TtCs12_SwiftObject
+@end

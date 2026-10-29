@@ -1,0 +1,3 @@
+@interface _TtCC6WeChat17KaraFeatureCenter12DiscoverView : _TtCC6WeChat17KaraFeatureCenter9Component
+@end
+

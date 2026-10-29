@@ -1,0 +1,3 @@
+@interface FWFWKNavigationDelegateHostApiCodecWriter : FlutterStandardWriter
+@end
+

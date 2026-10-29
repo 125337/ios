@@ -1,0 +1,10 @@
+@interface MMFinderLiveStickerWevisionCompositingLogic : MMFinderLiveStickerCompositingLogic
+- (unsigned long long)addStickerItem:(id)arg1;
+- (unsigned long long)insertStickerItemToBack:(id)arg1;
+- (unsigned long long)removeStickerItem:(id)arg1;
+- (unsigned long long)removeStickerItemWithId:(id)arg1;
+- (id)createWevisionWidgetWithSticker:(id)arg1;
+- (struct)transferStickerAffineTransformToWevisionTransform:(CGAffineTransformComponents)arg1;
+- (CGSize)transferNormalizedSizeFromStickerToWevision:(id)arg1;
+@end
+

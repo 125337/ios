@@ -1,0 +1,3 @@
+@interface WCAdChannelReportExtendInfoModel : NSObject
+@end
+

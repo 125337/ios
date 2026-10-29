@@ -1,0 +1,21 @@
+@interface TrackRoomUIManager : MMUserService <MMServiceProtocol>
+- (id)init;
+- (BOOL)openTrackRoom:(id)arg1 POIInfo:(id)arg2 Scene:(unsigned int)arg3;
+- (void)closeTrackRoomView:(unsigned int)arg1 reason:(unsigned int)arg2;
+- (void)minimizeTrackRoomView;
+- (void)hideTrackRoomView;
+- (BOOL)isShowingTrackRoom;
+- (void)autoExitAtHidden;
+- (void)showTrackRoomView;
+- (void)cleanResource;
+- (void)onTrackRoomViewClose;
+- (void)onTrackRoomViewHide;
+- (void)onServiceMemoryWarning;
+- (void)onVideoVoipViewDidAppear:(id)arg1;
+- (void)onVideoVoipViewDisappear;
+- (void)onMonoServiceMultitalkWillStart;
+- (void)onMonoServiceVoipWillStart;
+- (void)onMonoServiceWalkieTalkieWillStart;
+- (void)onMonoServiceDidEnd;
+- (void)onMMLiveWillStart;
+@end

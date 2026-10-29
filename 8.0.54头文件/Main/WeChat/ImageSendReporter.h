@@ -1,0 +1,7 @@
+@interface ImageSendReporter : NSObject
++ (void)reportAssetError:(long long)arg1;
++ (void)reportUploadFailWithMsgStatError:(long long)arg1 cdnError:(long long)arg2;
++ (void)reportSendFailWithCgiError:(long long)arg1;
++ (void)doReportWithErrorCode:(long long)arg1 msgStatTaskError:(long long)arg2 cdnErrorCode:(long long)arg3 cgiErrorCode:(long long)arg4 extraInfo:(id)arg5;
+@end
+

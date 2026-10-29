@@ -1,0 +1,3 @@
+@interface WCFinderRecommendTagViewModel : NSObject
+@end
+

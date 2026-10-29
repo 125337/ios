@@ -1,0 +1,3 @@
+@interface WAJSEventHandler_updateModal : WAJSEventHandler_BaseEvent
+- (void)handleJSEvent:(id)arg1;
+@end

@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_openEcsProductPage : WAJSEventHandler_baseOpenEcsPage
+@end

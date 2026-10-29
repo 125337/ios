@@ -1,0 +1,306 @@
+@interface MMLiveViewController : MMUIViewController <TRTCCloudDelegate, MMLiveCommentViewDelegate, MMLiveConnectMicOperationPanelDelegate, MMAcceptAgreementResultViewControllerDelegate, MMTipsViewControllerDelegate, WAAppTaskMgrExt, MMLiveOperationViewDelegate, MMLiveCompleteViewControllerDelegate, MMLiveStarterViewControllerDelegate, MMLiveLogicDelegate, MMLiveTaskMgrExt, WCActionSheetDelegate, MMLiveContainerLogicControllerDelegate, INetworkStatusMgrExt, MMFinderLivePIPMinimizeLogicControllerDelegate>
+{
+    BOOL _isForcePortraitForExtend; // +0x68
+    BOOL _isPresentingWithCustomTransition; // +0x69
+    BOOL _liveDidFinished; // +0x6a
+    BOOL _isClosing; // +0x6b
+    BOOL _waitingJoinLive; // +0x6c
+    BOOL _postponeJoinLive; // +0x6d
+    BOOL _supressMinimizeWindowAutoupdate; // +0x6e
+    BOOL _isAppTaskLaunchingDuringLive; // +0x6f
+    BOOL _isInBackground; // +0x70
+    BOOL _isRealInBackground; // +0x71
+    BOOL _isInSysInterruptionHandling; // +0x72
+    BOOL _isPausedByAnchor; // +0x73
+    BOOL _isPausedByVerify; // +0x74
+    BOOL _anchorJoinLiveAfterAbnormalExit; // +0x75
+    BOOL _isAbnormallyDismissed; // +0x76
+    BOOL _liveDidStarted; // +0x77
+    BOOL _isLiveAppearing; // +0x78
+    id <MMLiveViewControllerDelegate> _delegate; // +0x80
+    MMLiveView * _liveView; // +0x88
+    MMLiveTaskId * _liveTaskId; // +0x90
+    MMLiveLogic * _liveLogic; // +0x98
+    MMLiveCompleteViewController * _completeViewController; // +0xa0
+    UIImageView * _blurView; // +0xa8
+    MMLiveStarterViewController * _starterViewController; // +0xb0
+    UINavigationController * _navControl; // +0xb8
+    id /* block */ _closeLiveBlock; // +0xc0
+    NSString * _lastNetworkType; // +0xc8
+    id /* block */ _forbidLiveActionCallback; // +0xd0
+    NSMutableDictionary * _completeExtraInfo; // +0xd8
+    unsigned long long _currSupportedInterfaceOrientations; // +0xe0
+    MMLiveOperationView * _operationView; // +0xe8
+    long long _currOrientation; // +0xf0
+    unsigned long long _currentPauseViewTypes; // +0xf8
+}
+- (id)animationControllerForDismissedController:(id)arg1;
+- (id)animationControllerForPresentedController:(id)arg1 presentingController:(id)arg2 sourceController:(id)arg3;
+- (id)presentationControllerForPresentedViewController:(id)arg1 presentingViewController:(id)arg2 sourceViewController:(id)arg3;
+- (id)initWithLiveTaskId:(id)arg1;
+- (void)dealloc;
+- (BOOL)isJoinLiveAfterAbnormalExit;
+- (BOOL)shouldSupportLandScape;
+- (void)initAbnormalState;
+- (void)initData;
+- (void)initLiveLogic;
+- (void)initReporter;
+- (void)initNotifications;
+- (void)viewDidLoad;
+- (void)startHandleForLiveRoomDidLoad;
+- (void)registerExtension;
+- (void)unRegisterExtension;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (void)viewDidLayoutSubviews;
+- (void)viewDidTransitionToNewSize;
+- (void)viewWillTransitionToSize:(CGSize)arg1 withTransitionCoordinator:(id)arg2;
+- (void)viewWillBeDismissed:(BOOL)arg1;
+- (void)viewDidBeDismissed:(BOOL)arg1;
+- (void)liveViewWillBeAbnormallyDismissed;
+- (void)forceLayoutForOrientationChanged;
+- (BOOL)shouldAutorotate;
+- (unsigned long long)supportedInterfaceOrientations;
+- (unsigned long long)providedInterfaceOrientationMaskInIphone;
+- (unsigned long long)inner_supportedInterfaceOrientations;
+- (unsigned long long)currentOrientationMask;
+- (BOOL)shouldInteractivePop;
+- (BOOL)useBlackStatusbar;
+- (long long)preferredStatusBarStyle;
+- (void)exitAndClearLive;
+- (void)markReleaseUIAndLogic;
+- (void)updateCurrSupportedInterfaceOrientations:(unsigned long long)arg1;
+- (void)changeCurrOrientation:(long long)arg1;
+- (void)closeDirectly;
+- (void)closeDirectlyWithCompletion:(id /* block */)arg1;
+- (void)stopLive;
+- (void)anchorAssistantClose;
+- (void)close;
+- (void)closeByCutLive;
+- (void)closeWithoutNavigation;
+- (void)closeWithError:(id)arg1 needNotify:(BOOL)arg2;
+- (void)gotoCompletePageOverride;
+- (void)gotoCompletePage;
+- (id)createCompleteViewController;
+- (void)showCompleteViewController:(id)arg1;
+- (id)navigationController;
+- (id)realNavigationController;
+- (void)persistMorphDismissTarget;
+- (void)setupMorphDismiss;
+- (unsigned long long)systemCapabilityAuthScene;
+- (void)updateLiveProgress;
+- (void)onLiveAppearingChanged;
+- (id)operationView;
+- (id)connectMicLogic;
+- (unsigned long long)liveId;
+- (long long)roleType;
+- (id)liveTask;
+- (BOOL)hasInvokeStartLive;
+- (id)pivotViewController;
+- (void)embedSubviewFromChildViewController:(id)arg1;
+- (void)unembedChildViewController:(id)arg1;
+- (void)viewSafeAreaInsetsDidChange;
+- (void)initUI;
+- (void)initOperationViewHideStatus;
+- (void)initControllerViewSettings;
+- (void)showLiveStarterViewController;
+- (void)layoutUI;
+- (void)layoutLiveView;
+- (void)layoutBlurView;
+- (void)layoutOperationView;
+- (id)createOperationView;
+- (id)displayContentView;
+- (id)minimizeSrcView;
+- (CGRect)getMinimizeSrcFrameForBusiness:(long long)arg1;
+- (void)showView;
+- (void)hideView;
+- (BOOL)shouldSupportInteractiveTransition;
+- (BOOL)shouldInvokeInteractiveTransition;
+- (BOOL)isPIPHandlerCreated;
+- (void)onInteractiveTransitionToMinimizationDidBegin;
+- (BOOL)shouldSupportLiveSwitchingWithGestureRecognizer:(id)arg1;
+- (BOOL)shouldSupportSpecialLiveAnimatorGestureRecognizer:(id)arg1;
+- (BOOL)shouldShowCloseButtonWhenMinimized;
+- (void)rotateToOrientation:(long long)arg1;
+- (void)onWillTransitionToMinimize;
+- (void)onEndTransitionWithPreState:(long long)arg1;
+- (BOOL)isAnchorPreviewRotateTransiting;
+- (id)pipMinimizeContentView;
+- (void)notifyShowContentView;
+- (void)notifyHideContentView;
+- (long long)getCurrentOrientation;
+- (void)createLive:(id)arg1;
+- (void)joinLive:(unsigned long long)arg1;
+- (void)gotoUserProfile:(id)arg1 isAnchorHeadImage:(BOOL)arg2;
+- (void)minimizeLive:(id /* block */)arg1;
+- (void)displayContent;
+- (void)unDisplayContent;
+- (unsigned long long)getCurrentSupportedInterfaceOrientations;
+- (BOOL)forbidHiddenNavigationBarWillAppear;
+- (unsigned long long)displayingPauseViewType;
+- (void)addCurrentPauseViewTypes:(unsigned long long)arg1;
+- (void)removeCurrentPauseViewTypes:(unsigned long long)arg1;
+- (void)showPauseViewWithType:(unsigned long long)arg1;
+- (void)hidePauseViewWithType:(unsigned long long)arg1;
+- (id)pauseMessageForType:(unsigned long long)arg1;
+- (void)doShowPauseViewWithType:(unsigned long long)arg1;
+- (void)doHidePauseView;
+- (id)getLiveCloseDestructiveTitle;
+- (void)closeRoomAction;
+- (void)switchCameraAction;
+- (void)onCreateLive:(id)arg1;
+- (void)onJoinLive:(id)arg1;
+- (void)onShareLive:(id)arg1;
+- (void)onLiveClosed:(id)arg1;
+- (void)onGetLiveInfo;
+- (void)onGetAnchorStatus;
+- (id)getLiveOperationView;
+- (id)getLiveViewControllerForLiveLogic;
+- (BOOL)checkTask:(id)arg1;
+- (void)onLiveTask:(id)arg1 enterLiveRoom:(id)arg2;
+- (void)onLiveTask:(id)arg1 exitLiveRoom:(long long)arg2 error:(id)arg3;
+- (void)onLiveTask:(id)arg1 liveSdkInfoWillExpire:(id)arg2;
+- (void)onLiveTask:(id)arg1 switchRoleType:(int)arg2 errMsg:(id)arg3;
+- (void)onLiveTask:(id)arg1 user:(id)arg2 audioAvailable:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 user:(id)arg2 videoAvailable:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 networkLocalQuality:(id)arg2 remoteQuality:(id)arg3;
+- (void)onLiveTask:(id)arg1 netStatus:(id)arg2;
+- (void)onLiveTask:(id)arg1 cdnPlayEventId:(int)arg2 params:(id)arg3;
+- (void)onLiveTaskFirstShowCdnPlayerView:(id)arg1;
+- (void)onLiveTask:(id)arg1 cdnPlayRemoteVideoSizeChanged:(CGSize)arg2;
+- (void)onLiveTask:(id)arg1 remoteUserEnterRoom:(id)arg2;
+- (void)onLiveTask:(id)arg1 remoteUserLeaveRoom:(id)arg2 reason:(long long)arg3;
+- (void)onLiveTask:(id)arg1 connectOtherRoomResult:(BOOL)arg2 userId:(id)arg3 errCode:(int)arg4 errMsg:(id)arg5;
+- (void)onLiveTask:(id)arg1 sysCallInterrupted:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 SEIConnectMicUserInfoListUpdated:(id)arg2 listChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 SEIMicMsgInfoUpdated:(id)arg2 listChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 SEIMicTalkingUsersListUpdated:(id)arg2;
+- (void)onLiveTask:(id)arg1 userVoiceVolume:(id)arg2 totalVolume:(long long)arg3 isSelfAnchorUserTalking:(BOOL)arg4;
+- (void)onLiveTask:(id)arg1 isPureAudioModeChangedTo:(BOOL)arg2 isPureAudioDisplayModeValueChanged:(BOOL)arg3 showTip:(BOOL)arg4;
+- (void)onLiveTask:(id)arg1 isAudienceLocalAudioModeChangedTo:(BOOL)arg2 isPureAudioDisplayModeValueChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 localAudioModeStateChangedTo:(unsigned long long)arg2;
+- (void)onLiveTask:(id)arg1 audioRoomSceneChangedTo:(unsigned long long)arg2;
+- (void)onLiveTask:(id)arg1 audioRoomSEIMicMsgInfoUpdated:(id)arg2 listChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 flvNetworkQualityUpdated:(long long)arg2 hasChanged:(BOOL)arg3;
+- (void)onLiveTask:(id)arg1 anchorIsTalking:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 liveViewConnectMicStateChanged:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 otherConnectMicAnchor:(id)arg2 anchorSeiStatus:(unsigned int)arg3 anchorSEIInfo:(id)arg4;
+- (void)onLiveTask:(id)arg1 micMutedDidChange:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 didChangeViewCapturing:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 playingViaCdnChanged:(BOOL)arg2;
+- (void)onLiveTask:(id)arg1 isAssistantValueChanged:(BOOL)arg2;
+- (void)onLiveTaskSendFirstLocalAudioFrame:(id)arg1;
+- (void)onLiveTaskMicDidReady:(id)arg1;
+- (void)onMMLiveStarterViewControllerCreateLive:(id)arg1;
+- (void)onMMLiveStarterViewControllerStartLive;
+- (void)onMMLiveStarterViewControllerClose;
+- (void)onMMLiveStarterViewControllerSwitchCamera;
+- (void)onMMLiveStarterViewControllerUserCancelLive;
+- (void)onMMLiveOperationClose;
+- (void)invokeCloseLive;
+- (void)onMMLiveOperationConnectMic;
+- (void)onMMLiveOperationConnectSwitchCamera;
+- (void)onMMLiveOperationShareScreen;
+- (BOOL)onMMLiveOperationIsShareScreenBlocked;
+- (double)getControllerVisibleHeight;
+- (void)onMMLiveOperationUserHeadImageClicked:(id)arg1 userInfo:(id)arg2;
+- (void)onMMLiveGlorySelfHeadImageClicked;
+- (void)onMMLiveGloryTipsHeadImageClicked;
+- (void)onMMLiveOperationInviteFriendsBtnClicked;
+- (void)onMMLiveOperationSwitchAudioRoomMode;
+- (void)onMMLiveOperationKTVSongButtonClicked;
+- (void)onMMLiveCompleteViewControllerClose;
+- (void)onExtendFromCollapseAnimationDidEndWithLiveTask:(id)arg1;
+- (void)onLiveTaskMinimizedWindowDismiss:(id)arg1;
+- (void)showToastWithTitle:(id)arg1;
+- (void)handleUIOrientationChanged:(id)arg1;
+- (void)showForbidLiveViewWithTitleLabel:(id)arg1 withDescLabel:(id)arg2 andActionCallback:(id /* block */)arg3;
+- (void)showForbidLiveViewWithTitleLabel:(id)arg1 withDescLabel:(id)arg2 hasLinkLabel:(BOOL)arg3 andActionCallback:(id /* block */)arg4;
+- (void)stopStarterViewTimer;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)showAnchorAssistantLiveCloseTip;
+- (void)onClickTipsBtn:(id)arg1 Index:(long long)arg2;
+- (void)onNetworkStatusChange:(unsigned int)arg1;
+- (void)isNeedTipOnMobilePhoneTraffic;
+- (void)showTipWhenChangeNetToSimCard4G:(id)arg1;
+- (void)onBecomeActive;
+- (void)onResignActive;
+- (void)onEnterBackground;
+- (void)onEnterForeground;
+- (void)onClickMakeSureActionWithViewController:(id)arg1;
+- (void)onMMLiveFullScreenTipsViewClose;
+- (void)onAppTaskWillRestoreIntermediatePageWhenLaunchWithAppId:(id)arg1;
+- (void)onAppTaskDidRestoreIntermediatePageWhenLaunchWithAppId:(id)arg1;
+- (void)handleForBeginSysInterruption;
+- (void)handleForEndSysInterruption;
+- (BOOL)shouldForcePortrait;
+- (void)onCurrAnchorMainShouldSupportOrientationMaskChanged:(unsigned long long)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)liveView;
+- (void)setLiveView:(id)arg1;
+- (id)liveTaskId;
+- (void)setLiveTaskId:(id)arg1;
+- (id)liveLogic;
+- (void)setLiveLogic:(id)arg1;
+- (id)completeViewController;
+- (void)setCompleteViewController:(id)arg1;
+- (id)blurView;
+- (void)setBlurView:(id)arg1;
+- (BOOL)isForcePortraitForExtend;
+- (void)setIsForcePortraitForExtend:(BOOL)arg1;
+- (BOOL)isPresentingWithCustomTransition;
+- (void)setIsPresentingWithCustomTransition:(BOOL)arg1;
+- (id)starterViewController;
+- (void)setStarterViewController:(id)arg1;
+- (id)navControl;
+- (void)setNavControl:(id)arg1;
+- (BOOL)liveDidFinished;
+- (void)setLiveDidFinished:(BOOL)arg1;
+- (id /* block */)closeLiveBlock;
+- (void)setCloseLiveBlock:(id /* block */)arg1;
+- (BOOL)isClosing;
+- (void)setIsClosing:(BOOL)arg1;
+- (BOOL)waitingJoinLive;
+- (void)setWaitingJoinLive:(BOOL)arg1;
+- (id)lastNetworkType;
+- (void)setLastNetworkType:(id)arg1;
+- (id /* block */)forbidLiveActionCallback;
+- (void)setForbidLiveActionCallback:(id /* block */)arg1;
+- (id)completeExtraInfo;
+- (void)setCompleteExtraInfo:(id)arg1;
+- (BOOL)postponeJoinLive;
+- (void)setPostponeJoinLive:(BOOL)arg1;
+- (BOOL)supressMinimizeWindowAutoupdate;
+- (void)setSupressMinimizeWindowAutoupdate:(BOOL)arg1;
+- (BOOL)isAppTaskLaunchingDuringLive;
+- (void)setIsAppTaskLaunchingDuringLive:(BOOL)arg1;
+- (unsigned long long)currSupportedInterfaceOrientations;
+- (void)setCurrSupportedInterfaceOrientations:(unsigned long long)arg1;
+- (void)setOperationView:(id)arg1;
+- (long long)currOrientation;
+- (void)setCurrOrientation:(long long)arg1;
+- (BOOL)isInBackground;
+- (void)setIsInBackground:(BOOL)arg1;
+- (BOOL)isRealInBackground;
+- (void)setIsRealInBackground:(BOOL)arg1;
+- (BOOL)isInSysInterruptionHandling;
+- (void)setIsInSysInterruptionHandling:(BOOL)arg1;
+- (BOOL)isPausedByAnchor;
+- (void)setIsPausedByAnchor:(BOOL)arg1;
+- (BOOL)isPausedByVerify;
+- (void)setIsPausedByVerify:(BOOL)arg1;
+- (BOOL)anchorJoinLiveAfterAbnormalExit;
+- (void)setAnchorJoinLiveAfterAbnormalExit:(BOOL)arg1;
+- (BOOL)isAbnormallyDismissed;
+- (void)setIsAbnormallyDismissed:(BOOL)arg1;
+- (BOOL)liveDidStarted;
+- (void)setLiveDidStarted:(BOOL)arg1;
+- (BOOL)isLiveAppearing;
+- (void)setIsLiveAppearing:(BOOL)arg1;
+- (unsigned long long)currentPauseViewTypes;
+- (void).cxx_destruct;
+@end
+

@@ -1,0 +1,3 @@
+@interface InnerQMarker : QMarker
+@end
+

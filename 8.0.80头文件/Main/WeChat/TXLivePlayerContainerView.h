@@ -1,0 +1,2 @@
+@interface TXLivePlayerContainerView : TXLiveContainerView
+@end

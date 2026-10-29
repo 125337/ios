@@ -1,0 +1,163 @@
+@interface BraceletRankViewController : MMUIViewController <MMSightCameraViewControllerDelegate, WCCommitViewResultDelegate, UITableViewDelegate, UITableViewDataSource, IDeviceRankSnsMgrExt, IDeviceRankProfileMgrExt, WCActionSheetDelegate, MMWebImageViewDelegate, ForwardMessageLogicDelegate, MMImageLoaderObserver, BraceletAbroadRankViewDelegate, BraceletRankProfileViewControllerDelegate>
+{
+    MMTableView * _tableView; // +0x68
+    UIView * _tableHeaderView; // +0x70
+    UIView * _championTipView; // +0x78
+    MMWebImageView * _championCoverView; // +0x80
+    UIImageView * _leaderView; // +0x88
+    MMUILabel * _tipLablel; // +0x90
+    NSString * _rankId; // +0x98
+    NSDictionary * _infoDic; // +0xa0
+    NSString * _championCoverUrl; // +0xa8
+    NSString * _championMotto; // +0xb0
+    NSMutableArray * _rankInfoArray; // +0xb8
+    NSTimer * m_disappearTimer; // +0xc0
+    BOOL _bExpired; // +0xc8
+    NSString * _nsScrollToName; // +0xd0
+    NSString * _nsJumpChampionUrl; // +0xd8
+    BOOL _isLikedCover; // +0xe0
+    BOOL _hasCoverUrl; // +0xe1
+    NSString * _donateStepsUrl; // +0xe8
+    NSString * _nsShareTitle; // +0xf0
+    NSString * _nsShareUrl; // +0xf8
+    NSString * _nsSelfCoverUrl; // +0x100
+    unsigned int _iEntranceScence; // +0x108
+    UIImageView * _blurView; // +0x110
+    UIImage * _snapShotImg; // +0x118
+    BOOL _isBluring; // +0x120
+    RankExtInfo * m_rankExtInfo; // +0x128
+    DeviceRankInfo * m_myselfRankInfo; // +0x130
+    NSMutableSet * friendLikeSet; // +0x138
+    UIView * m_oTableFooterView; // +0x140
+    ForwardMessageLogicController * m_forwardLogic; // +0x148
+    MMHeadImageView * m_oHeadImageView; // +0x150
+    BOOL m_bAbroad; // +0x158
+    BraceletRankUtils * m_oBraceletRankUtils; // +0x160
+    UIImage * m_oSelfCoverImage; // +0x168
+    long long _timestamp; // +0x170
+    NSString * _championUsername; // +0x178
+    UIView * _championView; // +0x180
+    UILabel * _currentDayLabel; // +0x188
+    MMHeadImageView * _championHeadImageView; // +0x190
+    UILabel * _championDisplayLabel; // +0x198
+    BraceletChampionTailView * _championTailView; // +0x1a0
+    CAGradientLayer * _gradientLayer; // +0x1a8
+    NSMutableArray * _likeMeUserList; // +0x1b0
+    NSMutableArray * _focusArray; // +0x1b8
+    NSMutableArray * _focusInfoArray; // +0x1c0
+}
++ (BOOL)launchDonateStepWAApp:(id)arg1 fromRank:(BOOL)arg2;
+- (id)initWithRankInfoDictionary:(id)arg1 bExpire:(BOOL)arg2;
+- (id)initForLatestRank;
+- (id)initWithLikeUserInfoDictionary:(id)arg1;
+- (void)viewDidLoad;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (void)viewDidPop:(BOOL)arg1;
+- (void)dealloc;
+- (void)initData;
+- (void)initView;
+- (void)viewDidLayoutSubviews;
+- (void)initNotSupportView;
+- (void)initTableView;
+- (BOOL)canShowChampionTailView;
+- (void)updateHeadImageView;
+- (void)updateInfoViewSnapshot;
+- (void)openChampionProfile;
+- (id)braceletRankUtils;
+- (void)onRankProfile;
+- (void)onClickLike:(id)arg1;
+- (void)animatChangeLikeStateForUser:(id)arg1 isTolikeState:(BOOL)arg2;
+- (void)onSingleTap:(id)arg1;
+- (void)updateTableBgView;
+- (void)reloadTable;
+- (void)updateTableFooterView;
+- (void)clickToInviteFriend:(id)arg1;
+- (void)onRankInfoClicked:(id)arg1;
+- (void)setChampionUsername:(id)arg1;
+- (id)currentDayLabel;
+- (id)championHeadImageView;
+- (id)championDisplayLabel;
+- (void)initChampionTailView;
+- (id)gradientLayer;
+- (id)likeMeUserList;
+- (id)focusArray;
+- (id)focusInfoArray;
+- (id)removeAllNumberAndComma:(id)arg1;
+- (id)defaultChampionCoverImage;
+- (void)addRightBarButtonForShare;
+- (void)setTipsForSettingCoverVisible:(BOOL)arg1;
+- (BOOL)shouldChangeChampionCover:(id)arg1;
+- (void)addBkgView;
+- (void)addChampionView;
+- (id)genChampionView;
+- (void)layoutChampionView;
+- (void)updateMyCover:(id)arg1;
+- (BOOL)shouldChangeMyCover:(id)arg1;
+- (void)updateChampionCover:(id)arg1;
+- (void)updateChampionTailView;
+- (id)getRankInfoAtIndexPath:(id)arg1;
+- (void)makeCell:(id)arg1 AtIndexPath:(id)arg2;
+- (long long)numberOfSectionsInTableView:(id)arg1;
+- (long long)tableView:(id)arg1 numberOfRowsInSection:(long long)arg2;
+- (double)tableView:(id)arg1 heightForRowAtIndexPath:(id)arg2;
+- (double)tableView:(id)arg1 heightForHeaderInSection:(long long)arg2;
+- (id)tableView:(id)arg1 viewForHeaderInSection:(long long)arg2;
+- (id)tableView:(id)arg1 cellForRowAtIndexPath:(id)arg2;
+- (void)tableView:(id)arg1 didSelectRowAtIndexPath:(id)arg2;
+- (void)tableView:(id)arg1 willDisplayCell:(id)arg2 forRowAtIndexPath:(id)arg3;
+- (void)onReceivedRankingResp:(id)arg1 rankId:(id)arg2 success:(BOOL)arg3;
+- (void)updateDataForResp:(id)arg1;
+- (void)updateViewForResp:(id)arg1;
+- (id)convertRankingInfoFromRawItem:(id)arg1;
+- (void)refreshRankingDataWith:(id)arg1;
+- (void)refreshLikedMeDataWith:(id)arg1;
+- (void)mergeLikeCountWith:(id)arg1;
+- (void)sortMyFollows;
+- (void)refreshFollowsDataWith:(id)arg1;
+- (void)updateChampionUsername;
+- (void)onClickChampionTailView;
+- (void)onLikeFriendRank:(id)arg1 optype:(unsigned int)arg2 err:(int)arg3;
+- (void)scrollToLikeUser;
+- (void)scrollViewDidScroll:(id)arg1;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)showImagePicker:(long long)arg1;
+- (void)MMImagePickerManager:(id)arg1 didFinishPickingImageWithInfo:(id)arg2;
+- (void)MMImagePickerManagerDidCancel:(id)arg1;
+- (void)onSightPictureTaken:(id)arg1 imageData:(id)arg2 withFrontCamera:(BOOL)arg3 editImageAttr:(id)arg4;
+- (void)onCoverImageChanged;
+- (void)onAddFollowWithFollowItems:(id)arg1 error:(int)arg2;
+- (void)onDelFollowWithUserName:(id)arg1 error:(int)arg2;
+- (void)ImageDidLoadWithData:(id)arg1 Url:(id)arg2;
+- (void)ImageDidFail:(id)arg1;
+- (void)onShare;
+- (void)launchChatStepRank;
+- (void)shareToFriend;
+- (void)shareToTimeline;
+- (void)donateSteps;
+- (void)launchDonateStepWAApp;
+- (void)onDoneForwardForForwardView:(id)arg1;
+- (void)onLoadImageOK:(id)arg1;
+- (void)ImageDidLoad:(id)arg1 Url:(id)arg2;
+- (id)getCurrentViewController;
+- (void)OnForwardMessageSend:(id)arg1;
+- (void)OnForwardMessageCancel:(id)arg1;
+- (void)onShareAbroadStep;
+- (void)onClickHeadImage;
+- (void)onRankBeBlackedWithUserName:(id)arg1;
+- (id)championUsername;
+- (id)championView;
+- (void)setChampionView:(id)arg1;
+- (void)setCurrentDayLabel:(id)arg1;
+- (void)setChampionHeadImageView:(id)arg1;
+- (void)setChampionDisplayLabel:(id)arg1;
+- (id)championTailView;
+- (void)setChampionTailView:(id)arg1;
+- (void)setGradientLayer:(id)arg1;
+- (void)setLikeMeUserList:(id)arg1;
+- (void)setFocusArray:(id)arg1;
+- (void)setFocusInfoArray:(id)arg1;
+- (void).cxx_destruct;
+@end
+

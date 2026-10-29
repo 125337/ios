@@ -1,0 +1,3 @@
+@interface MinimizeRecUtil : MMObject
+@end
+

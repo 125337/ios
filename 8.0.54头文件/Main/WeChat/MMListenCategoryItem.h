@@ -1,0 +1,31 @@
+@interface MMListenCategoryItem : WXPBGeneratedMessage
++ (id)categoryItemFromSimplePlaylistInfo:(id)arg1;
++ (id)typeStringFor:(int)arg1;
++ (id)categoryItemFromSingerInfo:(id)arg1;
++ (void)initialize;
+- (id)toShareItem;
+- (id)toChatMessageWithCoverImageData:(id)arg1;
+- (id)toWCUpLoadTaskWithCoverImageData:(id)arg1;
+- (id)toFavItemWithCoverImageData:(id)arg1;
+- (id)toPlaylistInfo;
+- (BOOL)isValid;
+- (BOOL)isMusicAlbum;
+- (BOOL)isTopicUGC;
+- (BOOL)isUGCPlaylist;
+- (BOOL)isTagCategory;
+- (BOOL)isSingerRadio;
+- (BOOL)isRadioChannel;
+- (BOOL)isTabRecommendPlayList;
+- (BOOL)isSinger;
+- (BOOL)isAudioCategory;
+- (BOOL)isAudioLocalCategory;
+- (id)authorName;
+- (id)typeString;
+- (id)shareDesc;
+- (BOOL)canShareAsSourceList;
+- (id)coverUrl;
+- (id)tapeDesc;
+- (id)generateTapeDescriptionPrefix;
+- (id)basicDesc;
+@end
+

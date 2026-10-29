@@ -1,0 +1,3 @@
+@interface ZZActivityIndicatorViewChainModel : _ZZActivityIndicatorViewChainModel
+@end
+

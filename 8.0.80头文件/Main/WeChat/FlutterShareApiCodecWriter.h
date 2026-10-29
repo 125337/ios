@@ -1,0 +1,3 @@
+@interface FlutterShareApiCodecWriter : FlutterStandardWriter
+- (void)writeValue:(id)arg1;
+@end

@@ -1,0 +1,2 @@
+@interface _TtC6WeChat30KaraGroupChatImportanceProphet : _TtC6WeChat17KaraProphetModule
+@end

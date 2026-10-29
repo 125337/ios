@@ -1,0 +1,2 @@
+@interface _TtC6WeChatP33_F19A8BB53838BF5C7AD9D0B5A19886F721ChatBotAsstVoIPLCKLog : _TtCs12_SwiftObject
+@end

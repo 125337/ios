@@ -1,0 +1,2 @@
+@interface MMFinderLiveCombleCommentTableViewCell : MMFinderLiveReusePubbleCommentTableViewCell
+@end

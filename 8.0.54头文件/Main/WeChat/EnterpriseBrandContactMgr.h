@@ -1,0 +1,25 @@
+@interface EnterpriseBrandContactMgr : MMUserService <IContactMgrExt, PBMessageObserverDelegate, MMServiceProtocol>
+- (id)init;
+- (id)getEnabledSubBrandContactList:(id)arg1;
+- (id)getDisabledSubBrandContactList:(id)arg1;
+- (id)getEnterpriseChatContact:(id)arg1;
+- (id)getEnterpriseChatExtendContacts:(id)arg1;
+- (BOOL)hasChatExtendSubBrand:(id)arg1;
+- (id)getSubBrandContacts:(id)arg1 ForConnectMsgType:(unsigned long long)arg2;
+- (BOOL)hasMainBrandForConnectMsgType:(unsigned long long)arg1;
+- (id)getMainAndChatBrandListForConnectMsgType:(unsigned long long)arg1;
+- (id)sortMainAndChatBrandContacts:(id)arg1;
+- (void)updateEnterpriseBrandContactOfMainBrand:(id)arg1;
+- (void)forceUpdateEnterpriseBrandContact:(id)arg1;
+- (void)switchBrandContact:(id)arg1 enable:(BOOL)arg2;
+- (void)handleSwitchBrandContact:(id)arg1;
+- (void)callEnterpriseBrandContactModifiedExtension:(id)arg1;
+- (void)callEnterpriseBrandAttrChangedExtension:(id)arg1;
+- (void)callEnterpriseBrandContactDeletedExtension:(id)arg1;
+- (void)callEnterpriseBrandSyncedExtension:(id)arg1 extParams:(id)arg2;
+- (void)onModifyContact:(id)arg1;
+- (void)onDeleteContact:(id)arg1;
+- (void)onRemoveContactFromAddressBook:(id)arg1;
+- (void)MessageReturn:(id)arg1 Event:(unsigned int)arg2;
+@end
+

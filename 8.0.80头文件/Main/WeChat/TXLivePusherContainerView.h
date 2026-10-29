@@ -1,0 +1,2 @@
+@interface TXLivePusherContainerView : TXLiveContainerView
+@end

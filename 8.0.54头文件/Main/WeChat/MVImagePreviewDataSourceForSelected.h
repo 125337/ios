@@ -1,0 +1,3 @@
+@interface MVImagePreviewDataSourceForSelected : MVImagePreviewDataSource
+@end
+

@@ -1,0 +1,2 @@
+@interface MBJITJSObject : MBDictJSObject
+@end

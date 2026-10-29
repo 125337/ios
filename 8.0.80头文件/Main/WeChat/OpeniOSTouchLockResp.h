@@ -1,0 +1,2 @@
+@interface OpeniOSTouchLockResp : NSObject
+@end

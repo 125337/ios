@@ -1,0 +1,45 @@
+@interface MMFinderLiveGiftResourceBaseMgr : MMUserService
+- (void)loadGiftResForURL:(id)arg1 resType:(long long)arg2 productId:(id)arg3 fileMD5:(id)arg4 memoryCacheOptions:(unsigned long long)arg5 oberver:(id)arg6;
+- (void)loadGiftResForURL:(id)arg1 resType:(long long)arg2 productId:(id)arg3 fileMD5:(id)arg4 memoryCacheOptions:(unsigned long long)arg5 oberver:(id)arg6 extra:(id)arg7;
+- (void)loadGiftResForURL:(id)arg1 resType:(long long)arg2 productId:(id)arg3 fileMD5:(id)arg4 memoryCacheOptions:(unsigned long long)arg5 isPreload:(BOOL)arg6 oberver:(id)arg7;
+- (void)loadGiftResForURL:(id)arg1 resType:(long long)arg2 productId:(id)arg3 fileMD5:(id)arg4 memoryCacheOptions:(unsigned long long)arg5 isPreload:(BOOL)arg6 oberver:(id)arg7 extra:(id)arg8;
+- (void)cancelLoadForResourceId:(id)arg1 targetURL:(id)arg2 resourceType:(long long)arg3 oberver:(id)arg4;
+- (void)cancelLoadAllURLs:(id)arg1;
+- (void)stopAllPreloadDownLoad;
+- (unsigned long long)currentDownloadingCount;
+- (BOOL)checkGiftResExistenceWithResourceID:(id)arg1 fileMD5:(id)arg2 resType:(long long)arg3;
+- (void)clearGiftResourceWithResourceID:(id)arg1 fileMD5:(id)arg2 resType:(long long)arg3;
+- (id)getFullPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getFullRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getLandscapeFullPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getLandscapeFullRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getPreviewPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getPreviewRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getThumbnailWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getTextCustomizationPreviewPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getForegroundPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getForegroundRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (id)getTextCustomizationPreviewRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (void)getFullPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getFullRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getLandscapeFullPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getLandscapeFullRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getPreviewPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getPreviewRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getThumbnailWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getTextCustomizationPreviewPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getForegroundPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getForegroundRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)getTextCustomizationPreviewRfxPagFileWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (void)cleanUnusedGiftResources;
+- (void)cleanGiftResourceCaches;
+- (void)getInteractionGiftFileWithResourceID:(id)arg1 fileMD5:(id)arg2 maybeAsyncBlock:(id /* block */)arg3;
+- (id)getInteractionGiftFileWithResourceID:(id)arg1 fileMD5:(id)arg2;
+- (id)getAttackGiftFileWithResourceID:(id)arg1 fileMD5:(id)arg2;
+- (void)getAttackGiftFileWithResourceID:(id)arg1 fileMD5:(id)arg2 maybeAsyncBlock:(id /* block */)arg3;
+- (id)getAnchorCustomizeImageWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3;
+- (void)getAnchorCustomizeImageWithResourceID:(id)arg1 fileMD5:(id)arg2 memoryCacheOptions:(unsigned long long)arg3 maybeAsyncBlock:(id /* block */)arg4;
+- (id)filterInvalidateCatalogue:(id)arg1;
+- (id)unzipPathForProductID:(id)arg1 fileMD5:(id)arg2 resType:(long long)arg3;
+@end
+

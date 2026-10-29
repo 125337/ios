@@ -1,0 +1,92 @@
+@interface MMWechatEmotionsViewController : MMUIViewController <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, EmoticonStoreMgrExt, EmoticonBoughtListMgrExt, MMStoreEmotionAllCellDelegate, EmotionCollectionFooterViewDelegate, InfiniteLoopContainerViewDelegate, EmoticonStoreMoreManualFetchFooterViewDelegate, MMLoadMoreCollectionViewDelegate>
+{
+    UICollectionViewFlowLayout * _layout; // +0x70
+    UIView * m_collectionHeaderView; // +0x78
+    EmotionCollectionFooterView * _footerView; // +0x80
+    MMTimer * m_timer; // +0x88
+    NSArray * m_sectionInfoArray; // +0x90
+    NSMutableArray * _storeItemArray; // +0x98
+    NSMutableArray * _storeAdsArray; // +0xa0
+    NSMutableArray * m_cellSetList; // +0xa8
+    unsigned int _topHotNum; // +0xb0
+    unsigned int m_recentHotNum; // +0xb4
+    unsigned int _scene; // +0xb8
+    unsigned int _reqType; // +0xbc
+    unsigned long long _sessionId; // +0xc0
+    BOOL m_hasGetFirstResponse; // +0xc8
+    MMUIViewController * m_contentsViewController; // +0xd0
+    BOOL m_isEmoticonStoreExpt; // +0xd8
+    unsigned long long _searchScene; // +0xe0
+    InfiniteLoopContainerView * _bannerView; // +0xe8
+    EmoticonStoreMoreManualFetchFooterView * _moreFooterView; // +0xf0
+    MMLoadMoreCollectionView * _collectionView; // +0xf8
+    StoreEmoticonTopicProxyLogic * _topicVCPorxy; // +0x100
+}
+- (id)init;
+- (id)initWithEmotionScene:(unsigned int)arg1 AndParentViewController:(id)arg2;
+- (void)dealloc;
+- (void)viewDidLoad;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (BOOL)shouldInteractivePop;
+- (void)clearSearchDisplayController;
+- (void)stopBannerPageTimer;
+- (void)initBannerPageTimer;
+- (void)changeBannerToNextPage;
+- (void)configViews;
+- (void)configData;
+- (void)configCollectionView;
+- (void)configHeaderView;
+- (void)configBanner;
+- (void)configTailView;
+- (void)reloadData;
+- (void)reloadAdsFromMgr;
+- (void)configSectionInfos;
+- (id)itemForSectionType:(unsigned long long)arg1 rowIndex:(unsigned long long)arg2;
+- (BOOL)isFirstitemForSectionType:(unsigned long long)arg1 rowIndex:(unsigned long long)arg2;
+- (void)tryInitViewOfSearchController;
+- (void)adjustContentInsetAndSearchBarMask;
+- (void)reportEmoticonStoreExposure;
+- (long long)collectionView:(id)arg1 numberOfItemsInSection:(long long)arg2;
+- (id)collectionView:(id)arg1 cellForItemAtIndexPath:(id)arg2;
+- (long long)numberOfSectionsInCollectionView:(id)arg1;
+- (id)collectionView:(id)arg1 viewForSupplementaryElementOfKind:(id)arg2 atIndexPath:(id)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 referenceSizeForFooterInSection:(long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 minimumLineSpacingForSectionAtIndex:(long long)arg3;
+- (UIEdgeInsets)collectionView:(id)arg1 layout:(id)arg2 insetForSectionAtIndex:(long long)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 referenceSizeForHeaderInSection:(long long)arg3;
+- (void)viewDidLayoutSubviews;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 sizeForItemAtIndexPath:(id)arg3;
+- (void)collectionView:(id)arg1 didSelectItemAtIndexPath:(id)arg2;
+- (void)OnStoreListChanged:(id)arg1 withRet:(unsigned long long)arg2 withReqType:(unsigned int)arg3 data:(id)arg4;
+- (void)OnRestoreEmoticonItemSuccess;
+- (unsigned long long)numberOfItemsInContainerView:(id)arg1;
+- (id)containerView:(id)arg1 viewForItemAtIndex:(unsigned long long)arg2;
+- (void)containerView:(id)arg1 onTapItemAtIndex:(unsigned long long)arg2;
+- (void)containerView:(id)arg1 onItemDidFullyDisplayInContainerViewAtIndex:(unsigned long long)arg2;
+- (CGSize)adjustedSizeForBanner;
+- (void)openPageForBannerSet:(id)arg1 IsFromBanner:(BOOL)arg2;
+- (id)topicVCPorxy;
+- (void)onStoreEmotionAllCellTapButton:(id)arg1;
+- (void)scrollViewDidScroll:(id)arg1;
+- (void)scrollViewWillEndDragging:(id)arg1 withVelocity:(CGPoint)arg2 targetContentOffset:(CGPoint *)arg3;
+- (void)scrollViewDidEndDragging:(id)arg1 willDecelerate:(BOOL)arg2;
+- (void)scrollViewDidEndDecelerating:(id)arg1;
+- (void)onTriggerRefresh;
+- (void)onLoadDone;
+- (void)onLoadMore;
+- (void)scrollViewWillBeginDecelerating:(id)arg1;
+- (void)registerYReportSdk;
+- (void)updateSDKReportParams;
+- (unsigned long long)searchScene;
+- (void)setSearchScene:(unsigned long long)arg1;
+- (id)bannerView;
+- (void)setBannerView:(id)arg1;
+- (id)moreFooterView;
+- (void)setMoreFooterView:(id)arg1;
+- (id)collectionView;
+- (void)setCollectionView:(id)arg1;
+- (void)setTopicVCPorxy:(id)arg1;
+- (void).cxx_destruct;
+@end

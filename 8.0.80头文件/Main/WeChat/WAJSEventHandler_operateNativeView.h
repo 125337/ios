@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_operateNativeView : WAJSEventHandler_updateNativeView
+@end

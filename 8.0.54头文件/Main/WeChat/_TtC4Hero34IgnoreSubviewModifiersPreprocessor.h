@@ -1,0 +1,3 @@
+@interface _TtC4Hero34IgnoreSubviewModifiersPreprocessor : _TtC4Hero16BasePreprocessor
+@end
+

@@ -1,0 +1,2 @@
+@interface MMWebNavigationController : MMUINavigationController
+@end

@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_private_captureScreen : WAJSEventHandler_captureScreen
+@end

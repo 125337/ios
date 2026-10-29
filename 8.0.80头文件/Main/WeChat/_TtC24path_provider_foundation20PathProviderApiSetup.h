@@ -1,0 +1,2 @@
+@interface _TtC24path_provider_foundation20PathProviderApiSetup : _TtCs12_SwiftObject
+@end

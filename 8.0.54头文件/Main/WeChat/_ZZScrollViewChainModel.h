@@ -1,0 +1,34 @@
+@interface _ZZScrollViewChainModel : _ZZViewChainModel
++ (Class)viewClass;
+- (id /* block */)delegate;
+- (id /* block */)delegate_O;
+- (id /* block */)contentSize;
+- (id /* block */)contentSize_O;
+- (id /* block */)contentOffset;
+- (id /* block */)contentOffset_O;
+- (id /* block */)contentInset;
+- (id /* block */)contentInset_O;
+- (id /* block */)bounces;
+- (id /* block */)bounces_O;
+- (id /* block */)alwaysBounceVertical;
+- (id /* block */)alwaysBounceVertical_O;
+- (id /* block */)alwaysBounceHorizontal;
+- (id /* block */)alwaysBounceHorizontal_O;
+- (id /* block */)zoomScale;
+- (id /* block */)zoomScale_O;
+- (id /* block */)minimumZoomScale;
+- (id /* block */)minimumZoomScale_O;
+- (id /* block */)maximumZoomScale;
+- (id /* block */)maximumZoomScale_O;
+- (id /* block */)pagingEnabled;
+- (id /* block */)pagingEnabled_O;
+- (id /* block */)scrollEnabled;
+- (id /* block */)scrollEnabled_O;
+- (id /* block */)showsHorizontalScrollIndicator;
+- (id /* block */)showsHorizontalScrollIndicator_O;
+- (id /* block */)showsVerticalScrollIndicator;
+- (id /* block */)showsVerticalScrollIndicator_O;
+- (id /* block */)scrollsToTop;
+- (id /* block */)scrollsToTop_O;
+@end
+

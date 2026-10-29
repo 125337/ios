@@ -1,0 +1,3 @@
+@interface WASyncGetContactCmd : WASyncBaseCmd
+@end
+

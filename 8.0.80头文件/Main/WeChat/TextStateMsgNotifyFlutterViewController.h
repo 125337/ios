@@ -1,0 +1,2 @@
+@interface TextStateMsgNotifyFlutterViewController : MMFlutterViewController
+@end

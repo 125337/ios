@@ -1,0 +1,29 @@
+@interface FavPhotoAccountNameCardMessageCellView : CommonMessageCellView
+{
+    UILabel * m_nicknameLabel; // +0xb8
+    UILabel * m_usernameLabel; // +0xc0
+    MMWebImageView * m_iconNamePrefix; // +0xc8
+    MMImageView * m_iconNamePostfix; // +0xd0
+    UIImageView * _certificationImageView; // +0xd8
+    MMUILabel * _personalVerifyIdentityLabel; // +0xe0
+}
+- (BOOL)canBeReused;
+- (void)layoutContentView;
+- (void)initNicknameLabel;
+- (void)initIconNamePostfixWithIcon:(id)arg1;
+- (void)initUsernameLabel;
+- (void)initIconNamePostfix;
+- (void)initCertificationImageView;
+- (void)setCertificationImageViewFrame;
+- (void)initPersonalVerifyIdentityLabel;
+- (void)updatePersonalVerifyIdentityLabel;
+- (id)operationMenuItems;
+- (BOOL)isOpenIMChat;
+- (BOOL)isOpenIMKefuChat;
+- (void)onTouchUpInside;
+- (id)certificationImageView;
+- (void)setCertificationImageView:(id)arg1;
+- (id)personalVerifyIdentityLabel;
+- (void)setPersonalVerifyIdentityLabel:(id)arg1;
+- (void).cxx_destruct;
+@end

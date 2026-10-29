@@ -1,0 +1,2 @@
+@interface Ml : NSObject
+@end

@@ -1,0 +1,3 @@
+@interface FLTPathProviderApiCodecWriter : FlutterStandardWriter
+@end
+

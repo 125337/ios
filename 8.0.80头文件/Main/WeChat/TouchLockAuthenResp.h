@@ -1,0 +1,2 @@
+@interface TouchLockAuthenResp : NSObject
+@end

@@ -1,0 +1,2 @@
+@interface WCAdvertiseRockPaperScissorsDataModel : WCAdvertiseCommonNumberRequestExtDataModel
+@end

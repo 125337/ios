@@ -1,0 +1,3 @@
+@interface _TtC6WeChat34WSNativeHotListVerticalSettingItem : _TtC6WeChat26WSNativeHotListSettingItem
+@end
+

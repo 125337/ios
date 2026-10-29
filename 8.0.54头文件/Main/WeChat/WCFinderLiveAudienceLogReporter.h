@@ -1,0 +1,353 @@
+@interface WCFinderLiveAudienceLogReporter : WCFinderLiveBaseLogReporter
+{
+    BOOL m_isQuit; // +0x8
+    unsigned int m_commentsCount; // +0xc
+    unsigned int m_replyCount; // +0x10
+    unsigned int m_clickCount; // +0x14
+    unsigned int m_pressCount; // +0x18
+    unsigned int m_emojiCount; // +0x1c
+    NSMutableArray * m_goodsClickData; // +0x20
+    unsigned int m_complainAnchorCount; // +0x28
+    unsigned int m_complainAudienceCount; // +0x2c
+    unsigned int m_profileCount; // +0x30
+    unsigned int m_clearCount; // +0x34
+    unsigned int m_commentDisableCount; // +0x38
+    BOOL m_isEnterFollow; // +0x3c
+    BOOL m_isExitFollow; // +0x3d
+    BOOL m_isShopExp; // +0x3e
+    BOOL m_isClickLandscape; // +0x3f
+    long long m_curOrientation; // +0x40
+    unsigned int m_clickToLandscapeCount; // +0x48
+    unsigned int m_rotateToLandscapeCount; // +0x4c
+    unsigned int m_clickToPortraitCount; // +0x50
+    unsigned int m_rotateToPortraitCount; // +0x54
+    unsigned int m_lotteryCount; // +0x58
+    unsigned int m_giftCount; // +0x5c
+    BOOL m_isEnterButCoin; // +0x60
+    unsigned int m_tryToConnectCount; // +0x64
+    unsigned int m_connectSuccessCount; // +0x68
+    NSMutableString * m_connectDuration; // +0x70
+    unsigned long long m_connectStartTime; // +0x78
+    BOOL m_isConnecting; // +0x80
+    unsigned long long m_shareTextStateCount; // +0x88
+    unsigned long long redPacketSource; // +0x90
+    NSString * m_shareId; // +0x98
+    NSMutableDictionary * _switchExtraDic; // +0xa0
+}
++ (id)reporterByTaskID:(id)arg1;
++ (void)Reoport:(id)arg1 logId:(int)arg2;
++ (void)InsertBaseData:(id)arg1 logId:(int)arg2;
++ (void)reportOuterAudienceAction:(unsigned long long)arg1 dataItem:(id)arg2 commentScene:(id)arg3 enterSessionId:(unsigned long long)arg4 enterIconType:(long long)arg5 sessionBuffer:(id)arg6 adData:(id)arg7 channelExtra:(id)arg8;
++ (unsigned long long)fromTypeForReport:(unsigned long long)arg1;
+- (id)init;
+- (id)initWithRoleType:(long long)arg1;
+- (void)setupData;
+- (void)dealloc;
+- (void)enterLive:(id)arg1;
+- (void)onShareTimeline;
+- (void)onShareSession:(id)arg1;
+- (void)onShareTextState;
+- (void)onShareOlympicWinterTimeline;
+- (void)onShareOlympicWinterSession:(id)arg1;
+- (void)onShareOlympicWinterTextState;
+- (void)onFloatOperation:(unsigned long long)arg1;
+- (void)onSendMessage:(id)arg1;
+- (void)onReplyMessage:(id)arg1;
+- (void)onProductQuestionMsgAction:(id)arg1;
+- (void)onShareRabbitMoment;
+- (void)onClickLike:(unsigned long long)arg1 isClipMode:(BOOL)arg2;
+- (void)onHideOpearation:(long long)arg1;
+- (void)onSlideRoom:(id)arg1 exitLiveId:(unsigned long long)arg2 exitLiveTask:(id)arg3;
+- (void)onPreviewRelatedSlideRoom:(id)arg1 exitLiveId:(unsigned long long)arg2;
+- (void)onQuitRoom:(unsigned long long)arg1;
+- (void)onVerifyAction:(unsigned long long)arg1;
+- (void)onCommerceAction:(unsigned long long)arg1 withCouponID:(id)arg2 productIdString:(id)arg3;
+- (void)onCommerceAction:(unsigned long long)arg1 extraInfo:(id)arg2;
+- (void)onShowAudienceLiveLotteryDetail:(id)arg1 eduDict:(id)arg2;
+- (void)onClickAudienceLiveLotteryDetail:(id)arg1 eduDict:(id)arg2;
+- (void)onCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withProductID:(unsigned long long)arg4 withAdItem:(id)arg5 withPbAdItem:(id)arg6 extraInfo:(id)arg7;
+- (void)onCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withProductID:(unsigned long long)arg4 withAdItem:(id)arg5 withPbAdItem:(id)arg6 withCouponID:(id)arg7 extraInfo:(id)arg8 reasonType:(unsigned long long)arg9;
+- (void)onCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withCouponID:(id)arg4 withCouponItem:(id)arg5;
+- (void)onShoppingButtonShow;
+- (void)onCommentDisable;
+- (void)onExposeLandscape;
+- (void)onClickLandscape;
+- (void)onSwitchLandscape:(long long)arg1;
+- (void)onLotteryAction:(unsigned long long)arg1 withResult:(id)arg2 withLotteryInfo:(id)arg3;
+- (void)onLotteryAction:(unsigned long long)arg1 withResult:(id)arg2 withLotteryInfo:(id)arg3 extraInfo:(id)arg4;
+- (void)onGiftAction:(unsigned long long)arg1 withGiftId:(id)arg2 withGiftCount:(unsigned int)arg3;
+- (void)onGiftAction:(unsigned long long)arg1 withGiftId:(id)arg2 withGiftCount:(unsigned int)arg3 extraActionResultDict:(id)arg4;
+- (void)onMicAction:(unsigned long long)arg1;
+- (void)onAudienceFreeMicAction:(unsigned long long)arg1 duration:(unsigned long long)arg2;
+- (void)onMoreLiveClick:(unsigned int)arg1;
+- (void)onMoreLiveExpose:(unsigned int)arg1;
+- (void)reportMoreLiveElementAction:(unsigned long long)arg1 tabId:(unsigned long long)arg2;
+- (void)onRedPacketAction:(unsigned long long)arg1 withSenderMicId:(id)arg2;
+- (void)onRedPacketAction:(unsigned long long)arg1 withSenderMicId:(id)arg2 extraInfo:(id)arg3;
+- (void)onFollowAction:(unsigned long long)arg1 isBizLive:(BOOL)arg2;
+- (void)onFollowAction:(unsigned long long)arg1 isBizLive:(BOOL)arg2 extParams:(id)arg3;
+- (void)onLiveTopicAction:(unsigned long long)arg1 topic:(id)arg2;
+- (void)onLiveAnchorNoticeOperation:(id)arg1;
+- (void)onAudienceVrLiveOperation:(unsigned long long)arg1;
+- (void)onAudienceMultiAngleOperation:(id)arg1;
+- (id)makeExposeActionCommon;
+- (void)onFollowConfirmShow;
+- (void)onFollowConfirmShowFolloGuideLeaveIcon;
+- (void)onFollowConfirmShowFollowGuideLeaveFollow;
+- (void)onFollowButtonShow;
+- (void)onFollowConfirmAction:(id)arg1;
+- (void)onLiveActionSheetExpose;
+- (void)onLiveForwardActionExpose:(id)arg1;
+- (void)onLiveForwardActionClick:(id)arg1;
+- (void)onLiveForwardActionClick:(id)arg1 shareType:(unsigned long long)arg2;
+- (void)onLiveForwardActionClick:(id)arg1 shareType:(unsigned long long)arg2 position:(unsigned long long)arg3;
+- (void)onAirPlayAction:(unsigned long long)arg1;
+- (void)onPlayTogetherJoinTeamAction:(unsigned long long)arg1;
+- (void)onJoinTeamAction:(unsigned long long)arg1;
+- (void)onJoinTeamAction:(unsigned long long)arg1 extData:(id)arg2;
+- (void)onBrandAction:(unsigned long long)arg1 bizUserName:(id)arg2;
+- (void)onHandoffAction:(unsigned long long)arg1;
+- (void)onJumpGameAction:(id)arg1;
+- (void)onGameRankAction:(id)arg1;
+- (void)onAudienceCommentAction:(unsigned long long)arg1;
+- (void)onAudienceCommentAction:(long long)arg1 jsonDict:(id)arg2;
+- (void)onAudienceBannerAction:(unsigned long long)arg1 bannerId:(id)arg2;
+- (void)onAudienceBannerAction:(unsigned long long)arg1 bannerId:(id)arg2 bannerInfo:(id)arg3;
+- (void)onAudienceDropGiftAction:(unsigned long long)arg1 giftId:(id)arg2;
+- (void)onAudienceWeAvatarAction:(unsigned long long)arg1;
+- (void)onAssistantLotteryAction:(unsigned long long)arg1;
+- (void)onAssistantShopAction:(unsigned long long)arg1 actionClickType:(unsigned long long)arg2 clickIndex:(unsigned long long)arg3;
+- (void)onAssistantMoreAction:(unsigned long long)arg1 topicText:(id)arg2;
+- (void)onOpenJoinFansGroupPanelButtonExpose:(unsigned long long)arg1;
+- (void)onOpenJoinFansGroupPanelButtonClick:(unsigned long long)arg1;
+- (void)onFollowAndJoinFansGroupPanelExpose:(BOOL)arg1 fromType:(unsigned long long)arg2;
+- (void)onFollowAndJoinFansGroupButtonClick:(BOOL)arg1 fromType:(unsigned long long)arg2;
+- (void)onJoinFansGroupPanelExpose:(BOOL)arg1 fromType:(unsigned long long)arg2;
+- (void)onJoinFansGroupButtonClick:(BOOL)arg1 fromType:(unsigned long long)arg2;
+- (void)onJoinGroupPayPanelExpose:(unsigned long long)arg1;
+- (void)onJoinGroupPayButtonClick:(unsigned long long)arg1;
+- (void)onOpenFansGroupDetailPage:(unsigned long long)arg1;
+- (void)onOpenFansGroupDetailPanel:(unsigned long long)arg1;
+- (void)onOpenFansGroupMemberListPanel;
+- (void)onFansGroupDetailPanelRightsTabExposed;
+- (void)onFansGroupDetailPanelFansNoticeExposed;
+- (void)onFansGroupDetailPanelFansNoticeImageClicked;
+- (void)onReportAudienceFansGroupAction:(unsigned long long)arg1 joinState:(unsigned long long)arg2 actionFromSrc:(unsigned long long)arg3;
+- (void)onExposeScrollUpEducation;
+- (void)onExposeScrollDownEducation;
+- (void)onScrollUpEducationAfterExposed;
+- (void)onScrollDownEducationAfterExposed;
+- (void)onExposeGameWelfare:(id)arg1 uiType:(int)arg2;
+- (void)onExposeGameWelfareCanReceived:(id)arg1 uiType:(int)arg2;
+- (void)onClickGameWelfare:(id)arg1 uiType:(int)arg2;
+- (void)onClickGameWelfareCanReceived:(id)arg1 uiType:(int)arg2;
+- (void)onClickLiveiPadWithouLogin;
+- (void)onExposeLiveiPadWithouLogin;
+- (void)onPromotePubbleExpose:(long long)arg1 extra:(id)arg2;
+- (void)onPromotePubbleClose:(long long)arg1 extra:(id)arg2;
+- (void)onPromotePubbleReserve:(long long)arg1 extra:(id)arg2;
+- (void)onPromotePubbleUnReserve:(long long)arg1 extra:(id)arg2;
+- (void)onLiveBusinessExpose:(id)arg1;
+- (void)onLiveTicketBusinessExpose:(id)arg1;
+- (void)onLiveAnchorNotificationInfoReport:(id)arg1;
+- (void)onPromotePubbleClickGoTo:(long long)arg1 extra:(id)arg2;
+- (void)onPictureInPictureActionReport:(id)arg1;
+- (void)onCommonPictureInPictureActionReport:(id)arg1;
+- (void)onMinimizeWindowActionReport:(id)arg1;
+- (void)onCommonMinimizeWindowActionReport:(id)arg1;
+- (void)onLivePicSettingButtonExpose;
+- (void)onLivePictureInPictureSwitchExpose;
+- (void)onLiveMinimizeButtonExpose;
+- (void)onLivePicSettingButtonClick;
+- (void)onLivePictureInPictureSwitchChange:(BOOL)arg1;
+- (void)onLiveMinimizeButtonClick;
+- (void)onLivePurchaseButtonShow;
+- (void)onLivePurchaseInitiating;
+- (void)onLivePurchaseSucceededAtTimeInMillisecond:(unsigned long long)arg1;
+- (void)onClickConfirmChargeButton;
+- (void)onClickAgreementConfirmButton;
+- (void)onClickAgreementCancelButton;
+- (void)onShowChargePanel;
+- (void)onChargeSuccessed;
+- (void)onClickedOlympicBarragePubble:(id)arg1;
+- (void)onLiveCommentBoxActionReport:(id)arg1;
+- (void)reportAudienceSongAction:(unsigned long long)arg1 songName:(id)arg2;
+- (void)reportAudienceSongAction:(unsigned long long)arg1 songName:(id)arg2 giftID:(id)arg3 giftCount:(id)arg4;
+- (id)buildCommonAudienceActionStruct;
+- (void)reportLiveRoomCommentAssistantOperation:(unsigned long long)arg1 alias:(unsigned long long)arg2;
+- (void)reportCommentHotWordsExpose:(id)arg1;
+- (void)reportFloatBarrageEntranceExpose;
+- (void)reportFloatBarragePostSuccess:(unsigned int)arg1 giftId:(id)arg2;
+- (void)reportFloatBarrageLike:(unsigned int)arg1;
+- (void)reportFloatBarrageReply:(unsigned int)arg1;
+- (void)reportFloatBarrageCopy:(unsigned int)arg1;
+- (void)reportFloatBarrageComplain:(unsigned int)arg1;
+- (void)reportFloatBarrageUnLike:(unsigned int)arg1;
+- (void)reportLandscapeBarrageSettingEntranceExpose;
+- (void)reportLandscapeBarrageSettingEntranceClick;
+- (void)reportLandscapeBarrageSettingEnableDisplayChange:(id)arg1;
+- (void)reportLandscapeBarrageSettingDisplayRangeChange:(id)arg1;
+- (void)reportLandscapeBarrageSettingDisplayAlphaChange:(id)arg1;
+- (void)reportCommentBoxChangeForLandscapeBarrageStart;
+- (void)reportLandscapeClarityHeaderBtnExpose;
+- (void)reportLandscapeClarityHeaderBtnClick;
+- (void)onAudienceVideoZoomAction:(unsigned long long)arg1 isClearScreen:(BOOL)arg2;
+- (void)reportAudienceVideoZoomAction:(unsigned long long)arg1 isClearScreen:(BOOL)arg2;
+- (void)onAudienceOpenUserProfileAction:(unsigned long long)arg1 withProfileScene:(unsigned long long)arg2 userIdentity:(unsigned long long)arg3 isCurrentMicUser:(BOOL)arg4 userIsAnchor:(BOOL)arg5 andUserName:(id)arg6;
+- (void)onScreenshotPosterAction:(unsigned long long)arg1 actionResultDictionary:(id)arg2;
+- (void)onReportLiveAudienceGiftGoalAction:(unsigned long long)arg1 goalId:(id)arg2 giftId:(id)arg3;
+- (void)onAudienceFriendLikeAction:(unsigned long long)arg1 sendReason:(unsigned long long)arg2;
+- (void)onPromotingBanberAction:(unsigned long long)arg1;
+- (void)onGiftWallActionAction:(unsigned long long)arg1 giftId:(id)arg2;
+- (void)report:(id)arg1 logId:(int)arg2;
+- (void)insertBaseData:(id)arg1 logId:(int)arg2;
+- (void)insertBaseDataForLiveAudienceAction:(id)arg1;
+- (void)reportEnterLive:(id)arg1;
+- (void)reportAction:(unsigned long long)arg1 actionResults:(id)arg2;
+- (void)reportFinderLiveMessage:(id)arg1;
+- (void)reportFinderLiveProductQuestionMsgAction:(id)arg1;
+- (void)reportKTVRequestSongPanelEntryAction:(unsigned long long)arg1 scene:(unsigned long long)arg2;
+- (void)reportKTVRequestSongPanelAction:(unsigned long long)arg1 element:(unsigned long long)arg2 boardItem:(id)arg3 subBoardItem:(id)arg4 songItem:(id)arg5;
+- (void)reportKTVRequestedSongEntryAction:(unsigned long long)arg1;
+- (void)reportKTVRequestedSongPanelAction:(unsigned long long)arg1 element:(unsigned long long)arg2 tab:(unsigned long long)arg3 songItem:(id)arg4;
+- (void)reportKTVLeaveGuideAction:(unsigned long long)arg1 element:(unsigned long long)arg2 status:(unsigned long long)arg3 scene:(unsigned long long)arg4;
+- (void)reportKTVAudioEffectOperatingPanelExpose:(id)arg1;
+- (void)reportKTVAudioEffectOperatingPanelDismiss:(id)arg1;
+- (void)reportAudienceShareLiveGuideAction:(unsigned long long)arg1 position:(unsigned long long)arg2;
+- (void)reportFinderLiveCommentBoxAction:(id)arg1;
+- (void)reportFinderLiveReply:(id)arg1;
+- (void)reportFinderLiveLike:(unsigned long long)arg1 isClipMode:(BOOL)arg2;
+- (void)reportCommentExpose:(id)arg1;
+- (void)reportComplaintEntry;
+- (void)reportAudienceMinizaion:(unsigned long long)arg1;
+- (void)reportAudienceShare:(unsigned long long)arg1 withUsername:(id)arg2;
+- (id)genShareStructWith:(unsigned long long)arg1 withUsername:(id)arg2 isCertificateType:(BOOL)arg3;
+- (void)reportAudienceShare:(unsigned long long)arg1 withUsername:(id)arg2 isCertificateType:(BOOL)arg3;
+- (id)getLastChatRoomContact:(id)arg1;
+- (void)reportEnterProfile;
+- (void)reportBizLiveEnterProfile:(id)arg1;
+- (void)reportAirPlayAction:(unsigned long long)arg1;
+- (void)reportCopyComment;
+- (void)reportQuitRoom:(unsigned long long)arg1;
+- (void)reportQuitRoom:(unsigned long long)arg1 withLiveTask:(id)arg2;
+- (void)switchClarityWithLevel:(long long)arg1 newLevel:(long long)arg2;
+- (void)reportFinderLiveHideOpearation:(long long)arg1;
+- (void)reportSlideRoom:(id)arg1;
+- (void)reportAudienceFaceVerify:(unsigned long long)arg1;
+- (void)reportExposeLandscape;
+- (void)reportSwitchLandscape:(long long)arg1;
+- (void)reportCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withProductID:(unsigned long long)arg4 withAdItem:(id)arg5 withPbAdItem:(id)arg6 extraInfo:(id)arg7;
+- (void)reportCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withProductID:(unsigned long long)arg4 withAdItem:(id)arg5 withPbAdItem:(id)arg6 withCouponID:(id)arg7 extraInfo:(id)arg8;
+- (void)reportCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withProductID:(unsigned long long)arg4 withAdItem:(id)arg5 withPbAdItem:(id)arg6 withCouponID:(id)arg7 withCouponItem:(id)arg8 extraInfo:(id)arg9 reasonType:(unsigned long long)arg10;
+- (void)reportCommerceAction:(unsigned long long)arg1 withSessionID:(id)arg2 withRequestID:(id)arg3 withProductIDStr:(id)arg4 withAdItem:(id)arg5 withPbAdItem:(id)arg6 withCouponID:(id)arg7 withCouponItem:(id)arg8 extraInfo:(id)arg9 reasonType:(unsigned long long)arg10;
+- (void)reportCommerceAction:(unsigned long long)arg1 extraInfo:(id)arg2;
+- (void)reportLotteryAction:(unsigned long long)arg1 withResult:(id)arg2 extraInfo:(id)arg3;
+- (void)reportGiftAction:(unsigned long long)arg1 withGiftId:(id)arg2 withGiftCount:(unsigned int)arg3;
+- (void)reportGiftAction:(unsigned long long)arg1 withGiftId:(id)arg2 withGiftCount:(unsigned int)arg3 extraActionResultDict:(id)arg4;
+- (void)reportMicAction:(unsigned long long)arg1;
+- (void)reportAudienceFreeMicAction:(unsigned long long)arg1 duration:(unsigned long long)arg2;
+- (void)reportAudienceConnectMicSessionWithType:(unsigned long long)arg1 liveMode:(unsigned int)arg2 liveSubMode:(unsigned int)arg3 subSessionId:(id)arg4;
+- (void)reportMoreLiveClick:(id)arg1;
+- (void)reportMoreLiveExpose:(id)arg1;
+- (void)reportRedPacketAction:(unsigned long long)arg1 withSenderMicId:(id)arg2 extraInfoDict:(id)arg3;
+- (void)reportAudienceLiveResult:(unsigned long long)arg1 withLiveTask:(id)arg2;
+- (void)reportBGMusicAction:(long long)arg1;
+- (void)reportJoinTeamAction:(unsigned long long)arg1 extData:(id)arg2;
+- (void)reportPauseAction:(unsigned long long)arg1 accumulatedTime:(long long)arg2;
+- (void)reportBrandAction:(unsigned long long)arg1 bizUserName:(id)arg2;
+- (void)reportHandoffAction:(unsigned long long)arg1;
+- (void)reportJumpGameAction:(id)arg1;
+- (void)reportGameRankAction:(id)arg1;
+- (void)reportCommentAtAction:(unsigned long long)arg1 actionResult:(id)arg2;
+- (void)reportAudienceCommentAction:(unsigned long long)arg1;
+- (void)reportAudienceCommentAction:(unsigned long long)arg1 jsonDict:(id)arg2;
+- (void)reportCommentSendLocationAction:(unsigned long long)arg1 actionResult:(id)arg2;
+- (void)reportAssistantLotteryAction:(unsigned long long)arg1;
+- (void)reportAssistantShopAction:(unsigned long long)arg1 actionClickType:(unsigned long long)arg2 clickIndex:(unsigned long long)arg3;
+- (void)reportAssistantMoreAction:(unsigned long long)arg1 topicText:(id)arg2;
+- (void)reportBannerAction:(unsigned long long)arg1 bannerId:(id)arg2;
+- (void)reportBannerAction:(unsigned long long)arg1 bannerId:(id)arg2 bannerInfo:(id)arg3;
+- (void)addBannerExtReportDataTo:(id)arg1 with:(id)arg2;
+- (unsigned long long)transferToAudienceActionTypeFromAtAction:(unsigned long long)arg1;
+- (void)reportWeAvataRenderedAcation:(unsigned long long)arg1;
+- (void)reportDropGiftAction:(unsigned long long)arg1 giftId:(id)arg2;
+- (void)reportAudienceFansGroupAction:(unsigned long long)arg1 joinState:(unsigned long long)arg2 actionFromSrc:(unsigned long long)arg3;
+- (void)reportAudiencePromoteAction:(long long)arg1 actionType:(long long)arg2 extra:(id)arg3;
+- (void)reportAudiencePictureInPictureAction:(id)arg1;
+- (void)reportAudienceCommonPictureInPictureAction:(id)arg1;
+- (void)reportAudienceMinimizeWindowAction:(id)arg1;
+- (void)reportAudienceCommonMinimizeWindowAction:(id)arg1;
+- (void)reportForLiveSettingButtonExpose:(id)arg1;
+- (void)reportForLiveSettingButtonClick:(id)arg1 extra:(id)arg2;
+- (void)reportAudienceShowScrollEducationAction:(unsigned long long)arg1 eventRes:(unsigned long long)arg2;
+- (void)reportAudienceShowGameWelfareAction:(unsigned long long)arg1 extInfo:(id)arg2 uiType:(int)arg3;
+- (void)reportPreviewRelatedEnterLive:(id)arg1 WithCommentScene:(id)arg2 specialViewModel:(id)arg3;
+- (void)onPreviewRelatedStatusChangedWithType:(unsigned long long)arg1 operation:(unsigned long long)arg2 specialViewModel:(id)arg3;
+- (void)reportPreviewRelatedAudienceLiveResultWithViewModel:(id)arg1;
+- (id)dictionaryOf:(id)arg1;
+- (void)onLiveMinifyBannerShowWithViewModel:(id)arg1;
+- (void)onPreviewRelatedLivesShowWithViewModel:(id)arg1 dataItem:(id)arg2 cardExpType:(unsigned long long)arg3 indexInSpecialList:(unsigned long long)arg4;
+- (void)onExposeInvitedCardButtonDataItem:(id)arg1 joinSence:(unsigned long long)arg2 isGetCertificate:(unsigned long long)arg3 relaySence:(unsigned long long)arg4;
+- (void)onMinifyRoomBannerClickedWithViewModel:(id)arg1;
+- (void)onPreviewRelatedDataItemsClickedWithViewModel:(id)arg1 dataItem:(id)arg2 indexInSpecialList:(unsigned long long)arg3;
+- (void)onMemberShipGuideConfirmButtonClick;
+- (void)onLiveWishBannerShowWithWishListId:(id)arg1 isGiftWall:(BOOL)arg2;
+- (void)onLiveShowLotteryDetail:(id)arg1 eduDict:(id)arg2;
+- (void)onLiveClickLotteryDetail:(id)arg1 eduDict:(id)arg2;
+- (void)onLiveWishBannerClickedWithWishListId:(id)arg1 isGiftWall:(BOOL)arg2;
+- (void)onClickedRelayButtonDataItem:(id)arg1 joinSence:(unsigned long long)arg2 isGetCertificate:(BOOL)arg3 relaySenceTpe:(unsigned long long)arg4 finderUsername:(id)arg5;
+- (void)onClickedOlympicShareButtonDataItem:(id)arg1 joinSence:(unsigned long long)arg2 isGetCertificate:(BOOL)arg3 relaySenceTpe:(unsigned long long)arg4 finderUsername:(id)arg5;
+- (void)onClickedOlympicSetTextStateButtonDataItem:(id)arg1 joinSence:(unsigned long long)arg2 isGetCertificate:(BOOL)arg3 relaySenceTpe:(unsigned long long)arg4 finderUsername:(id)arg5;
+- (void)reportLiveScrollActionSheetActionForiPadWatchLiveWithoutLog:(unsigned long long)arg1;
+- (void)reportLivePurchaseEvent:(unsigned long long)arg1 atTimeInMillisecond:(unsigned long long)arg2;
+- (void)reportBoxShareButtonExpose;
+- (void)reportBoxPageSheetShareButtonClicked;
+- (void)reportExposeEndPageLiveReplay:(id)arg1 refObjectid:(unsigned long long)arg2;
+- (void)reportExposeEndPageLiveCard:(unsigned long long)arg1;
+- (void)reportExposeEndPageLiveItem:(unsigned long long)arg1;
+- (void)reportExposeEndPageFeedCard:(id)arg1;
+- (void)reportExposeEndPageToAnchorPage:(id)arg1 eid:(id)arg2 commentscene:(id)arg3;
+- (void)reportExposeEndPageToAnchorPage:(id)arg1 eid:(id)arg2;
+- (void)reportExposeEndPageNewLiveContainer:(unsigned long long)arg1;
+- (void)reportClickEndPageLiveCard:(unsigned long long)arg1;
+- (void)reportClickEndPageLiveItem:(unsigned long long)arg1;
+- (void)reportClickEndPageNewLiveButton:(unsigned long long)arg1;
+- (void)reportClickEndPageFeedCard:(id)arg1;
+- (void)reportClickEndReplayToAnchorPage:(id)arg1 eid:(id)arg2 commentscene:(id)arg3 eldDictionary:(id)arg4;
+- (void)reportClickEndPageToAnchorPage:(id)arg1 eid:(id)arg2 commentscene:(id)arg3;
+- (void)reportClickEndPageToAnchorPage:(id)arg1 eid:(id)arg2;
+- (void)reportAudienceMilestoneLotteryAction:(unsigned long long)arg1 lotteryId:(id)arg2 noticeId:(id)arg3;
+- (void)reportAudienceMilestoneLotteryAction:(unsigned long long)arg1 lotteryId:(id)arg2 noticeId:(id)arg3 customDict:(id)arg4;
+- (void)reportAudienceRedDotWithDict:(id)arg1;
+- (void)reportReplayStopgapAction:(unsigned long long)arg1 elapsedTime:(unsigned long long)arg2;
+- (void)reportScreenshotPosterAction:(unsigned long long)arg1 actionResultDictionary:(id)arg2;
+- (void)reportAdVideo:(unsigned long long)arg1 advertiseType:(unsigned long long)arg2 advertiseId:(id)arg3 watchDuration:(double)arg4;
+- (void)reportVoteActionType:(unsigned long long)arg1 voteId:(id)arg2;
+- (void)reportVoteActionType:(unsigned long long)arg1 voteId:(id)arg2 extraInfo:(id)arg3;
+- (void)onLiveRewardQuotaOperationReport:(unsigned long long)arg1;
+- (void)onLiveRewardQuotaOperationReport:(unsigned long long)arg1 extraInfo:(id)arg2;
+- (void)onLiveGiftPackageOperationReport:(unsigned long long)arg1;
+- (void)onInteractiveHomePageAction:(unsigned long long)arg1 pressedLiveID:(unsigned long long)arg2;
+- (void)onNotifyBanner:(id)arg1 didAction:(unsigned long long)arg2 displayAsReward:(BOOL)arg3;
+- (void)onReportLiveAudienceLiveStarterScrollActionSheetOperation:(id)arg1;
+- (void)onReportLiveAudienceFollowSheetAction:(unsigned long long)arg1 params:(id)arg2;
+- (void)onReportLivePromoteTipsPubbleAction:(int)arg1 pubblePosition:(int)arg2;
+- (void)onReportLiveGloryAction:(unsigned long long)arg1 listOrder:(int)arg2 username:(id)arg3 userIdentity:(int)arg4 clickSoure:(id)arg5;
+- (void)onEligibilityEntranceActionType:(int)arg1 reportInfo:(id)arg2;
+- (void)reportAudienceBusinessActionType:(unsigned long long)arg1 params:(id)arg2;
+- (id)getScreenTypeForReport;
+- (void)reportAudienceLocalAudioModeAction:(unsigned long long)arg1 subType:(unsigned long long)arg2;
+- (void)reportAudienceQuitLiveNavAction:(long long)arg1;
+- (void)reportAudienceConnectMicLocationGuideAction:(unsigned long long)arg1 isPageSheet:(BOOL)arg2 showLocation:(BOOL)arg3;
+- (void)reportAudienceConnectMicLocationAuthAction:(BOOL)arg1 isSystemAuth:(BOOL)arg2;
+- (void)reportAudienceConnectMicLocationResultAction:(BOOL)arg1 isDefault:(BOOL)arg2;
+- (void)reportAudienceIdentityPrivacyEntranceExpose:(unsigned int)arg1;
+- (void)reportAudienceIdentityPrivacyEntranceClick:(unsigned int)arg1;
+- (void)reportAudienceGiftWallAction:(unsigned long long)arg1;
+- (void)reportAudienceGiftWallActionWithParams:(id)arg1;
+- (void)reportStartChangeClarityWithQualityLevel:(unsigned long long)arg1 fromScene:(unsigned long long)arg2;
+- (id)switchExtraDic;
+- (void)setSwitchExtraDic:(id)arg1;
+- (void).cxx_destruct;
+@end
+

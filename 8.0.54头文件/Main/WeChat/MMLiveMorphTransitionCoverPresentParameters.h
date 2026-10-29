@@ -1,0 +1,3 @@
+@interface MMLiveMorphTransitionCoverPresentParameters : MMLiveMorphTransitionParameters
+@end
+

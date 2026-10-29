@@ -1,0 +1,219 @@
+{
+  "input" : "com.tencent.xin_8.0.80.ipa",
+  "limitations" : "从 Objective-C 元数据恢复声明，不包含方法实现。独立 protocol 声明和纯 Swift 类型暂未导出；加密镜像会跳过。",
+  "backend" : "REipa 0.1.0 · native in-process",
+  "headers" : 48289,
+  "bytes" : 44389615,
+  "created" : 1793263037.932339,
+  "binaries" : [
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/App.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/HuiYanBaseSDK.framework",
+      "status" : "success",
+      "classes" : 99,
+      "categories" : 8,
+      "headers" : 107,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/JavaScriptCore2.framework",
+      "status" : "success",
+      "classes" : 10,
+      "categories" : 1,
+      "headers" : 11,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/Lottie.framework",
+      "status" : "success",
+      "classes" : 67,
+      "categories" : 1,
+      "headers" : 68,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/MMRouter.framework",
+      "status" : "success",
+      "classes" : 3,
+      "categories" : 1,
+      "headers" : 4,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/NewMessageRingUtil.framework",
+      "status" : "success",
+      "classes" : 1,
+      "categories" : 0,
+      "headers" : 1,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/ProtobufLite.framework",
+      "status" : "success",
+      "classes" : 8,
+      "categories" : 0,
+      "headers" : 8,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/SoundTouch.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/TPFFmpeg.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/TPThirdParties.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/WeChatDylib.framework",
+      "status" : "success",
+      "classes" : 791,
+      "categories" : 13,
+      "headers" : 804,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/XFileSDK.framework",
+      "status" : "success",
+      "classes" : 12,
+      "categories" : 0,
+      "headers" : 12,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/andromeda.framework",
+      "status" : "success",
+      "classes" : 2,
+      "categories" : 0,
+      "headers" : 2,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/cronet_wrapper.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/matrixreport.framework",
+      "status" : "success",
+      "classes" : 5,
+      "categories" : 0,
+      "headers" : 5,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/mmcronet.framework",
+      "status" : "success",
+      "classes" : 12,
+      "categories" : 1,
+      "headers" : 13,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/openssl.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/owl.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/xfile.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/xfile_pdfium.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Main\/WeChat",
+      "status" : "success",
+      "classes" : 46673,
+      "categories" : 581,
+      "headers" : 47254,
+      "protocols" : 0,
+      "renamed_headers" : [
+        {
+          "original" : "NSString+Compare.h",
+          "exported" : "NSString+Compare-2.h"
+        },
+        {
+          "original" : "UINavigationController+WeChat.h",
+          "exported" : "UINavigationController+WeChat-2.h"
+        },
+        {
+          "original" : "UIView+ZZSeparator.h",
+          "exported" : "UIView+ZZSeparator-2.h"
+        },
+        {
+          "original" : "UIDevice+AdapterApi.h",
+          "exported" : "UIDevice+AdapterApi-2.h"
+        },
+        {
+          "original" : "NSDictionary+NSDictionary_SafeJSON.h",
+          "exported" : "NSDictionary+NSDictionary_SafeJSON-2.h"
+        },
+        {
+          "original" : "NSArray+NSArray_SafeJSON.h",
+          "exported" : "NSArray+NSArray_SafeJSON-2.h"
+        }
+      ]
+    }
+  ]
+}

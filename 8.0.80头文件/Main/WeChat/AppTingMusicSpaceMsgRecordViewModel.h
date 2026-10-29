@@ -1,0 +1,2 @@
+@interface AppTingMusicSpaceMsgRecordViewModel : AppTingMusicSpaceMessageViewModel
+@end

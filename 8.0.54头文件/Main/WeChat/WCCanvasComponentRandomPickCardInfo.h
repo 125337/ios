@@ -1,0 +1,3 @@
+@interface WCCanvasComponentRandomPickCardInfo : WCAdRandomPickCardItemsInfo
+@end
+

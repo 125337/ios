@@ -1,0 +1,3 @@
+@interface QCircleHandler : QOverlayHandler
+@end
+

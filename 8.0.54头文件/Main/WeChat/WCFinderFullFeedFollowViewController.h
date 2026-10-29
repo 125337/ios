@@ -1,0 +1,595 @@
+@interface WCFinderFullFeedFollowViewController : MMUIViewController <UITableViewDelegate, UITableViewDataSource, WCFinderRefreshTableFooterViewDelegate, EGORefreshTableHeaderDelegate, WCCommitViewResultDelegate, WCFinderRedDotNotifyExt, WCFinderFullMultiMediaTableViewCellDelegate, WCActionSheetDelegate, MMScrollActionSheetDelegate, WCFinderPostingCommentExt, WCFinderCommentDetailViewControllerDelegate, WCFinderRedDotExt, WCFinderFeedFollowVMDelegate, WCFinderMoreHotContentTableViewCellDelegate, WCFinderFeedListDownLoadExt, WCGeneralMonitorDelegate, MMTipsViewControllerDelegate, RecentForwardScrollViewDelegate, WCFinderCardWebViewControllerDelegate, WCAdFinderDialogViewControllerDelegate, WCFinderFeedContentVMExt, WCCanvasHalfScreenViewControllerDelegate, ForwardMessageLogicDelegate, WCFinderTimelineTipsBubbleProtocol, MMLiveMorphDismissTarget, RingBackInfoDisplaySheetViewDelegate, PAGViewListener, WCFinderPostViewControllerDelegate, WCFinderFeedFriendsLikeListViewControllerDelegate, WCFinderBulletCommentViewControllerDelegate, WCFinderPreloadStrategyExt, WCFinderHalfScreenProtocol, WCFinderTabViewControllerExt, MMFinderLiveCastViewControllerExt, WCFinderFansProfileViewControllerDelegate, WCFinderFeedDragUpDislikeControllerDelegate, WCFinderCustomPagingDelegate, WCFinderLeadToOtherTabTableViewCellDelegate, SnapshotPrinterViewProtocol, WCFinderActionSheetBulletAuthorDelegate, WCFinderPersonalizedSettingExt, WCFinderMinimizeListProtocol, WCFinderDescTableViewCellDelegate, WCFinderTabViewControllerProtocol, WCFinderFeedBaseViewControllerProtocol, WCFinderFollowViewControllerProtocol>
+{
+    BOOL _postFeedInsertMachineTab; // +0x68
+    BOOL _hasReportCreateEvent; // +0x69
+    BOOL _isDisableVideoAutoPlay; // +0x6a
+    BOOL _footerNoMoreData; // +0x6b
+    BOOL _needsResumeTimelineVideo; // +0x6c
+    BOOL _isEnableMarkRead; // +0x6d
+    BOOL _isViewWillAppeaer; // +0x6e
+    BOOL _hasFetchData; // +0x6f
+    BOOL _enableAutoRefresh; // +0x70
+    BOOL _alreadyShownScrollUpGuideAnimationView; // +0x71
+    UITableView * _tableView; // +0x78
+    WCFinderFeedFollowVM * _feedVM; // +0x80
+    NSString * _latestAutoplayVideoTid; // +0x88
+    WCFinderRefreshTableFooterView * _footerView; // +0x90
+    UIView * _noMoreFooterView; // +0x98
+    NSIndexPath * _currentForceIndexPath; // +0xa0
+    NSString * _lastStayFeedTidBeforeTopRefresh; // +0xa8
+    WCFinderPullDownRefreshHeaderView * _refreshHeaderView; // +0xb0
+    NSMutableDictionary * _exposureDict; // +0xb8
+    UILabel * _stateTipsLabel; // +0xc0
+    UITapGestureRecognizer * _stateRetryGesture; // +0xc8
+    UIImageView * _retryImageView; // +0xd0
+    UIViewController<WCFinderCommentBaseViewProtocol> * _lastCommentVC; // +0xd8
+    NSString * _currentVideoTid; // +0xe0
+    NSString * _currentForceTid; // +0xe8
+    long long _tabLastAnchorSecond; // +0xf0
+    MMScrollViewProxy * _scrollProxy; // +0xf8
+    MMTipsViewController * _shareToSnsTips; // +0x100
+    UIView * _maskView; // +0x108
+    UILabel * _refreshHeaderViewTipsLabel; // +0x110
+    double _refreshHeaderViewLastAlpha; // +0x118
+    unsigned long long _enterTime; // +0x120
+    WCFinderScrollActionSheet * _currentActionSheet; // +0x128
+    UIImage * _minimizeCoverImage; // +0x130
+    UIView * _minimizeSnapshotView; // +0x138
+    id /* block */ _forwardActionDelayBlock; // +0x140
+    WCFinderTLRegardfulAuthorView * _regardfulAuthorView; // +0x148
+    WCStoryTouchToDismissView * _scrollUpGuideAnimationMaskView; // +0x150
+    PAGView * _scrollUpGuideAnimationView; // +0x158
+    MMUILabel * _scrollUpGuideLabel; // +0x160
+    id <WCFinderFollowViewControllerDelegate> _delegate; // +0x168
+    unsigned long long _guideBarObjectId; // +0x170
+    WCFinderOpenTimelineParams * _openTimelineParams; // +0x178
+    WCFinderPlayRateOperationView * _operationView; // +0x180
+    WCFinderPlayRateOperationViewV3 * _operationViewV3; // +0x188
+    WCFinderFeedFriendsLikeListViewController * _tmpLikeListVC; // +0x190
+    WCFinderFeedDragUpDislikeController * _notInterestedLogic; // +0x198
+    WCFinderCustomPaging * _customPagingHelper; // +0x1a0
+    WCFinderFeedListBannderView * _bannerView; // +0x1a8
+    _TtC6WeChat25WCFinderFeedFastSlipLogic * _fastSlipLogic; // +0x1b0
+    EmoticonCustomCreateLogic * _emoticonCustomCreateLogic; // +0x1b8
+    MMFinderHandOffItem * _finderHandoffItem; // +0x1c0
+    WCFinderLandscapeReportInfo * _landscapeReportInfo; // +0x1c8
+    id /* block */ _pendingInsertionBlock; // +0x1d0
+}
+- (void)viewDidLoad;
+- (BOOL)useTransparentNavibar;
+- (void)setupNotInterestedActionLogicIfNeeded;
+- (void)dealloc;
+- (void)initSubview;
+- (void)setupCustomPaging;
+- (id)scrollUpGuideAnimationMaskView;
+- (id)scrollUpGuideAnimationView;
+- (id)scrollUpGuideLabel;
+- (id)fastSlipLogic;
+- (void)setUpTableView;
+- (void)setUpRefreshHeaderView;
+- (void)setUpFooterView;
+- (void)setUpScrollUpGuideAnimationView;
+- (void)setUpNoMoreFooterView;
+- (id)refreshHeaderViewTipsLabel;
+- (void)exposeCurrentDisplayFeed;
+- (CGRect)getCurSearchBarFrame;
+- (long long)currentVCTabType;
+- (void)willDisappear;
+- (void)onFinderTabAppear:(long long)arg1;
+- (void)onFinderTabDisappear:(long long)arg1;
+- (void)monitorView:(id)arg1 newExposedItems:(id)arg2 lastExposedItems:(id)arg3;
+- (void)monitorView:(id)arg1 unExposedCells:(id)arg2;
+- (void)monitorView:(id)arg1 unExposedItems:(id)arg2;
+- (void)updateAdReportMeta:(id)arg1;
+- (id)exposureDict;
+- (void)willPresentHalfScreen;
+- (void)resumeFromHalfScreen;
+- (void)setTableViewScrollEnable;
+- (id)retryImageView;
+- (id)stateTipsLabel;
+- (id)stateRetryGesture;
+- (void)stateRetryGestureAction:(id)arg1;
+- (void)resetRetryState;
+- (void)pauseCurrentMediaWithShowPauseBtn:(BOOL)arg1;
+- (void)resumeCurrentMedia;
+- (void)setUsedTaskData:(id)arg1;
+- (void)addOrUpdateUsedTaskData;
+- (void)stopCurrentMediaAndSnapCapture;
+- (void)stopCurrentMedia;
+- (void)stopVisibleVideo;
+- (void)stopPreloadVisibleVideo;
+- (void)needsUpdateCurrentVideo:(BOOL)arg1;
+- (void)resetCurrentVideoThumb;
+- (void)updateCurrentVideoThumb;
+- (void)scrollTimelineToTop;
+- (void)scrollTimelineToTopWithAnimation:(BOOL)arg1;
+- (void)reloadRowAtIndexPath:(id)arg1 contentVM:(id)arg2 animation:(long long)arg3;
+- (void)addObserverForForegroundNotification;
+- (void)removeObserverForForegroundNotification;
+- (void)addScreenshotNotification;
+- (void)removeScreenshotNotification;
+- (void)onTimelineViewEnterForeground:(id)arg1;
+- (void)onUserDidTakeScreenshot;
+- (void)triggerCellEnterForegroundAction;
+- (void)onTimelineViewEnterBackground:(id)arg1;
+- (void)triggerCellEnterBackgroundAction;
+- (long long)preferredInterfaceOrientationForPresentation;
+- (BOOL)shouldAutorotate;
+- (BOOL)supportRotate;
+- (unsigned long long)supportedInterfaceOrientations;
+- (void)throttleScrollProcess;
+- (void)scrollEndProcessWithTableViewTargetOffset:(CGPoint)arg1;
+- (void)checkShouldScrollToNextFeedWithDelay:(id)arg1;
+- (id)getVisibleVideoIndexPathArray:(id)arg1;
+- (void)autoplayVideoProcessWithTableViewTargetOffset:(CGPoint)arg1;
+- (void)checkCurrentForceIndexPathWithTableViewTargetOffset:(CGPoint)arg1;
+- (void)reportFullStatsImmediately;
+- (void)reportFullStatsExceptTidImmediately:(id)arg1;
+- (void)updateCurrentStats;
+- (BOOL)updateStatsExceptTidImmediately:(id)arg1;
+- (void)currentForceIndexPathWillChanged;
+- (void)removeAllUnReadLiveFeed;
+- (void)preloadVideoItems;
+- (id)getNeedPreloadItemsWithCurrentIndexPath:(id)arg1;
+- (void)checkPreCreateVideoItems;
+- (void)fetchNextPage;
+- (void)transferToRecommond;
+- (void)didClickFooterRefreshRetry:(id)arg1;
+- (void)finderFooterDidTriggerRefresh:(id)arg1;
+- (BOOL)isEnableTriggerRefreshAtScroll:(id)arg1;
+- (void)finderFooterViewWillStartLoading:(id)arg1;
+- (void)onFeedVMDataLocalEmpty;
+- (void)onFeedVMWillChangeOriginDataIndex:(BOOL)arg1;
+- (void)onFeedVMDataChanged;
+- (void)onFeedRevertPlayerState;
+- (void)onFeedVMDataDeleteWithIndexSet:(id)arg1;
+- (void)onFeedVMDataChangedWithDeletedIndexSet:(id)arg1;
+- (void)scrollToNextVisibleCellAfterLoading:(CGRect)arg1;
+- (void)onFeedVMDataAppendFromIndex:(long long)arg1 toIndex:(long long)arg2;
+- (void)onFeedVMInsertContentVM:(id)arg1 section:(long long)arg2;
+- (void)onFeedVMDataAppend:(id)arg1;
+- (void)onFeedVMDataChangedByPublish:(id)arg1 dataItem:(id)arg2;
+- (void)showShareToSnsTipsWith:(id)arg1;
+- (void)onClickTipsBtn:(id)arg1 Index:(long long)arg2 tipTag:(long long)arg3;
+- (void)onFeedFollowVMUploadSucWithDataItem:(id)arg1;
+- (id)feedFollowVCCurrentForceTid;
+- (void)feedFollowScrollToTargetIndexPath:(id)arg1 animated:(BOOL)arg2;
+- (void)onFeedShowStatusRefreshTipsWithTid:(id)arg1;
+- (void)onFeedVMDataFetchSuccess;
+- (void)onFeedServerFetchSuccess;
+- (BOOL)showMachineTab;
+- (BOOL)showLeadToMachineTabFooterView;
+- (void)checkDataEmpty;
+- (void)onFeedServerFetchHistorySuccess:(BOOL)arg1;
+- (void)onFeedVMDataPullRefreshStopLoading;
+- (void)onFeedVMDataPullRefreshNoMore;
+- (void)onFeedVMDataPullRefreshError:(unsigned long long)arg1;
+- (void)onFeedVMDataFootRefreshNoMore;
+- (void)onFeedVMDataFootRefreshError;
+- (void)onFeedVMDataChangedAtIndexPath:(id)arg1 contentVM:(id)arg2;
+- (void)onFeedVMDataChangedAtIndexPath:(id)arg1 contentVM:(id)arg2 animated:(BOOL)arg3;
+- (void)onFeedVMDataWillRemoved:(id)arg1;
+- (unsigned long long)getNextNotSplitSectionWithCurrentSection:(unsigned long long)arg1;
+- (void)onFeedLastestVideoMuteNeedChange;
+- (void)onFeedVMDataItemMediaResourceIsDeleted;
+- (void)onFeedVMFetchLocalRedDotDataItem;
+- (void)onFeedVMFetchSplitBubbleLayoutData;
+- (void)onRefreshTableViewResetContentInset;
+- (void)showMoreContentView;
+- (void)onDataEmptyState:(BOOL)arg1;
+- (void)resetFooterViewNormal;
+- (void)processLastVideoHunger;
+- (void)onFeedAllDataItemsNeedClean;
+- (BOOL)finderNotInterestedActionLogicCanShowPanel;
+- (void)finderNotInterestedActionLogicSetDislikeWithContentVM:(id)arg1;
+- (id)finderNotInterestedActionLogicGetContentVMAtPanStart;
+- (void)egoRefreshTableHeaderDidTriggerRefresh:(id)arg1;
+- (void)reportTopRefreshWithMode:(unsigned long long)arg1;
+- (void)startTriggerRefreshHeaderLoadingMode:(unsigned long long)arg1;
+- (void)triggerAutoRefreshActionByClickStatusBar:(BOOL)arg1;
+- (void)triggerActiveRefreshAction;
+- (void)stopRefreshHeaderLoadingCompletion:(id /* block */)arg1 delay:(double)arg2 refreshState:(unsigned long long)arg3;
+- (void)stopRefreshHeaderWithTipsView:(BOOL)arg1 completion:(id /* block */)arg2;
+- (void)stopRefreshHeaderLoadingWithDelay:(double)arg1 duration:(double)arg2 searchContainerHidden:(BOOL)arg3 completion:(id /* block */)arg4;
+- (void)notifyTopRefreshFinish:(BOOL)arg1 byTopRefresh:(BOOL)arg2;
+- (BOOL)egoRefreshTableHeaderDataSourceIsLoading:(id)arg1;
+- (BOOL)scrollViewShouldScrollToTop:(id)arg1;
+- (void)scrollViewDidScrollToTop:(id)arg1;
+- (void)scrollViewDidEndDragging:(id)arg1 willDecelerate:(BOOL)arg2;
+- (void)scrollViewWillEndDragging:(id)arg1 withVelocity:(CGPoint)arg2 targetContentOffset:(CGPoint *)arg3;
+- (void)scrollViewWillBeginDecelerating:(id)arg1;
+- (void)scrollViewDidEndDecelerating:(id)arg1;
+- (void)animatedDisplayBannerView;
+- (void)checkPreplayLive;
+- (void)_preplayLiveIfNeededWithIndex:(unsigned long long)arg1;
+- (void)scrollViewWillBeginDragging:(id)arg1;
+- (void)scrollViewDidScroll:(id)arg1;
+- (void)setFeedCellDecorationViewsAlpha:(double)arg1;
+- (id)tableView:(id)arg1 cellForRowAtIndexPath:(id)arg2;
+- (long long)tableView:(id)arg1 numberOfRowsInSection:(long long)arg2;
+- (long long)numberOfSectionsInTableView:(id)arg1;
+- (double)tableView:(id)arg1 heightForRowAtIndexPath:(id)arg2;
+- (id)feedCellViewParamModelWithContentVM:(id)arg1;
+- (BOOL)isInSubScene;
+- (id)feedIdByIndex:(id)arg1;
+- (id)specialParamsForFeedId:(id)arg1;
+- (id)getListView;
+- (void)reloadDataWrap;
+- (void)tableView:(id)arg1 didEndDisplayingCell:(id)arg2 forRowAtIndexPath:(id)arg3;
+- (void)exposureTime:(id)arg1 index:(long long)arg2;
+- (void)tableView:(id)arg1 willDisplayCell:(id)arg2 forRowAtIndexPath:(id)arg3;
+- (CGPoint)nearestTargetOffsetForOffset:(CGPoint)arg1;
+- (BOOL)canShowScrollUpGuideAnimationView;
+- (void)showScrollUpGuideAnimationView;
+- (void)showScrollUpGuideAnimationViewAfterDelay;
+- (void)showScrollUpGuideAnimation:(double)arg1 videoDuration:(double)arg2;
+- (void)reportFinderGlobalPushScrollUpGuideAnimationView:(long long)arg1;
+- (void)tableView:(id)arg1 willDisplayFooterView:(id)arg2 forSection:(long long)arg3;
+- (void)onFriendsLikeListViewControllerDisappear;
+- (void)onClickFriendLikeListDetail:(id)arg1;
+- (void)onClickFriendWeChatProfile:(id)arg1;
+- (void)onClickFriendGroupListDetail:(id)arg1;
+- (void)onRefreshFriendUI:(id)arg1;
+- (void)clickRecommendUrl:(id)arg1;
+- (void)finderFriendLikeTableViewCellClickLikeAction:(id)arg1 contentVM:(id)arg2 isNormalLiked:(BOOL)arg3;
+- (void)scrollToNextFeedWithContentVM:(id)arg1;
+- (void)onCurMultiMediaCellNPSFlutterShowing:(BOOL)arg1 cell:(id)arg2;
+- (void)onLiveFeedDidTap:(id)arg1 routeModel:(id)arg2;
+- (void)onLiveFeedStatusChanged:(id)arg1;
+- (void)onFeedCellDidClickAvatar:(id)arg1 avatarType:(unsigned long long)arg2 contentVM:(id)arg3;
+- (void)didFeedDoubleLikeAction:(id)arg1;
+- (void)doubleClickLikeFeedContentVMAction:(id)arg1;
+- (void)likeFeedContentVMAction:(id)arg1 isPrivateLike:(BOOL)arg2 touchPoint:(CGPoint)arg3;
+- (void)showSpamTipsWithString:(id)arg1;
+- (void)photoContentPageTurning:(id)arg1 currentPage:(unsigned long long)arg2 lastPage:(unsigned long long)arg3;
+- (void)retryLoadingVideoResource:(BOOL)arg1;
+- (void)contentMediaDidEndPlay:(unsigned long long)arg1 contentVM:(id)arg2 finderPlayerReport:(id)arg3;
+- (void)tryAutoPlayNextFeedAfterContentVM:(id)arg1;
+- (BOOL)isClickAutoPlaySwitchOn;
+- (void)scrollToNextContentVM:(id)arg1 animated:(BOOL)arg2;
+- (void)scrollToNextContentVM:(id)arg1 animated:(BOOL)arg2 limitMediaType:(unsigned long long)arg3;
+- (void)didEndMediaPlay;
+- (void)onFeedVideoStopPlay:(id)arg1 tid:(id)arg2;
+- (id)actionSheetItemConfigArrayWithContentVM:(id)arg1;
+- (BOOL)haveDislikeEntryWithContentVM:(id)arg1;
+- (id)createActionSheetWithContentVM:(id)arg1;
+- (void)onMultiMediaCell:(id)arg1 videoTemplateClickAction:(id)arg2;
+- (void)onLongPressMediaInCell:(id)arg1;
+- (id)getFinderSurveyContextInfoForCell:(id)arg1;
+- (void)onHeaderMoreClickAction:(id)arg1 shareButton:(id)arg2;
+- (void)onHeaderFollowBtnClickAction:(id)arg1 followButton:(id)arg2;
+- (BOOL)finderMulitMediaTableViewCellCanProgressGestureWithTid:(id)arg1;
+- (BOOL)onMultiMediaCellIsInHotSpots:(id)arg1;
+- (void)onVideoPlayDecoderError:(id)arg1;
+- (void)onVideoUpdatePosition:(double)arg1 videoDuration:(double)arg2 maxPlayVideoTime:(double)arg3;
+- (void)enhanceRelatedListByPlayProgressWithContentVM:(id)arg1 progress:(double)arg2;
+- (BOOL)showRelatedRecommendGuideByProgress:(double)arg1;
+- (void)tabViewControllerResetFullCellHalfScreen;
+- (void)tabBubbleBottomChange:(double)arg1;
+- (id)getFirstTableViewCell;
+- (void)onCurrentBGMDidEndPlay:(id)arg1;
+- (void)onFeedCellPreparedMediaContent:(id)arg1;
+- (void)multiMediaCellInPicture:(id)arg1;
+- (void)multiMediaCellForceToProtrait:(id)arg1;
+- (void)multiMediaCellShowPlayRate:(id)arg1;
+- (void)multiMediaCell:(id)arg1 shouldPauseVideoIfSupport:(BOOL)arg2;
+- (BOOL)multiMediaCell:(id)arg1 shouldShowDislikeButton:(id)arg2;
+- (BOOL)multiMediaCell:(id)arg1 isTouchPlayRateOperationV3View:(id)arg2;
+- (void)multiMediaCellPlayRateView:(id)arg1 playSpeedViewWillStartAnimatedChange:(long long)arg2;
+- (void)multiMediaCellPlayRateView:(id)arg1 playSpeedViewAnimatedChangeComplete:(long long)arg2;
+- (void)multiMediaCell:(id)arg1 handlePortoailLongPressGesture:(id)arg2 stateModel:(id)arg3;
+- (void)multiMediaCellClickTemplateCommentSuspendViewConfirmViewWithDataItem:(id)arg1 commentId:(unsigned long long)arg2;
+- (void)onWillClickToolbarLikeAction:(id)arg1 isPrivateLike:(BOOL)arg2;
+- (void)onClickToolbarLikeAction:(id)arg1 isPrivateLike:(BOOL)arg2;
+- (void)onCellTriggerAntiAddictCheckLogic;
+- (void)onClickViewAllCommentAction:(id)arg1 isActiveInput:(BOOL)arg2 isFromCommentButton:(BOOL)arg3;
+- (void)showCommentListWithContentVM:(id)arg1 shouldEnterKeyBoard:(BOOL)arg2 refCommentID:(unsigned long long)arg3 commentAction:(unsigned long long)arg4 showTitle:(BOOL)arg5 enterType:(unsigned long long)arg6 appendCommentModel:(id)arg7;
+- (void)setLastCommentVC:(id)arg1;
+- (void)onClickToolbarCancelUploading:(id)arg1;
+- (void)onWillClickToolbarCollectionAction:(id)arg1;
+- (void)onClickToolbarCollectionAction:(id)arg1 sourceType:(int)arg2;
+- (void)forbidTableViewScrollingWithDuration:(double)arg1;
+- (void)didFeedDoubleThumbLikeAction:(id)arg1;
+- (void)handleFavoriteActionWithContentVM:(id)arg1 sourceType:(int)arg2;
+- (void)scrollActionSheetWillDismiss:(id)arg1;
+- (void)scrollActionSheetDidDismiss:(id)arg1;
+- (void)_pushContentPOIVCAction:(id)arg1 fromVC:(id)arg2;
+- (void)clickContentPOIAction:(id)arg1 commentVC:(id)arg2;
+- (void)clickContentPOIAction:(id)arg1;
+- (void)_pushContentUsernameVCAction:(id)arg1 fromVC:(id)arg2;
+- (void)onClickContentUsernameAction:(id)arg1 commentVC:(id)arg2;
+- (void)onClickContentUsernameAction:(id)arg1;
+- (void)_pushEventEntry:(id)arg1 fromVC:(id)arg2;
+- (void)onClickEventEntry:(id)arg1 commentVC:(id)arg2;
+- (void)onClickEventEntry:(id)arg1;
+- (void)onFeedCellClickHotWord:(id)arg1;
+- (void)onClickMoreRelatedTipsButton:(id)arg1;
+- (void)onMultiMediaCell:(id)arg1 lastestLiveInfoClickAction:(id)arg2;
+- (void)onFeedContentUserFollowStateChangedWithContentVM:(id)arg1;
+- (void)onMultiMediaCell:(id)arg1 beDisliked:(id)arg2;
+- (void)onFeedClickJumpInfo:(id)arg1 style:(id)arg2;
+- (void)onCanvasHalfScreenViewControllerJumpToOthers;
+- (void)onCanvasHalfScreenViewControllerWillResume;
+- (void)onCanvasHalfScreenViewControllerWillBeClosed;
+- (void)onAdFinderDialogFailedToJumpToAppDirectlyWithAppParams:(id)arg1 jumpParams:(id)arg2;
+- (void)onFeedCellClickSetRingToneGuideView:(id)arg1;
+- (void)onFeedCellClickHotComment:(id)arg1 contentVM:(id)arg2;
+- (void)onFeedCellClickBulletCommentButton;
+- (void)onFeedShowPostEntranceByContentVM:(id)arg1 enterScene:(unsigned long long)arg2 postType:(unsigned long long)arg3;
+- (void)onReportBulletComment:(id)arg1 contentVM:(id)arg2;
+- (void)onCopyBulletComment:(id)arg1 contentVM:(id)arg2;
+- (void)onDeleteBulletComment:(id)arg1 contentVM:(id)arg2;
+- (void)onMoreBulletComment:(id)arg1 isInBlackList:(BOOL)arg2 contentVM:(id)arg3;
+- (void)onUnBlockBulletComment:(id)arg1 contentVM:(id)arg2;
+- (void)onBlockBulletComment:(id)arg1 contentVM:(id)arg2;
+- (void)modBlackListWithOpType:(int)arg1 bulletItem:(id)arg2 contentVM:(id)arg3 successText:(id)arg4 failText:(id)arg5;
+- (void)onBulletCommentOpenStateChanged:(id)arg1;
+- (void)onCommentOpenStateChanged:(BOOL)arg1;
+- (void)onFeedCellClickPostComment:(id)arg1 scene:(int)arg2 contentVM:(id)arg3;
+- (void)onFeedCellClickGuideMakeEmotion:(id)arg1;
+- (void)onFeedCellShouldCheckPopupViewFromContentVM:(id)arg1 enablePopUpShow:(BOOL)arg2;
+- (void)onFinderCardWebViewControllerJumpToOthers;
+- (void)onFinderCardWebViewControllerWillResume;
+- (void)onFinderCardWebViewControllerWillBeClosed;
+- (void)onRefreshContentCellUI:(id)arg1;
+- (void)_pushContentExtReadingWithUrl:(id)arg1 fromVC:(id)arg2;
+- (void)onClickContentExtReadingAction:(id)arg1;
+- (void)onClickContentExtReadingAction:(id)arg1 commentVC:(id)arg2;
+- (void)_pushContentTopicVCWith:(id)arg1 dataItem:(id)arg2 fromVC:(id)arg3;
+- (void)onClickContentTopicAction:(id)arg1 dataItem:(id)arg2;
+- (void)onClickContentTopicAction:(id)arg1 dataItem:(id)arg2 commentVC:(id)arg3;
+- (void)_pushContentMentionAction:(id)arg1 nickname:(id)arg2 dataItem:(id)arg3 fromVC:(id)arg4 sucBlock:(id /* block */)arg5;
+- (void)onClickContentMentionAction:(id)arg1 nickname:(id)arg2 dataItem:(id)arg3;
+- (void)onClickContentMentionAction:(id)arg1 nickname:(id)arg2 dataItem:(id)arg3 commentVC:(id)arg4 sucBlock:(id /* block */)arg5;
+- (void)onCancelForwardForForwardView:(id)arg1;
+- (void)onDoneForwardForForwardView:(id)arg1;
+- (void)scrollActionSheet:(id)arg1 didSelecteItem:(id)arg2;
+- (void)addToTingListenLater:(id)arg1;
+- (void)didClickFinderHandOff:(id)arg1;
+- (void)makeFinderHandoffItem:(id)arg1;
+- (void)scrollActionSheetDidCancel:(id)arg1;
+- (void)scrollActionSheetDidTapTransparent:(id)arg1;
+- (void)scrollActionSheetDidAppeared:(id)arg1;
+- (void)snapshotForMinimize;
+- (void)reportForwordWith:(id)arg1;
+- (void)didClickToolbarDeleteAction:(id)arg1;
+- (void)deleteFeedWithContentVM:(id)arg1;
+- (void)showPlayRatePanelTriggerByDragging:(BOOL)arg1;
+- (void)showLockSpeedPlayPanel;
+- (void)_showV1OperationView;
+- (void)inPicture;
+- (void)updateCurrentThumbForMinimize;
+- (id)minimizeCaptureSnapView;
+- (BOOL)checkIsDisableMinimize;
+- (BOOL)checkNeedInterruptMinimize;
+- (id)minimizePlayInfo:(BOOL)arg1;
+- (void)updateFloatContentMinimizePlayInfo:(id)arg1;
+- (double)pauseCurrentPlayingFeedReturnPalybackTime;
+- (id)minimizeUserAvatarView;
+- (id)contentScrollView;
+- (BOOL)currentSelectedMediaIsPlay;
+- (void)onMinimizeRestorePlayContentView:(id)arg1 cleanPauseStatus:(BOOL)arg2;
+- (void)updateMinimizePlayInfo;
+- (void)onFinderDataItemPostingCommentFailBySpecialError:(id)arg1 errorCode:(int)arg2 errorMsg:(id)arg3;
+- (void)onFinderVideoPlayerStartPlay;
+- (void)onCommentDetailViewControllerDidDisappear;
+- (void)clickCommentNickname:(id)arg1 username:(id)arg2 contact:(id)arg3 isWeChatFriend:(BOOL)arg4 dataItem:(id)arg5;
+- (void)updateCommentDetailVCPushState:(id)arg1;
+- (void)handleFeedExposeLogic;
+- (void)exposeMarkRead:(id)arg1;
+- (void)pourStateIntoPool:(id)arg1;
+- (void)updateExposureStatusOfContentVM:(id)arg1;
+- (void)handleDataReportLogicViewShow;
+- (void)resetRefreshState;
+- (BOOL)triggerRefreshLogic:(long long)arg1 toTab:(long long)arg2;
+- (void)markNeedReloadTeenagerModeChange;
+- (void)tabViewControllerWillDisappear:(unsigned long long)arg1;
+- (void)tabViewControllerDidBePoped;
+- (void)tabViewControllerRecordEnterInfo;
+- (BOOL)isCurrentMediaBeginPlayed;
+- (BOOL)isTopRrefreshing;
+- (id)minimizeKey;
+- (id)currentFeedContentVM;
+- (id)snapshotImageForMedia;
+- (id)viewForKeepHoldAnimation;
+- (id)currentFeedMediaCell;
+- (void)enableTriggerRefreshAction:(BOOL)arg1;
+- (void)finderRedDotDataChangedWithPathKey:(id)arg1;
+- (BOOL)WCFinderFeedFollowVMIsSelected;
+- (void)onFeedFollowVMShouldReloadAtIndexPath:(id)arg1;
+- (id)onFeedFollowVMGetHotTabLastBuff;
+- (BOOL)onFeedFollowVMGetHotTabNeedTopRefresh;
+- (int)feedViewControllerScene;
+- (unsigned long long)feedViewerScene;
+- (BOOL)canReceiveEdgeSwipGes:(CGPoint)arg1;
+- (void)tabViewControllerInitIfNeeded;
+- (void)tabViewControllerSelectionWillChange:(BOOL)arg1;
+- (void)tabViewControllerSelectionDidChange:(BOOL)arg1;
+- (void)prepareToInsertFeedByTL;
+- (void)tabViewControllerScrollInsertPopupFeedById:(id)arg1;
+- (void)tabViewControllerScrollInsertPopupFeedById:(id)arg1 animated:(BOOL)arg2;
+- (void)tabViewControllerSilenceInsertPopupFeedById:(id)arg1;
+- (void)performInsertFeedId:(id)arg1;
+- (void)realInsertFeedId:(id)arg1;
+- (BOOL)tabContainerHasTargetFeedId:(id)arg1;
+- (void)tabViewRemoveTargetFeedId:(id)arg1;
+- (void)tabViewControllerNeedRefreshDataByPassInfo:(id)arg1;
+- (BOOL)tabViewControllerIsInPinchState;
+- (void)triggerSelectLogic;
+- (void)triggerDeselectLogic;
+- (void)updateCurVideoCellPausePanel;
+- (void)handleDataReportLogicViewHidden;
+- (void)tabViewControllerStopCurrentPlayVideo;
+- (long long)tabViewControllerReturnCurFeedNum;
+- (void)viewWillTransitionToSize:(CGSize)arg1 withTransitionCoordinator:(id)arg2;
+- (void)viewWillLayoutSubviews;
+- (void)handleHotContentExposeLogic;
+- (BOOL)tabViewControllerGetSelectState;
+- (unsigned long long)getCurTableViewVisibleBottomIndex;
+- (void)refreshHeadOnScrolltoTop;
+- (void)refreshHeadOnScrolltoTop:(long long)arg1;
+- (void)tabViewControllerAutoRefreshTrigerByRedDot;
+- (unsigned long long)tabViewControllerGetCurTableViewVisibleTopIndex;
+- (id)getCurViewModelLastBuff;
+- (id)getCurrentDataItemWithSessionBuffer;
+- (id)getCurrentContentVM;
+- (id)getCurMaskView;
+- (id)maskView;
+- (id)landscapeReportInfo;
+- (void)onClickRealNameAction;
+- (BOOL)isShowingScrollUpGuide;
+- (void)bulletCommentOpenStateChanged:(BOOL)arg1 itemFlag:(unsigned long long)arg2 changedScene:(long long)arg3 openType:(unsigned long long)arg4;
+- (void)bulletCommentOpenStateChanged:(BOOL)arg1 itemFlag:(unsigned long long)arg2 changedScene:(long long)arg3;
+- (void)onMoreHotContentCellClick;
+- (void)reportItemsExposed:(id)arg1 withIndex:(unsigned long long)arg2;
+- (void)clickRFItemCallBack:(id)arg1;
+- (void)relayoutScrollSheet;
+- (id)getCurrentViewController;
+- (void)OnForwardMessageSend:(id)arg1;
+- (void)OnForwardMessageCancel:(id)arg1;
+- (void)timelineTipsBubbleDidAppear;
+- (void)timelineTipsBubbleDidDisappear;
+- (void)adjustTimelineBubbleTipView;
+- (id)timelineTabViewController;
+- (BOOL)shouldLiveUseMorphDismissForCustomKey:(id)arg1;
+- (CGRect)liveMorphDismissTargetFrameOnScreenForCustomKey:(id)arg1 videoSize:(CGSize)arg2;
+- (BOOL)shouldLiveKeepAudioEnabledAfterMorphDismissForCustomKey:(id)arg1;
+- (void)onRingToneSheetDisappear;
+- (void)onRingToneSheetSetRingtoneSuccess:(long long)arg1 friendUsername:(id)arg2;
+- (void)onAnimationEnd:(id)arg1;
+- (void)onAnimationCancel:(id)arg1;
+- (void)onAnimationTimeout:(id)arg1;
+- (void)finderDescTableViewCell:(id)arg1 endCountDownTimmerWithTid:(id)arg2;
+- (BOOL)finderDescTableViewCellCanShowCountDownTips:(id)arg1;
+- (void)finderDescTableViewCell:(id)arg1 clickActionType:(unsigned long long)arg2;
+- (BOOL)canShowMore;
+- (void)onClickLikedListClickMoreActionWith:(id)arg1 ObjectId:(id)arg2;
+- (void)onClickLikedListContactWithWith:(id)arg1 LikeInfo:(id)arg2 ObjectID:(id)arg3;
+- (void)doBusinessWithCompletion:(id /* block */)arg1;
+- (void)fansProfileViewController:(id)arg1 clickFinderActionWithWXUsername:(id)arg2;
+- (void)wx_fansProfileViewController:(id)arg1 clickActionWithFinderContact:(id)arg2;
+- (void)onBulletCommentViewControllerDidComment:(id)arg1;
+- (void)onBulletCommentViewControllerChangeBulletCommentOpenState:(BOOL)arg1;
+- (id)getCurrentMediaViewCell;
+- (void)onBulletCommentViewControllerClosed;
+- (void)onBulletCommentViewControllerShowInputViewWithDisable;
+- (void)finderMediaVideoPreloadSuccessful:(id)arg1 mediaWrap:(id)arg2 isFirstFrameDowloadState:(BOOL)arg3;
+- (void)leadToOtherTabCell:(id)arg1 clickJumpWithPlaceHolderInfo:(id)arg2;
+- (void)onDoneForwardMessageWithContentVM:(id)arg1 andUserArray:(id)arg2;
+- (void)onDoneForwardForForwardViewWithContentVM:(id)arg1 isCertificateType:(BOOL)arg2;
+- (void)onFeedContent:(id)arg1 commentLikeStatusChangedWithCommentID:(unsigned long long)arg2 likeStatus:(BOOL)arg3;
+- (void)onFeedContent:(id)arg1 postCommentSuccessful:(id)arg2;
+- (BOOL)isCustomPagingSplitView:(id)arg1;
+- (void)finderPreloadStrategyUpdate;
+- (id)getListenHalfAnimView;
+- (unsigned long long)listenHalfScreenOption;
+- (void)listenHalfScreenIsShow:(BOOL)arg1 eventType:(unsigned long long)arg2;
+- (void)updateTabViewByHalfScreenIsShow:(BOOL)arg1;
+- (void)registerYReportSdk;
+- (void)tabViewControllerRemoveAllUnReadLiveFeed;
+- (void)liveCastViewControllerDidDismiss:(id)arg1;
+- (unsigned long long)curFollowTabStyle;
+- (void)multiMediaCell:(id)arg1 didChangePinchVideoState:(BOOL)arg2;
+- (void)wechatPersonalizedChangeType:(long long)arg1 value:(BOOL)arg2;
+- (void)deleteAllFeedAfterTid:(id)arg1;
+- (id)extInfoForSnapshotPrinter;
+- (id)getNextMinimizeListPlayContentVMWithCurrentTid:(id)arg1;
+- (BOOL)postFeedInsertMachineTab;
+- (void)setPostFeedInsertMachineTab:(BOOL)arg1;
+- (BOOL)hasReportCreateEvent;
+- (void)setHasReportCreateEvent:(BOOL)arg1;
+- (id)tableView;
+- (void)setTableView:(id)arg1;
+- (id)feedVM;
+- (void)setFeedVM:(id)arg1;
+- (id)latestAutoplayVideoTid;
+- (void)setLatestAutoplayVideoTid:(id)arg1;
+- (id)footerView;
+- (void)setFooterView:(id)arg1;
+- (id)noMoreFooterView;
+- (void)setNoMoreFooterView:(id)arg1;
+- (id)currentForceIndexPath;
+- (void)setCurrentForceIndexPath:(id)arg1;
+- (id)lastStayFeedTidBeforeTopRefresh;
+- (void)setLastStayFeedTidBeforeTopRefresh:(id)arg1;
+- (id)refreshHeaderView;
+- (void)setRefreshHeaderView:(id)arg1;
+- (BOOL)isDisableVideoAutoPlay;
+- (void)setIsDisableVideoAutoPlay:(BOOL)arg1;
+- (void)setExposureDict:(id)arg1;
+- (void)setStateTipsLabel:(id)arg1;
+- (void)setStateRetryGesture:(id)arg1;
+- (void)setRetryImageView:(id)arg1;
+- (BOOL)footerNoMoreData;
+- (void)setFooterNoMoreData:(BOOL)arg1;
+- (id)lastCommentVC;
+- (BOOL)needsResumeTimelineVideo;
+- (void)setNeedsResumeTimelineVideo:(BOOL)arg1;
+- (id)currentVideoTid;
+- (void)setCurrentVideoTid:(id)arg1;
+- (BOOL)isEnableMarkRead;
+- (void)setIsEnableMarkRead:(BOOL)arg1;
+- (BOOL)isViewWillAppeaer;
+- (void)setIsViewWillAppeaer:(BOOL)arg1;
+- (id)currentForceTid;
+- (void)setCurrentForceTid:(id)arg1;
+- (BOOL)hasFetchData;
+- (void)setHasFetchData:(BOOL)arg1;
+- (long long)tabLastAnchorSecond;
+- (void)setTabLastAnchorSecond:(long long)arg1;
+- (BOOL)enableAutoRefresh;
+- (void)setEnableAutoRefresh:(BOOL)arg1;
+- (id)scrollProxy;
+- (void)setScrollProxy:(id)arg1;
+- (id)shareToSnsTips;
+- (void)setShareToSnsTips:(id)arg1;
+- (void)setMaskView:(id)arg1;
+- (void)setRefreshHeaderViewTipsLabel:(id)arg1;
+- (double)refreshHeaderViewLastAlpha;
+- (void)setRefreshHeaderViewLastAlpha:(double)arg1;
+- (unsigned long long)enterTime;
+- (void)setEnterTime:(unsigned long long)arg1;
+- (id)currentActionSheet;
+- (void)setCurrentActionSheet:(id)arg1;
+- (id)minimizeCoverImage;
+- (void)setMinimizeCoverImage:(id)arg1;
+- (id)minimizeSnapshotView;
+- (void)setMinimizeSnapshotView:(id)arg1;
+- (id /* block */)forwardActionDelayBlock;
+- (void)setForwardActionDelayBlock:(id /* block */)arg1;
+- (id)regardfulAuthorView;
+- (void)setRegardfulAuthorView:(id)arg1;
+- (void)setScrollUpGuideAnimationMaskView:(id)arg1;
+- (void)setScrollUpGuideAnimationView:(id)arg1;
+- (void)setScrollUpGuideLabel:(id)arg1;
+- (BOOL)alreadyShownScrollUpGuideAnimationView;
+- (void)setAlreadyShownScrollUpGuideAnimationView:(BOOL)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (unsigned long long)guideBarObjectId;
+- (void)setGuideBarObjectId:(unsigned long long)arg1;
+- (id)openTimelineParams;
+- (void)setOpenTimelineParams:(id)arg1;
+- (id)operationView;
+- (void)setOperationView:(id)arg1;
+- (id)operationViewV3;
+- (void)setOperationViewV3:(id)arg1;
+- (id)tmpLikeListVC;
+- (void)setTmpLikeListVC:(id)arg1;
+- (id)notInterestedLogic;
+- (void)setNotInterestedLogic:(id)arg1;
+- (id)customPagingHelper;
+- (void)setCustomPagingHelper:(id)arg1;
+- (id)bannerView;
+- (void)setBannerView:(id)arg1;
+- (void)setFastSlipLogic:(id)arg1;
+- (id)emoticonCustomCreateLogic;
+- (void)setEmoticonCustomCreateLogic:(id)arg1;
+- (id)finderHandoffItem;
+- (void)setFinderHandoffItem:(id)arg1;
+- (void)setLandscapeReportInfo:(id)arg1;
+- (id /* block */)pendingInsertionBlock;
+- (void)setPendingInsertionBlock:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end
+

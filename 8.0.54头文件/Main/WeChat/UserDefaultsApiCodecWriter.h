@@ -1,0 +1,3 @@
+@interface UserDefaultsApiCodecWriter : FlutterStandardWriter
+@end
+

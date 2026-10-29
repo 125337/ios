@@ -1,0 +1,56 @@
+@interface MMImgDataItem_Message : MMImgDataItem
+{
+    CMessageWrap * _msgWrap; // +0x8
+}
+- (id)initWithMsgWrap:(id)arg1;
+- (unsigned int)type;
+- (id)dataId;
+- (id)uuid;
+- (BOOL)isRawMediaExpired;
+- (id)thumbImage;
+- (BOOL)isFileImg;
+- (id)image;
+- (id)imagePath;
+- (BOOL)isHDImage;
+- (id)hdImage;
+- (unsigned int)hdImageSize;
+- (id)hdImagePath;
+- (BOOL)isLivePhoto;
+- (id)livePhotoPath;
+- (id)hdLivePhotoPath;
+- (unsigned int)hdLivePhotoSize;
+- (BOOL)isFileVideo;
+- (id)videoThumbImage;
+- (id)videoPath;
+- (BOOL)isRawVideoPreviewing;
+- (BOOL)isRawVideo;
+- (id)rawVideoPath;
+- (unsigned long long)rawVideoSize;
+- (id)generatePlayerInfo;
+- (id)generateRawPlayerInfo;
+- (unsigned int)videoDuration;
+- (BOOL)isBrandMPVideo;
+- (id)brandMPVideoTitle;
+- (id)brandMPVideoSourceUsername;
+- (id)brandMPVideoSourceDisplayName;
+- (id)brandMPVideoUrl;
+- (id)brandMPVideoItem;
+- (unsigned int)attachedVideoType;
+- (id)attachedVideoUrl;
+- (id)attachedVideoTitle;
+- (id)generateForwardMsg;
+- (id)generateFavItem;
+- (id)generateWCDataItem;
+- (id)fileId;
+- (id)aesKey;
+- (id)sourceImgInfo;
+- (id)weappScreenshotContextInfo;
+- (id)mpScreenshotArticleInfo;
+- (BOOL)isLoadingFromICloud;
+- (BOOL)isSending;
+- (long long)GetMsgPreviewOpType;
+- (BOOL)forbidDisplay;
+- (id)msgWrap;
+- (void)setMsgWrap:(id)arg1;
+- (void).cxx_destruct;
+@end

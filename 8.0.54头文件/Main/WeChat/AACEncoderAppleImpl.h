@@ -1,0 +1,20 @@
+@interface AACEncoderAppleImpl : NSObject
+{
+    OpaqueAudioConverter * converterRef_; // +0x8
+    AudioEncodeParams params_; // +0x10
+    CopyOnWriteBuffer buffer_; // +0x30
+    unsigned long long frameCount_; // +0x48
+}
+- (id)init;
+- (void)dealloc;
+- (void)disposeConverter;
+- (BOOL)createAudioConverterWithParams:(const AudioEncodeParams *)arg1;
+- (BOOL)setBitrateInBPS:(unsigned long long)arg1;
+- (int)Encode:(span<const unsigned char, 18446744073709551615UL>)arg1;
+- (Optional<liteav::audio::AudioFrame>)encodeAudioFrame:(const void *)arg1;
+- (Optional<liteav::audio::AudioPacket>)encodeAudioPacket:(const void *)arg1;
+- (unsigned long long)frameLengthInBytes;
+- (void).cxx_destruct;
+- (id).cxx_construct;
+@end
+

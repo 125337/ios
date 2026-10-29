@@ -1,0 +1,3 @@
+@interface WCFinderOriginalUserFeedsCGI : WCFinderBaseCgi
+@end
+

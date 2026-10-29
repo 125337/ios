@@ -1,0 +1,2 @@
+@interface WCFinderPostSimpleModel : NSObject
+@end

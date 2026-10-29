@@ -1,0 +1,3 @@
+@interface WcoMinimizeWindow : MultitalkMinimizeWindow
+@end
+

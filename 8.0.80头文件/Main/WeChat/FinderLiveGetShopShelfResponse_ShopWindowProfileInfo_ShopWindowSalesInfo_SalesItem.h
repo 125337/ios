@@ -1,0 +1,3 @@
+@interface FinderLiveGetShopShelfResponse_ShopWindowProfileInfo_ShopWindowSalesInfo_SalesItem : WXPBGeneratedMessage
++ (void)initialize;
+@end

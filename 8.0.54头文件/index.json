@@ -1,0 +1,285 @@
+{
+  "created" : 1793265517.169795,
+  "input" : "微信_8.0.54[JwipaS].ipa",
+  "limitations" : "从 Objective-C 元数据恢复声明，不包含方法实现。独立 protocol 声明和纯 Swift 类型暂未导出；加密镜像会跳过。",
+  "partial" : 1,
+  "backend" : "REipa 0.1.0 · native in-process",
+  "headers" : 36313,
+  "parserRevision" : 96,
+  "bytes" : 33596933,
+  "binaries" : [
+    {
+      "binary" : "Images\/PlugIns\/WeChatWidgetExtension.appex\/WeChatWidgetExtension",
+      "status" : "success",
+      "classes" : 14,
+      "categories" : 3,
+      "headers" : 17,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Images\/PlugIns\/WeChatSiriExtensionUI.appex\/WeChatSiriExtensionUI",
+      "status" : "success",
+      "classes" : 16,
+      "categories" : 1,
+      "headers" : 17,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Images\/PlugIns\/WeChatScreenCapture.appex\/WeChatScreenCapture",
+      "status" : "success",
+      "classes" : 18,
+      "categories" : 0,
+      "headers" : 18,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Images\/PlugIns\/WeChatShareExtensionNew.appex\/WeChatShareExtensionNew",
+      "status" : "success",
+      "classes" : 266,
+      "categories" : 21,
+      "headers" : 287,
+      "protocols" : 0,
+      "renamed_headers" : [
+        {
+          "original" : "NSString+GTMNSStringHTMLAdditions.h",
+          "exported" : "NSString+GTMNSStringHTMLAdditions-2.h"
+        }
+      ]
+    },
+    {
+      "binary" : "Images\/PlugIns\/WeChatNotificationServiceExtension.appex\/WeChatNotificationServiceExtension",
+      "status" : "success",
+      "classes" : 30,
+      "categories" : 6,
+      "headers" : 36,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Images\/PlugIns\/WeChatSiriExtension.appex\/WeChatSiriExtension",
+      "status" : "success",
+      "classes" : 51,
+      "categories" : 1,
+      "headers" : 52,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Main\/WeChat",
+      "status" : "success",
+      "classes" : 35256,
+      "categories" : 528,
+      "headers" : 35784,
+      "protocols" : 0,
+      "renamed_headers" : [
+        {
+          "original" : "ChatroomData.h",
+          "exported" : "ChatroomData-2.h"
+        },
+        {
+          "original" : "PoiInfo.h",
+          "exported" : "PoiInfo-2.h"
+        },
+        {
+          "original" : "GetChatRoomMsgRequest.h",
+          "exported" : "GetChatRoomMsgRequest-2.h"
+        },
+        {
+          "original" : "GetChatRoomMsgResponse.h",
+          "exported" : "GetChatRoomMsgResponse-2.h"
+        },
+        {
+          "original" : "rankItem.h",
+          "exported" : "rankItem-2.h"
+        },
+        {
+          "original" : "PopUp.h",
+          "exported" : "PopUp-2.h"
+        },
+        {
+          "original" : "EaglView.h",
+          "exported" : "EaglView-2.h"
+        },
+        {
+          "original" : "NSString+Compare.h",
+          "exported" : "NSString+Compare-2.h"
+        },
+        {
+          "original" : "UIView+autoLayout.h",
+          "exported" : "UIView+autoLayout-2.h"
+        },
+        {
+          "original" : "UIView+ZZSeparator.h",
+          "exported" : "UIView+ZZSeparator-2.h"
+        },
+        {
+          "original" : "UIDevice+AdapterApi.h",
+          "exported" : "UIDevice+AdapterApi-2.h"
+        },
+        {
+          "original" : "NSDictionary+NSDictionary_SafeJSON.h",
+          "exported" : "NSDictionary+NSDictionary_SafeJSON-2.h"
+        },
+        {
+          "original" : "NSArray+NSArray_SafeJSON.h",
+          "exported" : "NSArray+NSArray_SafeJSON-2.h"
+        }
+      ]
+    },
+    {
+      "status" : "failed",
+      "binary" : "Images\/Watch\/WeChatWatchNative.app\/PlugIns\/WeChatWatchNativeExtension.appex\/WeChatWatchNativeExtension",
+      "message" : "Invalid Mach-O: no arm64\/arm64e slice found",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/ilink_network.framework",
+      "status" : "success",
+      "classes" : 5,
+      "categories" : 0,
+      "headers" : 5,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/TPFFmpeg.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/openssl.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/libswift_Concurrency.dylib",
+      "status" : "success",
+      "classes" : 4,
+      "categories" : 0,
+      "headers" : 4,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/SoundTouch.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/JavaScriptCore2.framework",
+      "status" : "success",
+      "classes" : 10,
+      "categories" : 1,
+      "headers" : 11,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/NewMessageRingUtil.framework",
+      "status" : "success",
+      "classes" : 1,
+      "categories" : 0,
+      "headers" : 1,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/owl.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/App.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/MMRouter.framework",
+      "status" : "success",
+      "classes" : 3,
+      "categories" : 1,
+      "headers" : 4,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/ProtobufLite.framework",
+      "status" : "success",
+      "classes" : 6,
+      "categories" : 0,
+      "headers" : 6,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/andromeda.framework",
+      "status" : "success",
+      "classes" : 2,
+      "categories" : 0,
+      "headers" : 2,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "binary" : "Frameworks\/matrixreport.framework",
+      "status" : "success",
+      "classes" : 1,
+      "categories" : 0,
+      "headers" : 1,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    },
+    {
+      "status" : "no_objc_metadata",
+      "binary" : "Frameworks\/TPThirdParties.framework",
+      "message" : "NO_OBJC_METADATA: no Objective-C classes or categories were recovered; Swift-only\/stripped images may contain none.",
+      "headers" : 0
+    },
+    {
+      "binary" : "Frameworks\/Lottie.framework",
+      "status" : "success",
+      "classes" : 67,
+      "categories" : 1,
+      "headers" : 68,
+      "protocols" : 0,
+      "renamed_headers" : [
+
+      ]
+    }
+  ],
+  "incompleteImages" : 1
+}

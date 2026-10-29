@@ -1,0 +1,142 @@
+@interface WCPayMainViewControllerV2 : WCBizBaseViewController <UICollectionViewDelegate, UICollectionViewDataSource, WCActionSheetDelegate, WCPayMainViewLogicControllerDelegate, WCPayRealNameTipsViewControllerDelegate, WCPayWalletEntryHeaderViewDelegate, WCPayWalletViewControllerDelegate, WCPayPwdViewControllerDelegate, ILinkEventExt, WCPayLogicMgrExt, WCMallWalletMangeControlLogicDelegate, WCPayWalletCollectionViewFlowLayoutDelegate, WCPayUploadIDCardTipsViewControllerDelegate, WCPayMainViewTipsPageSheetDelegate, WCPayOfflineLogicDelegate>
+{
+    BOOL _bHasNewOrRedDotWhenOpen; // +0x88
+    BOOL _bHasShowUploadIdImageAlert; // +0x89
+    BOOL _bNeedScrollToHead; // +0x8a
+    BOOL _hasReportedWalletEntryReddot; // +0x8b
+    BOOL _hasShownComplianceHalfPage; // +0x8c
+    BOOL _hasShowTipsPageSheet; // +0x8d
+    WCPayMainViewLogicController * _logicController; // +0x90
+    NoticeItem * _bannerData; // +0x98
+    GetEUInfoResp * _getGDPRResponse; // +0xa0
+    UICollectionView * _collectionView; // +0xa8
+    WCPayWalletEntryHeaderView * _headerView; // +0xb0
+    UIView * _footerView; // +0xb8
+    UIImageView * _wechatLogoImgView; // +0xc0
+    double _itemLeftRightMargin; // +0xc8
+    double _itemTopBottomMargin; // +0xd0
+    double _itemTargetHeight; // +0xd8
+    NSArray * _payManageLabelList; // +0xe0
+    NSString * _complianceHalfPageData; // +0xe8
+    WCPayComplianceHalfPage * _complianceHalfPage; // +0xf0
+    WCPayComplianceHalfPage * _complianceRealNameHalfPage; // +0xf8
+    WCPayMainViewTipsPageSheet * _tipsPageSheet; // +0x100
+    CGSize _itemTargetSize; // +0x108
+}
+- (void)initView;
+- (id)navigationBarBackgroundColor;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewWillBePoped:(BOOL)arg1;
+- (void)viewWillPopOrDismiss:(BOOL)arg1;
+- (void)viewDidBePushed:(BOOL)arg1;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (void)viewDidLoad;
+- (void)viewDidLayoutSubviews;
+- (void)viewDidBePoped:(BOOL)arg1;
+- (void)setupData;
+- (void)setupView;
+- (void)setupCollectionView;
+- (void)setupHeaderView;
+- (void)setupFooterView;
+- (void)enterReceiveOrPayLogic;
+- (void)refreshViewControllerWithData:(id)arg1;
+- (id)getViewController;
+- (void)timeoutNumberStartTimeout;
+- (void)popToRootWithoutAnimation;
+- (void)refreshViewAfterUpdatePaycardListData:(id)arg1 isFromCache:(BOOL)arg2;
+- (void)refreshViewAfterGetFunctionData:(BOOL)arg1;
+- (void)refreshViewAfterGetGDPRResponse:(id)arg1;
+- (void)showBusinessDisclaimerWithItemData:(id)arg1;
+- (void)openH5WithItemData:(id)arg1;
+- (void)openWeappWithItemData:(id)arg1;
+- (void)reloadCellWithIndexPath:(id)arg1;
+- (void)checkAndShowAlertInfo:(id)arg1;
+- (void)onMainViewTipsPageSheetClickButton;
+- (void)onOperate;
+- (void)refreshView;
+- (void)updateWalletBalanceViewData:(id)arg1;
+- (BOOL)checkShowChangeWalletTips:(id)arg1;
+- (void)checkIfNeedShowRealnameGuideView:(id)arg1;
+- (void)manageServiceBtnClick;
+- (void)onLinkClicked:(id)arg1 withRect:(CGRect)arg2;
+- (void)onClickBannerUrl:(id)arg1;
+- (void)offlinePayEntryBtnClick;
+- (void)onOfflinePayLogicShouldDropServiceHome;
+- (void)balanceEntryBtnClick;
+- (long long)numberOfSectionsInCollectionView:(id)arg1;
+- (long long)collectionView:(id)arg1 numberOfItemsInSection:(long long)arg2;
+- (id)collectionView:(id)arg1 cellForItemAtIndexPath:(id)arg2;
+- (id)collectionView:(id)arg1 viewForSupplementaryElementOfKind:(id)arg2 atIndexPath:(id)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 sizeForItemAtIndexPath:(id)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 referenceSizeForHeaderInSection:(long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 minimumInteritemSpacingForSectionAtIndex:(long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 minimumLineSpacingForSectionAtIndex:(long long)arg3;
+- (UIEdgeInsets)collectionView:(id)arg1 layout:(id)arg2 insetForSectionAtIndex:(long long)arg3;
+- (void)collectionView:(id)arg1 didSelectItemAtIndexPath:(id)arg2;
+- (BOOL)useSmallBottomMarginInDecorationView;
+- (double)calcItemTargetHeightWithWidth:(double)arg1;
+- (void)calcItemSize;
+- (void)calcItemLeftRightMargin;
+- (void)calcItemTopBottomMargin;
+- (void)onWCPayWalletViewControllerDidCallUpdate;
+- (void)onWCPayWalletViewControllerDidCallUpdateBalance;
+- (void)reportWithAction:(unsigned long long)arg1;
+- (void)handleEventAfterSvrDataFinishReload;
+- (void)reportExposureData;
+- (void)showComplianceHalfPageIfExist;
+- (void)realNameTipsVCDidConfirm:(id)arg1;
+- (void)OnWCPayPwdViewControllerBack;
+- (void)onBatchFunctionOperateDone;
+- (BOOL)isWCMallWalletMangeControlLogicNeedShowLoading;
+- (BOOL)isWCMallWalletMangeControllerNeedPresentShow;
+- (void)OnGetBindQueryInfo:(id)arg1 Error:(id)arg2;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)registerYReportSdk;
+- (BOOL)bHasNewOrRedDotWhenOpen;
+- (void)setBHasNewOrRedDotWhenOpen:(BOOL)arg1;
+- (id)logicController;
+- (void)setLogicController:(id)arg1;
+- (id)bannerData;
+- (void)setBannerData:(id)arg1;
+- (id)getGDPRResponse;
+- (void)setGetGDPRResponse:(id)arg1;
+- (id)collectionView;
+- (void)setCollectionView:(id)arg1;
+- (id)headerView;
+- (void)setHeaderView:(id)arg1;
+- (id)footerView;
+- (void)setFooterView:(id)arg1;
+- (id)wechatLogoImgView;
+- (void)setWechatLogoImgView:(id)arg1;
+- (BOOL)bHasShowUploadIdImageAlert;
+- (void)setBHasShowUploadIdImageAlert:(BOOL)arg1;
+- (CGSize)itemTargetSize;
+- (void)setItemTargetSize:(CGSize)arg1;
+- (double)itemLeftRightMargin;
+- (void)setItemLeftRightMargin:(double)arg1;
+- (double)itemTopBottomMargin;
+- (void)setItemTopBottomMargin:(double)arg1;
+- (double)itemTargetHeight;
+- (void)setItemTargetHeight:(double)arg1;
+- (BOOL)bNeedScrollToHead;
+- (void)setBNeedScrollToHead:(BOOL)arg1;
+- (id)payManageLabelList;
+- (void)setPayManageLabelList:(id)arg1;
+- (BOOL)hasReportedWalletEntryReddot;
+- (void)setHasReportedWalletEntryReddot:(BOOL)arg1;
+- (id)complianceHalfPageData;
+- (void)setComplianceHalfPageData:(id)arg1;
+- (id)complianceHalfPage;
+- (void)setComplianceHalfPage:(id)arg1;
+- (id)complianceRealNameHalfPage;
+- (void)setComplianceRealNameHalfPage:(id)arg1;
+- (BOOL)hasShownComplianceHalfPage;
+- (void)setHasShownComplianceHalfPage:(BOOL)arg1;
+- (id)tipsPageSheet;
+- (void)setTipsPageSheet:(id)arg1;
+- (BOOL)hasShowTipsPageSheet;
+- (void)setHasShowTipsPageSheet:(BOOL)arg1;
+- (void).cxx_destruct;
+@end

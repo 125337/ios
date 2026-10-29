@@ -1,0 +1,3 @@
+@interface WCMomentsRecorderDefinition : NSObject
+@end
+

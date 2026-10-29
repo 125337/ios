@@ -1,0 +1,2 @@
+@interface _TtC6WeChat31MagicEcsSpellOutStringAttribute : _TtC6WeChat23MagicEcsStringAttribute
+@end

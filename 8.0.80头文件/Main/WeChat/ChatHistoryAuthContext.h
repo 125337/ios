@@ -1,0 +1,35 @@
+@interface ChatHistoryAuthContext : NSObject
++ (id)asstViewControllerForSessionId:(id)arg1;
++ (long long)sceneFromHalfScreenEnterScene:(int)arg1;
++ (long long)sceneForSessionId:(id)arg1;
++ (id)allowUsernamesSetForSessionId:(id)arg1;
++ (BOOL)isUsername:(id)arg1 inAllowList:(id)arg2;
++ (long long)topSessionsLimit;
++ (long long)windowDays;
++ (long long)maxMsgsPerSession;
++ (long long)allowlistExpandableFloorWindowDays;
++ (long long)allowlistExpandableFloorMaxMsgs;
++ (long long)policyForAPI:(id)arg1 scene:(long long)arg2;
++ (id)denyPass:(id)arg1 reason:(id)arg2;
++ (id)evaluateForAPI:(id)arg1 sessionId:(id)arg2 params:(id)arg3;
++ (void)applyDailyGrantScopeToPass:(id)arg1;
++ (id)evaluateRecentChatsWithSessionId:(id)arg1 pass:(id)arg2;
++ (unsigned int)serverNowSecOrLocal;
++ (double)endOfLocalDayExpireAtUsingServerClock;
++ (unsigned int)floorWindowStartWithNow:(unsigned int)arg1;
++ (void)parseRequestQuotaFromParams:(id)arg1 reqStart:(unsigned int *)arg2 reqEnd:(unsigned int *)arg3 reqLimit:(long long *)arg4;
++ (void)applyAllowlistExpandableFloorScopeToPass:(id)arg1 apiName:(id)arg2 params:(id)arg3;
++ (void)applyAllowlistExpandableGrantScopeToPass:(id)arg1 apiName:(id)arg2 params:(id)arg3;
++ (BOOL)allowlistExpandableRequestExceedsFloorWithParams:(id)arg1;
++ (id)evaluateSearchDailyGrantForAPI:(id)arg1 sessionId:(id)arg2 params:(id)arg3 pass:(id)arg4;
++ (id)evaluateAllowlistExpandableForAPI:(id)arg1 sessionId:(id)arg2 params:(id)arg3 pass:(id)arg4;
++ (void)authorizeForAPI:(id)arg1 sessionId:(id)arg2 params:(id)arg3 completion:(id /* block */)arg4;
++ (void)completeAuthorize:(id)arg1 denyReason:(id)arg2 completion:(id /* block */)arg3;
++ (void)deliverAuthorizedPass:(id)arg1 apiName:(id)arg2 params:(id)arg3 traceId:(id)arg4 callId:(id)arg5 sessionId:(id)arg6 completion:(id /* block */)arg7;
++ (void)ensureGrantForAuthScene:(long long)arg1 apiName:(id)arg2 traceId:(id)arg3 callId:(id)arg4 sessionId:(id)arg5 alertTimeout:(double)arg6 completion:(id /* block */)arg7;
++ (double)recentAuthAlertTimeoutFromParams:(id)arg1 apiName:(id)arg2;
++ (id)evaluateAllowlistForAPI:(id)arg1 sessionId:(id)arg2 params:(id)arg3 pass:(id)arg4;
++ (void)logUploadForAPI:(id)arg1 pass:(id)arg2 params:(id)arg3 sessionCount:(long long)arg4 messageCount:(long long)arg5;
++ (BOOL)shouldIncludeSessionInRecentTopN:(id)arg1;
++ (id)recentTopChatIdsWithLimit:(long long)arg1;
+@end

@@ -1,0 +1,47 @@
+@interface WASessionInfo : MMBaseSessionInfo <WCTTableCoding>
++ (const void *)objectRelationalMapping;
++ (const void *)allProperties;
++ (id)allBridgeProperties;
++ (id)__wcdbtyper;
++ (const void *)sessionId;
++ (const void *)__wcdb_synthesize_0:(void *)arg1;
++ (id)swift_sessionId;
++ (const void *)unreadCount;
++ (const void *)__wcdb_synthesize_1:(void *)arg1;
++ (id)swift_unreadCount;
++ (const void *)lastMsgUpdateTime;
++ (const void *)__wcdb_synthesize_2:(void *)arg1;
++ (id)swift_lastMsgUpdateTime;
++ (const void *)draftMsg;
++ (const void *)__wcdb_synthesize_3:(void *)arg1;
++ (id)swift_draftMsg;
++ (const void *)draftMsgTime;
++ (const void *)__wcdb_synthesize_4:(void *)arg1;
++ (id)swift_draftMsgTime;
++ (const void *)sessionFlag;
++ (const void *)__wcdb_synthesize_5:(void *)arg1;
++ (id)swift_sessionFlag;
++ (const void *)outUnreadCount;
++ (const void *)__wcdb_synthesize_6:(void *)arg1;
++ (id)swift_outUnreadCount;
++ (const void *)sessionTopTime;
++ (const void *)__wcdb_synthesize_7:(void *)arg1;
++ (id)swift_sessionTopTime;
++ (const void *)pbLastMessage;
++ (const void *)__wcdb_synthesize_8:(void *)arg1;
++ (id)swift_pbLastMessage;
++ (const void *)sessionUnTopTime;
++ (const void *)__wcdb_synthesize_9:(void *)arg1;
++ (id)swift_sessionUnTopTime;
++ (const void *)outUnreadMsgTime;
++ (const void *)__wcdb_synthesize_10:(void *)arg1;
++ (id)swift_outUnreadMsgTime;
++ (void)__wcdb_column_constraint_11:(void *)arg1;
++ (id)baseSessionInfoWithUsrName:(id)arg1 contact:(id)arg2 lastMessage:(id)arg3;
+- (void)setContact:(id)arg1;
+- (id)genContact;
+- (void)updateSessionInfo;
+- (void)updateOutUnreadCount;
+- (void)clearOutUnreadCount;
+@end
+

@@ -1,0 +1,907 @@
+@interface WCCommentDetailViewControllerFB : MMUIViewController <InputControllerDelegate, BaseEmoticonViewDelegate, WCAdvertiseActionFloatViewDelegate, WCCanvasImageLoaderObserver, WCTimeLineContactSelectViewControllerDelegate, IMMGrowTextViewExt, WCTimeLineAdCardBaseViewDelegate, WCTimeLineAdDynamicFeedViewDelegate, WCAdTagButtonDelegate, WCAdSocialLikeViewDelegate, WCAdCommonBarContainerViewDelegate, WCAdFireworkCheerInviteFriendViewDelegate, MMRTCMenuResponderDelegate, MMRichTextSelectEventDelegate, RichTextLayoutDelegate, WCMomentsClickHandlerDelegate, WCMomentsContactMgrExt, WCAdvertiseFeedbackViewDelegate, WCAdActionLinkDetailViewDelegate, IWCCommentDetailViewControllerFBExt, WCPlayerConfigFullScreenViewControllerPostDelegate, WCCommitViewAnimationDelegate, WCCommentErrTipsViewDelegate, WCFinderShareLiveViewDelegate, MMLiveMorphDismissTarget, WCContentItemBaseViewDelegate, MJTemplateFullScreenViewControllerPostDelegate, EmoticonSearchViewControllerDelegate, IWCAdInfoProxyLogicExt, UITableViewDelegate, UITableViewDataSource, WCFacadeExt, IMsgExt, MMGrowTextViewDelegate, MMTableViewDelegate, BaseEmoticonViewDelegate, WCActionSheetDelegate, ILinkEventExt, WCCommentViewDelegate, WCImageFullScreeViewMgrExt, IStrangerContactMgrExt, ITranslateSnsMgrExt, WCSightViewExt, WCCommentImageHelperDelegate, WCEditImageViewControllerDelegate, WCMomentsShareScopeMgrDelegate>
+{
+    MMTableView * _tableView; // +0x70
+    NSMutableArray * _contentViews; // +0x78
+    UIView * _likeListView; // +0x80
+    WCHeaderGridView * _headerGridView; // +0x88
+    UIView * _inputView; // +0x90
+    EmoticonBoardView * _emoticonBoardView; // +0x98
+    UIButton * _expressionButton; // +0xa0
+    UIButton * _pictureButton; // +0xa8
+    MMUILabel * _remainWordCountLabel; // +0xb0
+    MMGrowTextView * _growTextView; // +0xb8
+    WCOperateFloatView * _floatOperateView; // +0xc0
+    WCAdvertiseActionFloatView * _advertiseActionFloatView; // +0xc8
+    WCInputController * _inputController; // +0xd0
+    BOOL _bStranger; // +0xd8
+    NSString * _nsStrangerUsrName; // +0xe0
+    BOOL _bForbideComment; // +0xe8
+    MMURLHandler * _urlHandler; // +0xf0
+    WCMomentsClickHandler * _clickHandler; // +0xf8
+    BOOL _bIsShow; // +0x100
+    WCUserComment * _refComment; // +0x108
+    WCUserComment * _defaultRefComment; // +0x110
+    double _defaultRefCommentContentOffset; // +0x118
+    BOOL _hasFoundDefaultRefComment; // +0x120
+    BOOL _hasJumpDefaultRefCommentOnce; // +0x121
+    NSObject<WCCommentDetailViewControllerFBDelegate> * m_delegate; // +0x128
+    NSString * _copyedText; // +0x130
+    WCRichTextView * _contentDescView; // +0x138
+    WCMomentsSpringTextContainerView * _springTextContainerView; // +0x140
+    WCRichTextView * m_translateView; // +0x148
+    UIButton * m_translateStatusView; // +0x150
+    UIView * m_translateLineView; // +0x158
+    int eTranslateStatus; // +0x160
+    double fTranslateViewHeight; // +0x168
+    WCUserComment * curLongPressedComment; // +0x170
+    WCUserComment * curTranslateComment; // +0x178
+    UIView * _errTipsView; // +0x180
+    MMHeadImageView * _headImageView; // +0x188
+    UrlLabel * _nickLabel; // +0x190
+    WCContentItemBaseView * _mediaCellView; // +0x198
+    RichTextView * _togetherTextView; // +0x1a0
+    MMUIButton * _privacyBtn; // +0x1a8
+    UILabel * _timeLabel; // +0x1b0
+    MMUIButton * _operateBtn; // +0x1b8
+    MMUIButton * _deleteBtn; // +0x1c0
+    UIButton * _advertiseLogo; // +0x1c8
+    WCAdTagButton * _adTagButton; // +0x1d0
+    WCCommentView * _commentViewForDelete; // +0x1d8
+    WCADPageWrap * _floatViewPageWrap; // +0x1e0
+    int m_commentWordLimit; // +0x1e8
+    BOOL m_bHasClickFloat; // +0x1ec
+    BOOL m_bHaveActionSheet; // +0x1ed
+    UILabel * _rewardTipLabel; // +0x1f0
+    WCSnsCommentDetailRewardView * _rewardDetailView; // +0x1f8
+    WCHeaderGridView * _headImageRewardView; // +0x200
+    UILabel * _adPOILabel; // +0x208
+    UILabel * _adChainStrengthenLabel; // +0x210
+    BOOL _isActionAtAd; // +0x218
+    NSString * _inputSessionId; // +0x220
+    NSMutableDictionary * m_dicUserCommentsUICache; // +0x228
+    UIView * _adCardTopMaskView; // +0x230
+    CContact * _atContact; // +0x238
+    UIButton * _atButton; // +0x240
+    WCPasteTextLengthLogic * pastelogic; // +0x248
+    MMCPLabel * m_openIMDescLabel; // +0x250
+    WCTimelineExtBean * _extBean; // +0x258
+    BOOL m_forbidsReloadTableView; // +0x260
+    BOOL _isCollectingLikeEasterEggDimTargets; // +0x261
+    BOOL _hasViewsCntExp; // +0x262
+    BOOL _bJustShowContent; // +0x263
+    BOOL _bMusicSearchScene; // +0x264
+    BOOL _bFromAtFriend; // +0x265
+    BOOL _enableV3DataReport; // +0x266
+    BOOL _shouldAddBackButtonWhenPresentAsRoot; // +0x267
+    BOOL _canShowInvisibleTipsView; // +0x268
+    BOOL _isInvisible; // +0x269
+    BOOL _bShowSpringBubble; // +0x26a
+    BOOL _isStarModificationEnabled; // +0x26b
+    BOOL _isStarBrowsingEnabled; // +0x26c
+    BOOL _dynamicTagEnabled; // +0x26d
+    BOOL _isViewAppear; // +0x26e
+    BOOL _isEnhanceInteractionEnabled; // +0x26f
+    BOOL _hasActionRecordForShowingStarGuideButton; // +0x270
+    BOOL _isModifyingStarStatus; // +0x271
+    BOOL _hasModifiedStarStatus; // +0x272
+    BOOL _hasActionRecordForShowingFinderShareButton; // +0x273
+    BOOL _actionAreaWrapEnabled; // +0x274
+    BOOL _isShowEmoticonSearchViewVC; // +0x275
+    BOOL _isShowingCommentImageFullViewVC; // +0x276
+    BOOL _shouldResumeInputState; // +0x277
+    BOOL _isShowingCommentPickerVC; // +0x278
+    BOOL _hasAtFriendForAd; // +0x279
+    BOOL _didShowModifyShareScopeInActionSheet; // +0x27a
+    NSString * _nsUsrName; // +0x280
+    long long _uiSource; // +0x288
+    WCTogetherTailReporter * _togetherTailReporter; // +0x290
+    WCMomentsTigerReporter * _tigerReporter; // +0x298
+    WCDataItem * _dataItem; // +0x2a0
+    WCContentItem * _contentItem; // +0x2a8
+    NSMutableArray * _arrMediaList; // +0x2b0
+    NSMutableArray * _arrCommentList; // +0x2b8
+    NSMutableArray * _arrLikeList; // +0x2c0
+    WCCommentItem * _failedComment; // +0x2c8
+    long long _tipType; // +0x2d0
+    WCCommentReport * _commentReport; // +0x2d8
+    WCAlbumForwardFinderUtil * _albumForwardFlow; // +0x2e0
+    long long _enterScene; // +0x2e8
+    long long _fromPageScene; // +0x2f0
+    long long _homepageType; // +0x2f8
+    NSString * _snsPageSessionId; // +0x300
+    double _pageEnterTime; // +0x308
+    WCMomentsPageContext * _pageContext; // +0x310
+    NSString * _flutterAlbumSessionId; // +0x318
+    long long _v3ReportPageScene; // +0x320
+    WCTogetherHistoryReportSession * _togetherHistoryReportSession; // +0x328
+    long long _lastRemainWordCount; // +0x330
+    MMSnsRichTextCoverView * _selectableRichTextCoverView; // +0x338
+    RichTextView * _selectableRichTextView; // +0x340
+    MMRTCSnsMenuResponder * _selectableMenuResponder; // +0x348
+    WCCommentImageHelper * _commentImageHelper; // +0x350
+    WCSnsLikeEasterEggFocusCenter * _likeEasterEggFocusCenter; // +0x358
+    CEmoticonWrap * _emoticonWrap; // +0x360
+    MMImage * _selectedImage; // +0x368
+    MMWebImageView * _commentImageView; // +0x370
+    MMUIButton * _commentImageDeleteButton; // +0x378
+    SharePreConfirmSheetView * _sharePreConfirmSheetView; // +0x380
+    WCTimelineCommentEmotionReport * _emotionReporter; // +0x388
+    double _detailContentLayoutWidth; // +0x390
+    UrlLabel * _sourceLabel; // +0x398
+    UrlLabel * _individualSourceLabel; // +0x3a0
+    UILabel * _locationLabel; // +0x3a8
+    UILabel * _individualLocationLabel; // +0x3b0
+    UILabel * _privateNotifyLabel; // +0x3b8
+    WCAdvertiseFeedbackBaseView * _adFeedbackView; // +0x3c0
+    WCMomentsWeAppLogoNameView * _weAppView; // +0x3c8
+    WCMomentsWeAppLogoNameView * _individualWeAppView; // +0x3d0
+    WCEcsLogoNameView * _ecsView; // +0x3d8
+    WCAdActionLinkDetailView * _adDetailView; // +0x3e0
+    WCAdBreakFrameView * _adBreakFrameView; // +0x3e8
+    WCAdBreakFrameTagView * _adBreakFrameTagView; // +0x3f0
+    WCAdInteractionLabelView * _adInteractionLabelView; // +0x3f8
+    WCAdSocialLikeView * _adSocialLikeView; // +0x400
+    WCAdSocialLikeCheerPlayerView * _adSocialLikeCheerPlayerView; // +0x408
+    WCAdContinuousLikeBannerAnimationView * _adContinuousLikeBannerAnimationView; // +0x410
+    WCAdWeGameGiftTagView * _adWeGameGiftTagView; // +0x418
+    WCAdContinuousLikeTagView * _adContinuousLikeTagView; // +0x420
+    WCAdStateSettingBarView * _adStateSettingBarView; // +0x428
+    WCAdRandomPickCardView * _adRandomPickCardView; // +0x430
+    WCAdPreviewMaskView * _adPreviewMaskView; // +0x438
+    WCAdInteractionTagView * _adInteractionTagView; // +0x440
+    WCAdHeadStateView * _adHeadStateView; // +0x448
+    WCAdHeadLivingView * _adHeadLivingView; // +0x450
+    WCAdHighlightTagView * _adHighlightTagView; // +0x458
+    WCAdCommonBarContainerView * _adMediaBottomBarContainerView; // +0x460
+    WCAdCommonBarContainerView * _adBarContainerView; // +0x468
+    WCMomentsPostSessionController * _postSessionController; // +0x470
+    WCMomentsShareScopeMgr * _shareScopeMgr; // +0x478
+    WCMomentsInvisibleTipsView * _invisibleTipsView; // +0x480
+    TextStateItemView * _textStateView; // +0x488
+    MMUIButton * _starIconButton; // +0x490
+    WCMomentsStarGuideViewModel * _starGuideViewModel; // +0x498
+    WCMomentsStarGuideButton * _starGuideButton; // +0x4a0
+    WCMomentsFinderShareViewModel * _finderShareViewModel; // +0x4a8
+    WCMomentsPostShareButton * _postShareButton; // +0x4b0
+    WCMomentsInputAreaReportInfo * _inputAreaReportInfo; // +0x4b8
+    unsigned long long _actionAreaRowCount; // +0x4c0
+    WCMomentsAnimatedFireworksView * _animatedFireworksView; // +0x4c8
+    WCSpringWishBubbleView * _springBubbleView; // +0x4d0
+    NSString * _feedTailText; // +0x4d8
+    EmoticonCustomManageAddLogic * _addEmoticonLogic; // +0x4e0
+    long long _bubSelectionType; // +0x4e8
+    WCMomentsCommentBrowseAggreReport * _commentBrowseAggreReporter; // +0x4f0
+    UIView * _growTextViewBackGroundView; // +0x4f8
+    UIView * _holdSpeakSeparator; // +0x500
+    UIView * _topSeparatorLine; // +0x508
+    WCCommentBigEmoticonAddHelper * _bigEmoticonAddHelper; // +0x510
+    NSString * _emoticonBoardPid; // +0x518
+    long long _totalCommentPicCount; // +0x520
+    NSArray * _actionItems; // +0x528
+}
++ (id)makeDataWrapForWCTranslate:(id)arg1;
+- (void)becomeInput;
+- (void)resignInput;
+- (id)getDefaultInputPlaceHolder;
+- (id)expressionButtonImageColor;
+- (void)mmTableView:(id)arg1 touchesBegan:(id)arg2 withEvent:(id)arg3;
+- (void)scrollViewWillBeginDragging:(id)arg1;
+- (void)mmTableViewDidFinishedLoading:(id)arg1;
+- (void)onSingleTapOnInputView;
+- (void)initInputToolView;
+- (BOOL)supportCommentEmoticonOrImagePost;
+- (BOOL)supportCommentImagePost;
+- (BOOL)supportCommentEmoticonPost;
+- (void)setInputAtButtonImage;
+- (void)initEmoticonView;
+- (void)initInputController;
+- (void)updatePlaceholderImage;
+- (void)updateContentOffset;
+- (void)updateInputView;
+- (void)reloadData:(id)arg1;
+- (void)updateWordCnt:(long long)arg1;
+- (void)performLightFeedBackIfNeededWithRemain:(long long)arg1;
+- (void)updateGrowTextViewMaxHeight;
+- (double)maxGrowTextViewHeight;
+- (BOOL)hasAtFriend:(id)arg1;
+- (id)subAtContactString:(id)arg1;
+- (double)getTableViewVisibleHeight;
+- (void)updateTableLayout;
+- (void)updateTableViewHeight;
+- (BOOL)getInputControllerSendButtonCanSendState;
+- (void)onSelectorSelfDefinedEmotcion:(id)arg1;
+- (void)_handleDidSelectEmoticon:(id)arg1;
+- (void)showEmoticonSearchViewController;
+- (void)onSelectEmoticonSearchItem;
+- (void)OnEmoticonPidDidChanged:(id)arg1;
+- (void)onSearchEmoticonViewControllerSendEmoticon:(id)arg1;
+- (void)onSearchEmoticonViewControllerDidClose;
+- (void)onCommentImageSelect:(id)arg1;
+- (void)onCommentImageCancel;
+- (void)onCommentImagePickerDismissCompletion;
+- (void)_showCommentImageWithImage:(id)arg1 contentMode:(long long)arg2;
+- (void)_showCommentImageWithEmoticon:(id)arg1 contentMode:(long long)arg2;
+- (void)onTapCommentImageView:(id)arg1;
+- (void)deleteCommentImage;
+- (void)onTapcommentImageDeleteButton:(id)arg1;
+- (void)updateTopSeparatorLineVisibility;
+- (void)layoutInputToolViewForCurrentWidth;
+- (void)adjustGrowTextViewBGViewLayout;
+- (void)MMGrowTextViewHeightDidChanged:(id)arg1;
+- (void)updateEmoticonFrame;
+- (void)MMGrowTextViewBeginEditing:(id)arg1;
+- (void)MMGrowTextViewDidClickDictationStartIntent:(id)arg1;
+- (void)inputControllerDidExposeDictationIcon:(id)arg1;
+- (void)onInputModeChangeTo:(long long)arg1 Animated:(BOOL)arg2;
+- (void)onTextChanged:(id)arg1 selectedRange:(_NSRange)arg2;
+- (void)growTextViewDidClickSendWithText:(id)arg1;
+- (void)emoticonBoardViewDidShow;
+- (void)didCommitEmptyText;
+- (void)didCommitText:(id)arg1;
+- (void)sendComment:(id)arg1 hasAtFreind:(BOOL)arg2;
+- (void)textViewTextDidChange;
+- (void)onGrowTextViewMenuItemClicked:(unsigned long long)arg1;
+- (void)onGrowTextViewDidShowMenuControllerWithMenuItemArr:(id)arg1;
+- (void)keyboardWillShow;
+- (void)keyboardWillHide;
+- (void)keyboardDidHide;
+- (BOOL)shouldRespondToKeyBoardEvent;
+- (void)addAtContactSelectedForAd;
+- (void)cacheInputText;
+- (void)restoreInputDraft;
+- (void)didSelectContact:(id)arg1;
+- (void)onCancelSelectContact;
+- (void)onTextView:(id)arg1 shouldChangeTextInRange:(_NSRange)arg2 replacementText:(id)arg3;
+- (void)onMenuControllerWillShow:(id)arg1;
+- (void)onMenuControllerWillHide:(id)arg1;
+- (BOOL)canBecomeFirstResponder;
+- (BOOL)canPerformAction:(SEL)arg1 withSender:(id)arg2;
+- (void)onCopyComment:(id)arg1;
+- (void)onDeleteComment:(id)arg1;
+- (void)onDelete:(id)arg1;
+- (void)onAddEmotion:(id)arg1;
+- (void)showEmoitionOrImageMenuItemWithRect:(CGRect)arg1 userComment:(id)arg2;
+- (void)showMenuItemForText:(id)arg1 withRect:(CGRect)arg2 isWord:(BOOL)arg3 andView:(id)arg4;
+- (void)showMenuItemForText:(id)arg1 withRect:(CGRect)arg2 isWord:(BOOL)arg3 andView:(id)arg4 isCommentText:(BOOL)arg5 isUserNameLink:(BOOL)arg6;
+- (void)showMenuItemForComment:(id)arg1 withRect:(CGRect)arg2 withComment:(id)arg3;
+- (void)onLinkLongPressed:(id)arg1 withRect:(CGRect)arg2 withView:(id)arg3;
+- (void)onSearchTopicLongPressed:(id)arg1 withRect:(CGRect)arg2 withView:(id)arg3;
+- (void)onPhoneLongPressed:(id)arg1 withRect:(CGRect)arg2 withView:(id)arg3;
+- (void)onTextLongPressed:(id)arg1 withRect:(CGRect)arg2 withView:(id)arg3;
+- (void)onRichTextViewDoubleClick:(id)arg1 withRect:(CGRect)arg2 withRichTextView:(id)arg3;
+- (void)onLinkClicked:(id)arg1 withRect:(CGRect)arg2;
+- (void)onPhoneClicked:(id)arg1 withRect:(CGRect)arg2;
+- (void)onLinkClicked:(id)arg1 backupUrl:(id)arg2 withRect:(CGRect)arg3 extraInfo:(id)arg4;
+- (void)onLinkClicked:(id)arg1 backupUrl:(id)arg2 withRect:(CGRect)arg3;
+- (void)onLinkClicked:(id)arg1 backupUrl:(id)arg2 withRect:(CGRect)arg3 extraInfo:(id)arg4 adClickSource:(long long)arg5;
+- (void)handleUrl:(id)arg1 backupUrl:(id)arg2;
+- (void)handleUrl:(id)arg1 backupUrl:(id)arg2 adClickSource:(long long)arg3;
+- (void)handleUrl:(id)arg1 backupUrl:(id)arg2 extraInfo:(id)arg3 adClickSource:(long long)arg4;
+- (void)onSearchTopicClicked:(id)arg1 withRect:(CGRect)arg2;
+- (void)onCommentViewTopicTagClicked:(id)arg1 query:(id)arg2;
+- (void)openTopicWithQuery:(id)arg1 userComment:(id)arg2;
+- (id)payTagParam:(id)arg1;
+- (void)onCommentViewLongPressed:(id)arg1 withText:(id)arg2 withRect:(CGRect)arg3 isUserNameLink:(BOOL)arg4;
+- (BOOL)shouldShowCommentMenuItemForText:(id)arg1 comment:(id)arg2;
+- (BOOL)isTouchEnableOnCommentView;
+- (void)onReloadCommentCellView:(id)arg1;
+- (void)delayReloadTableView;
+- (void)setInputToolView:(BOOL)arg1;
+- (void)onRestoreCommentCellView:(id)arg1;
+- (void)onCommentViewExposured:(id)arg1 item:(id)arg2 comment:(id)arg3;
+- (void)onCommentViewClicked:(id)arg1 item:(id)arg2 comment:(id)arg3;
+- (void)onCommentViewEmoticonClicked:(id)arg1 item:(id)arg2 comment:(id)arg3;
+- (void)onCommentViewPicClicked:(id)arg1 item:(id)arg2 comment:(id)arg3;
+- (void)onWCCommentEmotionViewSizeChange;
+- (void)onAtableAdClicked:(id)arg1;
+- (void)onExpressionButtonClicked:(id)arg1;
+- (void)onImageButtonClicked:(id)arg1;
+- (void)reloadExpressionButtonImage:(long long)arg1;
+- (void)updateRewardView;
+- (void)updateRewardTip;
+- (void)onDataChangedWithAdded:(id)arg1 andChanged:(id)arg2 andDeleted:(id)arg3;
+- (void)onUpdateDataItemDetailFinished:(long long)arg1 itemId:(id)arg2 dataItem:(id)arg3;
+- (void)onModifyDataItemShareScopeFinished:(long long)arg1 dataItemID:(id)arg2;
+- (void)onCommentItemDeleteFinished:(long long)arg1 commentItemID:(id)arg2 dataItemID:(id)arg3;
+- (BOOL)shouldInteractivePop;
+- (void)onAdvertiseDetail;
+- (void)onAdvertiseDetailWithSource:(long long)arg1;
+- (void)onAdFeedbackBtnClick:(id)arg1;
+- (void)resetAdFeedbackView;
+- (void)onDoAdvertiseAction:(id)arg1;
+- (void)onOpenIMTimeLineAction:(id)arg1;
+- (void)onAdActoin:(id)arg1;
+- (void)onUnInterestOpenIMTimeLine;
+- (void)onDataItemDeleteFinished:(long long)arg1 dataItemID:(id)arg2;
+- (void)onModifyTogetherFinished:(long long)arg1 itemID:(id)arg2 dataItem:(id)arg3;
+- (void)onModifyDataItemStarStatusFinished:(long long)arg1 dataItem:(id)arg2;
+- (void)onCommentSend:(id)arg1 comment:(id)arg2;
+- (void)onDataItem:(id)arg1 likeFlagChanged:(BOOL)arg2;
+- (void)onAdCardActionButtonClick;
+- (void)onAdDynamicFeedViewActionClickWithSource:(long long)arg1;
+- (void)onAdDynamicFeedViewActionClickWithExtraClickType:(long long)arg1 jumpInfo:(id)arg2;
+- (id)fetchAdTagButtonOriginView;
+- (id)fetchAdOriginView;
+- (void)onAdLikeButtonTouched:(id)arg1;
+- (void)onAdLikeButtonClicked:(id)arg1;
+- (void)onAdCommentButtonClicked:(id)arg1;
+- (void)onAdLikeButtonSizeChanged:(id)arg1;
+- (void)onAdCommonBarRockPaperScissorsLeaveCanvasWithDataItem:(id)arg1 showComment:(BOOL)arg2;
+- (void)showCommentForDataItem:(id)arg1;
+- (void)onAdCommonBarWorldCupAvatarLeaveCanvasWithDataItem:(id)arg1;
+- (void)doWorldCupAvatarLeaveCanvasInDetailWithDataItem:(id)arg1;
+- (id)onAdCommonBarFetchMediaViewWithDataItem:(id)arg1;
+- (void)onAdInviteButtonClick:(id)arg1;
+- (void)onActionFloatView:(id)arg1 didSelectReason:(id)arg2;
+- (void)onActionFloatView:(id)arg1 didSelectFeedbackItem:(id)arg2;
+- (void)onWCSightViewWillEnterFullScreen:(id)arg1;
+- (void)onWCSightViewWillExitFullScreen:(id)arg1;
+- (void)ImageDidLoadWithData:(id)arg1 Url:(id)arg2;
+- (void)ImageDidFail:(id)arg1;
+- (void)isInAtFriendCommentDetailViewController:(BOOL *)arg1;
+- (void)onWCContentItemViewInteractedByUser:(id)arg1 sender:(id)arg2;
+- (void)onWCContentItemViewWillEnterFullScreen;
+- (void)actionSheet:(id)arg1 clickedButtonAtIndex:(long long)arg2;
+- (void)onResignActive;
+- (void)onApplicationDidBecomeActive;
+- (void)momentsContactMgr:(id)arg1 didUpdateContact:(id)arg2;
+- (void)registerYReportSdk;
+- (void)setupInputAreaReportInfo;
+- (void)configSnsCmtEmoDataReport:(id)arg1;
+- (void)configSnsCmtAlbumDataReport:(id)arg1;
+- (id)genSnsCmtEmoOrPicReportDict;
+- (void)configSnsCmtBubDataReport:(id)arg1;
+- (void)configSnsCmtBubXDataReport:(id)arg1;
+- (void)reportSnsCmtBubDataWithEvent:(id)arg1;
+- (void)reportSnsCmtBubXDataWithEvent:(id)arg1;
+- (id)genSnsCmtBubOrXReportDict;
+- (void)reportSnsEmoAddClickEvent:(id)arg1;
+- (void)reportCmtSendClickEvent:(id)arg1;
+- (void)reportCmtPicSelectNextClickEvent;
+- (id)wxKeyBoardSupportMessageTypes;
+- (void)sendWXKeyBoardMessage:(id)arg1;
+- (int)contactFromSceneFromClickScene:(long long)arg1;
+- (id)menuItemsForTextView:(id)arg1 isWord:(BOOL)arg2 andView:(id)arg3 isCommentText:(BOOL)arg4;
+- (void)onLongPressWithRichTextCoverView:(id)arg1 nsText:(id)arg2 isWord:(BOOL)arg3 bubblePullType:(long long)arg4 textSelectType:(long long)arg5;
+- (void)onLongPressWithRichTextView:(id)arg1 menuItems:(id)arg2 isTranslatedText:(BOOL)arg3 bubblePullType:(long long)arg4 textSelectType:(long long)arg5;
+- (void)exitSelectState;
+- (id)getExtInfoForMenuAction;
+- (void)onRichTextViewExit;
+- (id)getCurrentViewController;
+- (id)getForwardingMenuActionTarget:(SEL)arg1;
+- (void)onSingleTapRTCV;
+- (void)onRemoveRTCV;
+- (id)getScrollView;
+- (void)reloadRightBarButtonItems;
+- (void)onShowMenu:(id)arg1;
+- (BOOL)canSetPrivate;
+- (id)getPrivacyString;
+- (void)startSetPrivacy;
+- (void)onSetDataItemPrivateFinished:(long long)arg1 dataItemID:(id)arg2;
+- (void)onSetDataItemPublicFinished:(long long)arg1 dataItemID:(id)arg2;
+- (BOOL)canModifyTogetherList;
+- (void)modifyTogetherList;
+- (void)RightBarButton_onModifyTogetherFinished:(long long)arg1 itemID:(id)arg2 dataItem:(id)arg3;
+- (void)onForwardToFinderPost;
+- (void)doModifyShareScopeExposureReport:(BOOL)arg1;
+- (void)onActionSheetCancel;
+- (id)getReplyNickNameFromComment:(id)arg1;
+- (id)init;
+- (id)pageContext;
+- (void)initCommentBrowseAggreReporter;
+- (void)hideFloatView;
+- (void)setDataItem:(id)arg1;
+- (void)checkAndUpdateCommentEmoticonIfNeeded;
+- (BOOL)shouldForbidComment;
+- (BOOL)shouldForbidCommentDataItem:(id)arg1;
+- (double)getTableViewMarginToBottom;
+- (id)shareScopeMgr;
+- (void)saveWCSettingIfEmoticonPidChanged;
+- (void)dealloc;
+- (void)initData;
+- (BOOL)isSpringStyle;
+- (BOOL)isSpringStyleForDataItem:(id)arg1;
+- (void)onActionLocation:(id)arg1;
+- (id)getTableView;
+- (id)getSpringTextContainerView;
+- (id)getTranslateView;
+- (id)getContentDescView;
+- (void)setCopyedText:(id)arg1;
+- (void)navigateToOriginPOI;
+- (void)onActionAdPOI:(id)arg1;
+- (void)onActionAdChainStrengthen:(id)arg1;
+- (void)updateTimeLabelText;
+- (BOOL)shouldShowErrTipsView;
+- (BOOL)shouldShowInnerReSendBtn;
+- (double)detailLayoutWidth;
+- (double)getContentWidth;
+- (double)getInfoMaxWidth;
+- (id)createHeadImageView;
+- (id)createNickNameLabel;
+- (id)createAdvertiseLogo:(double)arg1;
+- (id)createOpenIMDescLabel:(id)arg1 maxWidth:(double)arg2;
+- (id)createContentDescView:(id)arg1 contentDescPattern:(id)arg2;
+- (id)createMediaView:(id)arg1;
+- (id)createADDetailView;
+- (id)createInteractionLocationLabel;
+- (id)createDefaultLocationLabel;
+- (id)createInteractionADLocationLabel;
+- (id)createDefaultADLocationLabel;
+- (void)createOperateImage:(id *)arg1 operateImageHL:(id *)arg2;
+- (id)createAdInteractionLabelViewWithInfo:(id)arg1;
+- (id)createAdRandomPickCardViewWithInfo:(id)arg1;
+- (id)createAdBreakFrameTagView;
+- (id)createAdTagButtonWithInfo:(id)arg1;
+- (id)createAdWeGameGiftTagView;
+- (id)createAdContinuousLikeTagView;
+- (id)createAdStateSettingBarView;
+- (id)createAdInteractionTagView;
+- (id)createAdHighlightTagView;
+- (id)createAdBarContainerView;
+- (id)createTogetherTextView;
+- (id)createWithTextLabel:(id)arg1;
+- (id)createPrivacyBtn;
+- (id)createRewardTipLabel;
+- (id)createOperateBtn:(CGRect)arg1 operateImage:(id)arg2 operateImageHL:(id)arg3;
+- (id)createAdChainStrengthenLabel:(double)arg1;
+- (void)updateAdChainStrengthenContent;
+- (id)createDeleteButton;
+- (id)createOperateFloatView;
+- (double)calAdevertiseLabelMaxWidthToShowWithHeadImageSize:(CGSize)arg1 operateImageSize:(CGSize)arg2 timeLabelWidth:(double)arg3;
+- (id)sourceLabel;
+- (void)initIndividualSourceLabel;
+- (void)configFeedTailReport;
+- (id)genFeedTailReportDict;
+- (id)weAppView;
+- (id)individualWeAppView;
+- (void)initEcsView;
+- (id)locationLabel;
+- (void)initTableHeaderView;
+- (void)notifyRecreatedMediaViewWillDisplayIfNeeded;
+- (void)initExtensionViewsInTableHeader;
+- (void)onTapTextStateViewForCard;
+- (BOOL)useStatusIconStyleUpgrade;
+- (void)configTextStateViewReportWithContact:(id)arg1;
+- (id)createCommentDetailTextStateView:(id)arg1;
+- (void)_cleanMainViewsInTableHeaderView:(id)arg1;
+- (void)_recreateMainViewsInTableHeaderView:(id)arg1;
+- (void)_cleanExtensionViewsInTableHeaderView:(id)arg1;
+- (void)_recreateExtensionViewsInTableHeaderView:(id)arg1;
+- (void)_layoutTableHeaderView:(id)arg1;
+- (void)_layoutSubviewsInTableHeaderView:(id)arg1;
+- (void)tryToAutoPlayAdVideo;
+- (void)animateSpringBubbleView:(id)arg1;
+- (void)layoutSpringBubbleView;
+- (void)layoutFireworksPlayerViewInTableHeaderView:(id)arg1;
+- (id)fireworksDisplayRectList;
+- (void)tryToSetAdVideoPlayingState:(BOOL)arg1 forItemView:(id)arg2;
+- (id)fetchContentItem;
+- (BOOL)shouldShowRewardTip;
+- (BOOL)shouldShowRewardDetailView;
+- (void)initRewardDetailView:(id)arg1;
+- (void)rewardDetailViewTapped;
+- (void)resetFailedCommentText;
+- (void)reportSnsFeedDetailPageBlankState:(long long)arg1;
+- (void)showInvisibleTipsView;
+- (void)layoutInvisibleTipsView;
+- (void)playerViewController:(id)arg1 requireToPostWithShareInfo:(id)arg2;
+- (BOOL)isShareButtonVisibleInPlayerViewController:(id)arg1;
+- (void)templateFullScreenViewController:(id)arg1 didClickShareButton:(id)arg2;
+- (void)animationDidEndRemainView:(id)arg1 hintDataItem:(id)arg2;
+- (void)onAdActionLinkDetailClicked;
+- (void)onForbidScrollToTop;
+- (void)onResumeScrollToTop;
+- (id)getContactDisplayName;
+- (double)getHeadImageViewLeftMargin;
+- (double)getCommentViewLeftMargin;
+- (double)getCommentViewWidth;
+- (double)getOperateBtnRightMargin;
+- (double)calculateLikeIconRightMarginWithLikeIconSize:(double)arg1;
+- (unsigned int)getLikeIconCountPerLineWithLikeIconSize:(double)arg1 likeIconRowSpace:(double)arg2;
+- (double)layoutHeadInnerView;
+- (BOOL)canShowSourceLabel;
+- (BOOL)canShowIndividualSourceLabel;
+- (BOOL)canShowWeAppView;
+- (BOOL)canShowIndividualwWeAppView;
+- (BOOL)canShowLocationLabel;
+- (BOOL)canShowIndividualLocationLabel;
+- (BOOL)canShowStarIcon;
+- (BOOL)canShowStarIconWithDataItem:(id)arg1;
+- (BOOL)canShowDeleteButton;
+- (BOOL)canShowPirvacyButton;
+- (BOOL)isPrivateNotifyRowActive;
+- (BOOL)_hasFriendInteractionInDataItem:(id)arg1;
+- (double)layoutActionArea;
+- (double)maxActionAreaWidth;
+- (id)actionAreaSubViewWithType:(unsigned long long)arg1;
+- (BOOL)layoutSourceLabel;
+- (BOOL)layoutLocationLabel;
+- (void)layoutWeAppSource;
+- (double)maxSourceContentWidth;
+- (int)getDefaultInputViewHeight;
+- (int)getInputViewHeight;
+- (void)initTableFooterView;
+- (id)privateFooterTipsForContentType:(long long)arg1;
+- (void)setupNavigationTitle;
+- (void)tryIncrementReadCount;
+- (BOOL)shouldShowReadCountRow;
+- (double)readCountRowHeight;
+- (id)createReadCountRowViewWithHeight:(double)arg1;
+- (void)initTableView;
+- (void)reloadTableView;
+- (void)forbidsReloadTableView;
+- (void)tryResumeReloadTableView;
+- (id)getCommentsUICacheKey:(id)arg1;
+- (id)FormCommentTipsView:(id)arg1;
+- (id)getCurSessionId;
+- (void)updateHeaderGridView;
+- (void)viewDidLoad;
+- (void)viewWillAppear:(BOOL)arg1;
+- (void)viewWillDisappear:(BOOL)arg1;
+- (void)viewDidBePushOrPresent:(BOOL)arg1;
+- (void)viewWillBePoped:(BOOL)arg1;
+- (void)viewDidBePoped:(BOOL)arg1;
+- (void)viewWillPush:(BOOL)arg1;
+- (void)viewDidLayoutSubviews;
+- (void)didChangeToOrientation:(long long)arg1 previousOrientation:(long long)arg2;
+- (void)viewDidAppear:(BOOL)arg1;
+- (void)viewDidDisappear:(BOOL)arg1;
+- (void)viewDidTransitionToNewSize;
+- (void)onHeadImageClicked:(id)arg1;
+- (void)onDeletePhoto:(id)arg1;
+- (void)onShowGroup;
+- (void)onClickStarIconButton:(id)arg1;
+- (void)onClickContent:(id)arg1 way:(long long)arg2;
+- (void)onClickSelfComment:(id)arg1 comment:(id)arg2 index:(long long)arg3 confirmDelete:(BOOL)arg4;
+- (void)onClickFriendsComment:(id)arg1 comment:(id)arg2 index:(long long)arg3 replay:(BOOL)arg4;
+- (id)generateInputSessionID;
+- (void)showConfirmDeleteAlert:(long long)arg1;
+- (void)onClickCommentBtnOnFloatView;
+- (void)onTouchDownLikeBtnOnFloatView;
+- (void)onClickLikeBtnOnFloatView;
+- (id)likeEasterEggFocusCenter;
+- (void)applyLikeEasterEggDimAnimated:(BOOL)arg1 extraCell:(id)arg2;
+- (void)tableView:(id)arg1 willDisplayCell:(id)arg2 forRowAtIndexPath:(id)arg3;
+- (void)onCommentPhoto:(id)arg1;
+- (void)modifyStarStatus:(BOOL)arg1;
+- (void)_modifyStarStatus:(BOOL)arg1;
+- (void)handleModifyDataItemStarStatusFinished:(long long)arg1 dataItem:(id)arg2;
+- (void)starGuideButtonClicked:(id)arg1;
+- (void)doStarReportWithDataItem:(id)arg1 isStarred:(BOOL)arg2 isFromBanner:(BOOL)arg3;
+- (void)showStarIconButtonAnimatedWithCompletion:(id /* block */)arg1;
+- (void)hideStarIconButtonAnimatedWithCompletion:(id /* block */)arg1;
+- (void)finderShareButtonClicked:(id)arg1;
+- (void)clearFinderShareButtonIfNeeded;
+- (void)onViewAnimationWillHide;
+- (void)handleResendBtnClick;
+- (void)handleDetailBtnClick;
+- (void)onAdInfoProxyLogicAvatarImageUpdated:(id)arg1 username:(id)arg2 url:(id)arg3;
+- (id)tableView:(id)arg1 cellForRowAtIndexPath:(id)arg2;
+- (double)tableView:(id)arg1 heightForRowAtIndexPath:(id)arg2;
+- (long long)numberOfSectionsInTableView:(id)arg1;
+- (long long)tableView:(id)arg1 numberOfRowsInSection:(long long)arg2;
+- (id)findCommentViewWithComment:(id)arg1;
+- (void)adjustTableViewRect;
+- (void)willShow;
+- (void)willDisshow;
+- (id)GetMyTranslateSnsKeyID;
+- (void)onTranslateFeed:(id)arg1;
+- (void)onCancelTranslateFeed:(id)arg1;
+- (void)onCancelTranslateFeedInTranslatedArea:(id)arg1;
+- (void)onTranslateAction:(id)arg1;
+- (void)onChangeTranslateLanguageForContent:(id)arg1;
+- (void)onChangeTranslateLanguageForComment:(id)arg1;
+- (void)onTranslateCommentText:(id)arg1;
+- (void)onTranslateCommentOrigin:(id)arg1;
+- (void)onTranslateComment:(id)arg1;
+- (void)onCopyText:(id)arg1;
+- (void)onCopy:(id)arg1;
+- (void)onFavAdd:(id)arg1;
+- (void)onFavAddForTranslated:(id)arg1;
+- (void)onWebSearchText:(id)arg1;
+- (void)onWebSearchComment:(id)arg1;
+- (void)onAskXiaoWeiText:(id)arg1;
+- (void)onAskXiaoWeiComment:(id)arg1;
+- (void)onWebSearch:(id)arg1;
+- (void)modifyShareScope;
+- (long long)postPrivacyToVisibleRange:(long long)arg1;
+- (void)changeVisibilityResultNew:(long long)arg1 Old:(long long)arg2;
+- (double)initContentTranslateView:(id)arg1 andSuperView:(id)arg2;
+- (void)makeTranslateShowAnimation;
+- (double)initTranslateStatusButton:(BOOL)arg1 withTitle:(id)arg2 andReferView:(id)arg3;
+- (void)onTranslateSnsFailed:(id)arg1 errTip:(id)arg2;
+- (void)onTranslateSnsChanged:(id)arg1;
+- (void)floatViewHiddenWrap;
+- (void)asyncRecordMicroMerchantInteractionIfNeeded:(unsigned long long)arg1;
+- (void)momentsClickHandler:(id)arg1 willClickUserProfileWithContext:(id)arg2;
+- (void)reportOnViewApper;
+- (void)reportOnViewDisappear;
+- (id)behaviourInfoSession;
+- (int)behaviourInfoPageType;
+- (id)albumFeedBehaviourSession;
+- (void)endAlbumFeedBehaviourSessionIfNeeded;
+- (long long)menuTriggerScene;
+- (void)reportMenuAction:(long long)arg1 isComment:(BOOL)arg2;
+- (void)reportTopicTagInputMenuItemAction:(long long)arg1;
+- (id)togetherTailReporter;
+- (void)reportTogetherTailIfNeeded;
+- (id)tigerReporter;
+- (void)reportTigerIfNeeded;
+- (void)onAdFeedbackDisappear:(unsigned long long)arg1 toastTitle:(id)arg2 dataItem:(id)arg3;
+- (void)onClickComplainBtn:(id)arg1 dataItem:(id)arg2;
+- (void)onFeedbackClickLikedBtn:(id)arg1;
+- (void)onFeedbackClickReceivedReasonBtn:(id)arg1;
+- (void)onClickGuideAdManageBtn:(id)arg1 dataItem:(id)arg2;
+- (void)onClickPositiveBtn:(id)arg1;
+- (void)onClickNegativeBtn:(BOOL)arg1 dataItem:(id)arg2;
+- (void)onClickNegativeReasonBtn:(id)arg1 dataItem:(id)arg2;
+- (CGPoint)genButtonClickPoint:(id)arg1 isBaseFullScreen:(BOOL)arg2;
+- (void)onRemoveAd;
+- (void)onRemoveAd:(id)arg1;
+- (void)showSecurityVerificationAlert;
+- (void)onCommentErrTipsViewCustomButtonClicked:(id)arg1;
+- (void)onCommentErrTipsViewLinkClicked:(id)arg1 nsUrl:(id)arg2;
+- (void)onSecurityVerificationFinished:(BOOL)arg1 type:(unsigned long long)arg2 dataItem:(id)arg3;
+- (void)tryUpdateAdContent:(id)arg1;
+- (void)updateAdRelievedBuyVisibility:(id)arg1;
+- (double)adPageWidthInDetail;
+- (double)adFullCardWidthInDetail;
+- (double)adMediaMaxWidthInDetail;
+- (double)adMediaMaxViewportWidthInDetail;
+- (double)adMediaMaxWidthInDetailWithPageWidth:(double)arg1;
+- (CGSize)adMediaSizeInDetail;
+- (void)initAdBreakFrameView;
+- (void)resizeAdBreakFrameView;
+- (void)initAdPreviewMaskView;
+- (void)resizeAdPreviewMaskView;
+- (id)extBean;
+- (void)setExtBean:(id)arg1;
+- (void)clearExtBean;
+- (void)initAdSocialLikeView;
+- (void)initAdSocialLikeCheerPlayerView;
+- (void)resizeAdSocialLikeCheerPlayerView;
+- (void)initAdContinuousLikeBannerAnimationView;
+- (void)resizeAdContinuousLikeBannerAnimationView;
+- (BOOL)handleClickedOnAdFirstLikeForContact:(id)arg1;
+- (id)generatePostReportSessionForEntrance:(long long)arg1;
+- (void)reportSnsUserHomeCustomEvent:(id)arg1 params:(id)arg2;
+- (long long)homeTypeToAlbumScene:(long long)arg1;
+- (void)reportSnsFeedMaterialClick;
+- (void)reportSnsFeedDel;
+- (void)reportSnsFeedPin;
+- (void)reportSnsFeedModifyVisibility;
+- (void)reportSnsFeedCmt;
+- (void)reportSnsFeedLikeWithResult:(unsigned long long)arg1 triggeredEgg:(BOOL)arg2;
+- (void)reportSnsFeedLikeWithResult:(unsigned long long)arg1;
+- (id)getCurrentViewControllerForContentItemView:(id)arg1;
+- (id)fetchAdCellViewExtContainerForItemView:(id)arg1 type:(long long)arg2;
+- (id)getFinderLiveDismissTarget;
+- (BOOL)shouldLiveUseMorphDismissForCustomKey:(id)arg1;
+- (CGRect)liveMorphDismissTargetFrameOnScreenForCustomKey:(id)arg1 videoSize:(CGSize)arg2;
+- (id)liveShareViewViewWithTid:(id)arg1;
+- (BOOL)isAdFireworkCheerCommentStyle;
+- (id)commentViewBackgroundColor;
+- (void)startPlayRandomFireworksIfNeeded;
+- (void)stopPlayRandomFireworksIfNeeded;
+- (void)refreshUIAfterVisibilityChanged;
+- (id)nsStrangerUsrName;
+- (void)setNsStrangerUsrName:(id)arg1;
+- (id)nsUsrName;
+- (void)setNsUsrName:(id)arg1;
+- (long long)uiSource;
+- (void)setUiSource:(long long)arg1;
+- (BOOL)bStranger;
+- (void)setBStranger:(BOOL)arg1;
+- (BOOL)bForbideComment;
+- (void)setBForbideComment:(BOOL)arg1;
+- (id)m_delegate;
+- (void)setM_delegate:(id)arg1;
+- (id)refComment;
+- (void)setRefComment:(id)arg1;
+- (id)defaultRefComment;
+- (void)setDefaultRefComment:(id)arg1;
+- (BOOL)bJustShowContent;
+- (void)setBJustShowContent:(BOOL)arg1;
+- (id)dataItem;
+- (id)contentItem;
+- (void)setContentItem:(id)arg1;
+- (id)arrMediaList;
+- (void)setArrMediaList:(id)arg1;
+- (id)arrCommentList;
+- (void)setArrCommentList:(id)arg1;
+- (id)arrLikeList;
+- (void)setArrLikeList:(id)arg1;
+- (BOOL)bMusicSearchScene;
+- (void)setBMusicSearchScene:(BOOL)arg1;
+- (id)failedComment;
+- (void)setFailedComment:(id)arg1;
+- (long long)tipType;
+- (void)setTipType:(long long)arg1;
+- (BOOL)bFromAtFriend;
+- (void)setBFromAtFriend:(BOOL)arg1;
+- (id)commentReport;
+- (void)setCommentReport:(id)arg1;
+- (id)albumForwardFlow;
+- (void)setAlbumForwardFlow:(id)arg1;
+- (long long)enterScene;
+- (void)setEnterScene:(long long)arg1;
+- (long long)fromPageScene;
+- (void)setFromPageScene:(long long)arg1;
+- (long long)homepageType;
+- (void)setHomepageType:(long long)arg1;
+- (id)snsPageSessionId;
+- (void)setSnsPageSessionId:(id)arg1;
+- (double)pageEnterTime;
+- (void)setPageEnterTime:(double)arg1;
+- (void)setPageContext:(id)arg1;
+- (id)flutterAlbumSessionId;
+- (void)setFlutterAlbumSessionId:(id)arg1;
+- (BOOL)enableV3DataReport;
+- (void)setEnableV3DataReport:(BOOL)arg1;
+- (long long)v3ReportPageScene;
+- (void)setV3ReportPageScene:(long long)arg1;
+- (BOOL)shouldAddBackButtonWhenPresentAsRoot;
+- (void)setShouldAddBackButtonWhenPresentAsRoot:(BOOL)arg1;
+- (BOOL)canShowInvisibleTipsView;
+- (void)setCanShowInvisibleTipsView:(BOOL)arg1;
+- (BOOL)isInvisible;
+- (id)togetherHistoryReportSession;
+- (void)setTogetherHistoryReportSession:(id)arg1;
+- (long long)lastRemainWordCount;
+- (void)setLastRemainWordCount:(long long)arg1;
+- (BOOL)bShowSpringBubble;
+- (void)setBShowSpringBubble:(BOOL)arg1;
+- (BOOL)isStarModificationEnabled;
+- (BOOL)isStarBrowsingEnabled;
+- (BOOL)dynamicTagEnabled;
+- (void)setDynamicTagEnabled:(BOOL)arg1;
+- (id)selectableRichTextCoverView;
+- (void)setSelectableRichTextCoverView:(id)arg1;
+- (id)selectableRichTextView;
+- (void)setSelectableRichTextView:(id)arg1;
+- (id)selectableMenuResponder;
+- (void)setSelectableMenuResponder:(id)arg1;
+- (id)commentImageHelper;
+- (void)setCommentImageHelper:(id)arg1;
+- (BOOL)isCollectingLikeEasterEggDimTargets;
+- (void)setIsCollectingLikeEasterEggDimTargets:(BOOL)arg1;
+- (void)setLikeEasterEggFocusCenter:(id)arg1;
+- (id)emoticonWrap;
+- (void)setEmoticonWrap:(id)arg1;
+- (id)selectedImage;
+- (void)setSelectedImage:(id)arg1;
+- (id)commentImageView;
+- (void)setCommentImageView:(id)arg1;
+- (id)commentImageDeleteButton;
+- (void)setCommentImageDeleteButton:(id)arg1;
+- (id)sharePreConfirmSheetView;
+- (void)setSharePreConfirmSheetView:(id)arg1;
+- (id)emotionReporter;
+- (void)setEmotionReporter:(id)arg1;
+- (BOOL)isViewAppear;
+- (void)setIsViewAppear:(BOOL)arg1;
+- (double)detailContentLayoutWidth;
+- (void)setDetailContentLayoutWidth:(double)arg1;
+- (BOOL)isEnhanceInteractionEnabled;
+- (void)setIsEnhanceInteractionEnabled:(BOOL)arg1;
+- (void)setSourceLabel:(id)arg1;
+- (id)individualSourceLabel;
+- (void)setIndividualSourceLabel:(id)arg1;
+- (void)setLocationLabel:(id)arg1;
+- (id)individualLocationLabel;
+- (void)setIndividualLocationLabel:(id)arg1;
+- (id)privateNotifyLabel;
+- (void)setPrivateNotifyLabel:(id)arg1;
+- (id)adFeedbackView;
+- (void)setAdFeedbackView:(id)arg1;
+- (void)setWeAppView:(id)arg1;
+- (void)setIndividualWeAppView:(id)arg1;
+- (id)ecsView;
+- (void)setEcsView:(id)arg1;
+- (id)adDetailView;
+- (void)setAdDetailView:(id)arg1;
+- (id)adBreakFrameView;
+- (void)setAdBreakFrameView:(id)arg1;
+- (id)adBreakFrameTagView;
+- (void)setAdBreakFrameTagView:(id)arg1;
+- (id)adInteractionLabelView;
+- (void)setAdInteractionLabelView:(id)arg1;
+- (id)adSocialLikeView;
+- (void)setAdSocialLikeView:(id)arg1;
+- (id)adSocialLikeCheerPlayerView;
+- (void)setAdSocialLikeCheerPlayerView:(id)arg1;
+- (id)adContinuousLikeBannerAnimationView;
+- (void)setAdContinuousLikeBannerAnimationView:(id)arg1;
+- (id)adWeGameGiftTagView;
+- (void)setAdWeGameGiftTagView:(id)arg1;
+- (id)adContinuousLikeTagView;
+- (void)setAdContinuousLikeTagView:(id)arg1;
+- (id)adStateSettingBarView;
+- (void)setAdStateSettingBarView:(id)arg1;
+- (id)adRandomPickCardView;
+- (void)setAdRandomPickCardView:(id)arg1;
+- (id)adPreviewMaskView;
+- (void)setAdPreviewMaskView:(id)arg1;
+- (id)adInteractionTagView;
+- (void)setAdInteractionTagView:(id)arg1;
+- (id)adHeadStateView;
+- (void)setAdHeadStateView:(id)arg1;
+- (id)adHeadLivingView;
+- (void)setAdHeadLivingView:(id)arg1;
+- (id)adHighlightTagView;
+- (void)setAdHighlightTagView:(id)arg1;
+- (id)adMediaBottomBarContainerView;
+- (void)setAdMediaBottomBarContainerView:(id)arg1;
+- (id)adBarContainerView;
+- (void)setAdBarContainerView:(id)arg1;
+- (id)postSessionController;
+- (void)setPostSessionController:(id)arg1;
+- (void)setShareScopeMgr:(id)arg1;
+- (id)invisibleTipsView;
+- (void)setInvisibleTipsView:(id)arg1;
+- (id)textStateView;
+- (void)setTextStateView:(id)arg1;
+- (id)starIconButton;
+- (void)setStarIconButton:(id)arg1;
+- (BOOL)hasActionRecordForShowingStarGuideButton;
+- (void)setHasActionRecordForShowingStarGuideButton:(BOOL)arg1;
+- (id)starGuideViewModel;
+- (void)setStarGuideViewModel:(id)arg1;
+- (id)starGuideButton;
+- (void)setStarGuideButton:(id)arg1;
+- (BOOL)isModifyingStarStatus;
+- (void)setIsModifyingStarStatus:(BOOL)arg1;
+- (BOOL)hasModifiedStarStatus;
+- (void)setHasModifiedStarStatus:(BOOL)arg1;
+- (id)finderShareViewModel;
+- (void)setFinderShareViewModel:(id)arg1;
+- (BOOL)hasActionRecordForShowingFinderShareButton;
+- (void)setHasActionRecordForShowingFinderShareButton:(BOOL)arg1;
+- (id)postShareButton;
+- (void)setPostShareButton:(id)arg1;
+- (id)inputAreaReportInfo;
+- (void)setInputAreaReportInfo:(id)arg1;
+- (BOOL)actionAreaWrapEnabled;
+- (void)setActionAreaWrapEnabled:(BOOL)arg1;
+- (unsigned long long)actionAreaRowCount;
+- (void)setActionAreaRowCount:(unsigned long long)arg1;
+- (id)animatedFireworksView;
+- (void)setAnimatedFireworksView:(id)arg1;
+- (id)springBubbleView;
+- (void)setSpringBubbleView:(id)arg1;
+- (id)feedTailText;
+- (void)setFeedTailText:(id)arg1;
+- (id)addEmoticonLogic;
+- (void)setAddEmoticonLogic:(id)arg1;
+- (BOOL)isShowEmoticonSearchViewVC;
+- (void)setIsShowEmoticonSearchViewVC:(BOOL)arg1;
+- (BOOL)isShowingCommentImageFullViewVC;
+- (void)setIsShowingCommentImageFullViewVC:(BOOL)arg1;
+- (BOOL)shouldResumeInputState;
+- (void)setShouldResumeInputState:(BOOL)arg1;
+- (long long)bubSelectionType;
+- (void)setBubSelectionType:(long long)arg1;
+- (id)commentBrowseAggreReporter;
+- (void)setCommentBrowseAggreReporter:(id)arg1;
+- (id)growTextViewBackGroundView;
+- (void)setGrowTextViewBackGroundView:(id)arg1;
+- (id)holdSpeakSeparator;
+- (void)setHoldSpeakSeparator:(id)arg1;
+- (id)topSeparatorLine;
+- (void)setTopSeparatorLine:(id)arg1;
+- (id)bigEmoticonAddHelper;
+- (void)setBigEmoticonAddHelper:(id)arg1;
+- (BOOL)isShowingCommentPickerVC;
+- (void)setIsShowingCommentPickerVC:(BOOL)arg1;
+- (BOOL)hasAtFriendForAd;
+- (void)setHasAtFriendForAd:(BOOL)arg1;
+- (id)emoticonBoardPid;
+- (void)setEmoticonBoardPid:(id)arg1;
+- (long long)totalCommentPicCount;
+- (void)setTotalCommentPicCount:(long long)arg1;
+- (id)actionItems;
+- (void)setActionItems:(id)arg1;
+- (BOOL)didShowModifyShareScopeInActionSheet;
+- (void)setDidShowModifyShareScopeInActionSheet:(BOOL)arg1;
+- (void).cxx_destruct;
+@end

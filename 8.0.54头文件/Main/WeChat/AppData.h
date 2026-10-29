@@ -1,0 +1,3 @@
+@interface AppData : NSObject
+@end
+

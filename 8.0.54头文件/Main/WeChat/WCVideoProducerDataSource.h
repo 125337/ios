@@ -1,0 +1,3 @@
+@interface WCVideoProducerDataSource : WCBaseDataSource
+@end
+

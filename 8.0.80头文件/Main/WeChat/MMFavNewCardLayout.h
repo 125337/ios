@@ -1,0 +1,31 @@
+@interface MMFavNewCardLayout : NSObject
++ (void)updateStarIconOnCardView:(id)arg1 showStarIcon:(BOOL)arg2;
++ (void)removeNewCardBottomAreaSubviewsFromCardView:(id)arg1;
++ (void)markNewCardBottomAreaSubviewsOnCardView:(id)arg1 belowY:(double)arg2;
++ (double)relayoutNewCardBottomAreaForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4 contentSectionBottom:(double)arg5;
++ (double)layoutNewCardTypeRowOnCardView:(id)arg1 host:(id)arg2 afterContentBottom:(double)arg3 gapAbove:(double)arg4 contentLeftInset:(double)arg5;
++ (double)layoutBottomRowTagsForHost:(id)arg1 cardView:(id)arg2 tagList:(id)arg3 rowY:(double)arg4 metaRowHeight:(double)arg5 contentLeftInset:(double)arg6 contentRightInset:(double)arg7 sourceEndXInBottomRow:(double)arg8 bottomRow:(id)arg9 bottomRowWidth:(double)arg10;
++ (double)layoutWrappedTagsOnlyForHost:(id)arg1 cardView:(id)arg2 tagList:(id)arg3 afterSectionBottom:(double)arg4 contentLeftInset:(double)arg5 contentRightInset:(double)arg6 metaRowHeight:(double)arg7;
++ (double)layoutNewCardBottomRowForHost:(id)arg1 cardView:(id)arg2 afterSectionBottom:(double)arg3 typeRowAnchorBottom:(double)arg4 contentLeftInset:(double)arg5 showStarIcon:(BOOL)arg6;
++ (void)configMediaImageComponentForHost:(id)arg1 width:(double)arg2 height:(double)arg3;
++ (double)layoutMediaCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (void)configWebpageThumbComponentForHost:(id)arg1;
++ (void)configFileIconComponentForHost:(id)arg1;
++ (void)configTingListCoverComponentForHost:(id)arg1 isSinger:(BOOL)arg2;
++ (double)layoutVoiceCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutFileCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutTingListCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutMusicCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutRecordCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutWebpageCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutPlainTextCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutNoteCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutLocationCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (void)loadLocationMapImageForHost:(id)arg1 imageView:(id)arg2 favItem:(id)arg3 thumbSize:(CGSize)arg4;
++ (double)layoutNewCardWeAppHeaderRowOnCardView:(id)arg1 contentLeftInset:(double)arg2 contentWidth:(double)arg3 topY:(double)arg4 favItem:(id)arg5;
++ (double)layoutWeAppCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutLegacyContentCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (double)layoutCardForHost:(id)arg1 cardView:(id)arg2 contentLeftInset:(double)arg3 showStarIcon:(BOOL)arg4;
++ (void)applySearchHighlightInView:(id)arg1 keywords:(id)arg2;
++ (void)refreshSearchHighlightForHost:(id)arg1;
+@end

@@ -1,0 +1,2 @@
+@interface WCAdvertiseRandomSelectCardDataModel : WCAdvertiseCommonNumberRequestExtDataModel
+@end

@@ -1,0 +1,72 @@
+@interface _ZZButtonChainModel : _ZZControlChainModel
+{
+    id /* block */ _titleFont_O; // +0x8
+}
++ (Class)viewClass;
+- (id /* block */)pingFangRegular;
+- (id /* block */)pingFangMedium;
+- (id /* block */)title;
+- (id /* block */)title_O;
+- (id /* block */)titleHL;
+- (id /* block */)titleHL_O;
+- (id /* block */)titleSelected;
+- (id /* block */)titleSelected_O;
+- (id /* block */)titleDisabled;
+- (id /* block */)titleDisabled_O;
+- (id /* block */)titleColor;
+- (id /* block */)titleColor_O;
+- (id /* block */)titleColorHL;
+- (id /* block */)titleColorHL_O;
+- (id /* block */)titleColorSelected;
+- (id /* block */)titleColorSelected_O;
+- (id /* block */)titleColorDisabled;
+- (id /* block */)titleColorDisabled_O;
+- (id /* block */)titleShadowColor;
+- (id /* block */)titleShadowColor_O;
+- (id /* block */)titleShadowColorHL;
+- (id /* block */)titleShadowColorHL_O;
+- (id /* block */)titleShadowColorSelected;
+- (id /* block */)titleShadowColorSelected_O;
+- (id /* block */)titleShadowColorDisabled;
+- (id /* block */)titleShadowColorDisabled_O;
+- (id /* block */)image;
+- (id /* block */)image_O;
+- (id /* block */)imageHL;
+- (id /* block */)imageHL_O;
+- (id /* block */)imageSelected;
+- (id /* block */)imageSelected_O;
+- (id /* block */)imageDisabled;
+- (id /* block */)imageDisabled_O;
+- (id /* block */)backgroundImage;
+- (id /* block */)backgroundImage_O;
+- (id /* block */)backgroundImageHL;
+- (id /* block */)backgroundImageHL_O;
+- (id /* block */)backgroundImageSelected;
+- (id /* block */)backgroundImageSelected_O;
+- (id /* block */)backgroundImageDisabled;
+- (id /* block */)backgroundImageDisabled_O;
+- (id /* block */)attributedTitle;
+- (id /* block */)attributedTitle_O;
+- (id /* block */)attributedTitleHL;
+- (id /* block */)attributedTitleHL_O;
+- (id /* block */)attributedTitleSelected;
+- (id /* block */)attributedTitleSelected_O;
+- (id /* block */)attributedTitleDisabled;
+- (id /* block */)attributedTitleDisabled_O;
+- (id /* block */)backgroundColorHL;
+- (id /* block */)backgroundColorHL_O;
+- (id /* block */)backgroundColorSelected;
+- (id /* block */)backgroundColorSelected_O;
+- (id /* block */)backgroundColorDisabled;
+- (id /* block */)backgroundColorDisabled_O;
+- (id /* block */)titleFont;
+- (id /* block */)contentEdgeInsets;
+- (id /* block */)contentEdgeInsets_O;
+- (id /* block */)titleEdgeInsets;
+- (id /* block */)titleEdgeInsets_O;
+- (id /* block */)imageEdgeInsets;
+- (id /* block */)imageEdgeInsets_O;
+- (id /* block */)titleFont_O;
+- (void).cxx_destruct;
+@end
+

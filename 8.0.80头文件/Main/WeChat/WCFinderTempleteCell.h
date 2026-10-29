@@ -1,0 +1,2 @@
+@interface WCFinderTempleteCell : UICollectionViewCell
+@end

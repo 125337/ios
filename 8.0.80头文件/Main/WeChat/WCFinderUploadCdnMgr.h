@@ -1,0 +1,125 @@
+@interface WCFinderUploadCdnMgr : NSObject <INetworkStatusMgrExt, ICdnComMgrExt>
+{
+    NSMutableArray * _taskQueue; // +0x8
+    NSMutableArray * _retryQueue; // +0x10
+    NSMutableArray * _deleteQueue; // +0x18
+    NSMutableSet * _willReuseTaskMap; // +0x20
+    NSMutableSet * _preparingLegacyOriginInfoTids; // +0x28
+    NSString * _taskRetryPath; // +0x30
+    NSString * _taskUploadingPath; // +0x38
+    NSString * _taskUploadingShouldDeletePath; // +0x40
+    NSString * _taskWillReusePath; // +0x48
+    WCFinderUploadTask * _currentTask; // +0x50
+    id <WCFinderUploadCdnMgrDelegate> _delegate; // +0x58
+    NSObject<OS_dispatch_queue> * _ioQueue; // +0x60
+}
++ (BOOL)shouldMoveFileAfterConfirmForTask:(id)arg1;
++ (void)updateMentionedHistoryArray:(id)arg1;
++ (void)moveFileToDataItemPath:(id)arg1 fromPendingDataItem:(id)arg2;
+- (id)initWithDelegate:(id)arg1;
+- (void)filterIgnoreTask;
+- (void)clearInvalidUploadTask;
+- (long long)recoveryPriorityForTask:(id)arg1;
+- (void)repairLegacyPreUploadTask:(id)arg1;
+- (void)preparePostPhaseForPreUploadTask:(id)arg1 restartCDNUpload:(BOOL)arg2;
+- (void)markPostRequestedForTask:(id)arg1;
+- (void)addRetryQueueWithTask:(id)arg1;
+- (void)finderUploadRetryFail:(id)arg1;
+- (BOOL)checkDataItem:(id)arg1 inQueue:(id)arg2;
+- (BOOL)checkDataItemHasUpload:(id)arg1;
+- (id)tasksWithTid:(id)arg1 inQueue:(id)arg2;
+- (void)removeTasksWithTid:(id)arg1 fromQueue:(id)arg2;
+- (BOOL)hasPostRequestedTaskWithTid:(id)arg1;
+- (BOOL)uploadTask:(id)arg1 hasSamePlanWithPostSession:(id)arg2;
+- (void)holdBackgroundTaskForUploadTask:(id)arg1;
+- (void)releaseBackgroundTaskForUploadTask:(id)arg1;
+- (void)cancelCurrentTaskWithTid:(id)arg1;
+- (void)removeUncommittedPreUploadTask:(id)arg1;
+- (BOOL)deleteTaskTid:(id)arg1 inQueue:(id)arg2;
+- (BOOL)uploadTaskNeedDeleteWithTid:(id)arg1;
+- (void)deleteTaskInAllQueueWithTid:(id)arg1;
+- (void)deleteUploadTaskWithTid:(id)arg1;
+- (id)getUploadTaskWithTid:(id)arg1;
+- (id)postSessionForTid:(id)arg1;
+- (id)getUploadTaskWithTid:(id)arg1 fromQueue:(id)arg2;
+- (void)startWithTaskInfo:(id)arg1;
+- (id)taskQueue;
+- (id)retryQueue;
+- (id)willReuseTaskMap;
+- (id)deleteQueue;
+- (void)syncQueueToLocal;
+- (void)debounceSyncQueueToLocal;
+- (void)syncQueueToLocalImmediately;
+- (void)writeQueuesToLocalWithDeepCopy:(BOOL)arg1;
+- (void)syncWillResuseTaskToLocal;
+- (void)checkQueue;
+- (void)checkRetryQueue;
+- (void)uploadMgrIdle;
+- (void)startUploadFinderDraft:(id)arg1;
+- (void)preUploadFinderWithPostSession:(id)arg1;
+- (id)_getShouldUploadTaskByPostSession:(id)arg1;
+- (void)startUploadFinderWithPostSession:(id)arg1;
+- (void)startUploadFinderLiveWithDataItem:(id)arg1 successBlock:(id /* block */)arg2 failBlock:(id /* block */)arg3;
+- (void)startUploadFinderMemberQAWithPostSession:(id)arg1;
+- (id)createPostTaskOrRaiseError:(id)arg1;
+- (id)checkPostInvalidAddQueue:(id)arg1;
+- (BOOL)startUploadFinderCoverWithPostSession:(id)arg1 sucBlock:(id /* block */)arg2 failBlock:(id /* block */)arg3;
+- (void)startUploadCdnTask;
+- (void)startUploadCdnMediaTask;
+- (BOOL)checkFileExistsWithTask:(id)arg1;
+- (void)markStartUploadCDNTask;
+- (void)markUploadTaskAllFinish;
+- (id)handleCDNResultCombineLogic;
+- (BOOL)hasSamePrefixWithFirstString:(id)arg1 secondString:(id)arg2;
+- (void)modFeedInfoPost;
+- (void)startUploadCGIPost;
+- (void)finderMemberQAPost;
+- (void)draftPost;
+- (void)executeDraftPost;
+- (void)afterPostTaskFinish:(id)arg1;
+- (void)afterDraftPostTaskFailed:(long long)arg1 tid:(id)arg2;
+- (void)onDraftCDNUploadFailed;
+- (void)clearLiveUploadTask;
+- (void)finderMusicDraftPost;
+- (void)finderPost;
+- (void)executeTemplateCreationCGIIfNeededWithCompletionBlock:(id /* block */)arg1 failBlock:(id /* block */)arg2;
+- (void)executePostCGIWithSuccessBlock:(id /* block */)arg1 failBlock:(id /* block */)arg2;
+- (void)bindTraceInfoToDataItem:(id)arg1 traceInfo:(id)arg2;
+- (void)addPostTaskToUploadQueue:(id)arg1;
+- (void)handleCDNUploadSuccessWithUploadInfo:(id)arg1;
+- (void)handleDirectUploadPreuploadSuccessWithUploadInfo:(id)arg1;
+- (void)finderPreuploadCDNSuccess:(id)arg1;
+- (void)finderUploadCDNSuccess:(id)arg1;
+- (void)moveFileToDataItemPath:(id)arg1 fromDraft:(BOOL)arg2;
+- (void)OnCdnInit;
+- (void)OnSetCdnDnsInfo;
+- (void)OnCdnUploadProgress:(id)arg1;
+- (void)OnCdnUpload:(id)arg1;
+- (void)OnCdnDownload:(id)arg1;
+- (void)onNetworkStatusChange:(unsigned int)arg1;
+- (void)cleanAllUploadTask;
+- (BOOL)busy;
+- (BOOL)checkDataItemInCDNUploadQueue:(id)arg1;
+- (void)reportUploadResultWithMediaTaskInfo:(id)arg1 taskInfo:(id)arg2 retCode:(long long)arg3;
+- (void)setTaskQueue:(id)arg1;
+- (void)setRetryQueue:(id)arg1;
+- (void)setDeleteQueue:(id)arg1;
+- (void)setWillReuseTaskMap:(id)arg1;
+- (id)preparingLegacyOriginInfoTids;
+- (void)setPreparingLegacyOriginInfoTids:(id)arg1;
+- (id)taskRetryPath;
+- (void)setTaskRetryPath:(id)arg1;
+- (id)taskUploadingPath;
+- (void)setTaskUploadingPath:(id)arg1;
+- (id)taskUploadingShouldDeletePath;
+- (void)setTaskUploadingShouldDeletePath:(id)arg1;
+- (id)taskWillReusePath;
+- (void)setTaskWillReusePath:(id)arg1;
+- (id)currentTask;
+- (void)setCurrentTask:(id)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)ioQueue;
+- (void)setIoQueue:(id)arg1;
+- (void).cxx_destruct;
+@end

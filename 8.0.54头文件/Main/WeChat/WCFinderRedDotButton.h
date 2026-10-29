@@ -1,0 +1,3 @@
+@interface WCFinderRedDotButton : UIButton
+@end
+

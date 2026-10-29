@@ -1,0 +1,38 @@
+@interface CBTAskXiaoWeiReporter : NSObject
++ (void)reportViewExpWithPageId:(unsigned long long)arg1 params:(id)arg2;
++ (void)reportViewClkWithPageId:(unsigned long long)arg1 params:(id)arg2;
++ (void)reportCustomEventWithEventId:(id)arg1 params:(id)arg2;
++ (void)reportCustomEventWithEventId:(id)arg1 params:(id)arg2 routeRule:(unsigned long long)arg3;
++ (void)reportInputBoxExpWithIsGroupChat:(BOOL)arg1 chatName:(id)arg2;
++ (void)reportInputBoxClkWithIsGroupChat:(BOOL)arg1 chatName:(id)arg2;
++ (void)reportAddPanelExpWithIsGroupChat:(BOOL)arg1 chatName:(id)arg2;
++ (void)reportAddPanelClkWithIsGroupChat:(BOOL)arg1 chatName:(id)arg2;
++ (void)reportBubbleUnderlineExpWithIsGroupChat:(BOOL)arg1 chatName:(id)arg2 isFromMe:(unsigned int)arg3;
++ (void)reportBubbleUnderlineClkWithIsGroupChat:(BOOL)arg1 chatName:(id)arg2 isFromMe:(unsigned int)arg3;
++ (void)reportSharePanelExpWithPullShareSheetScene:(int)arg1;
++ (void)reportSharePanelClkWithPullShareSheetScene:(int)arg1;
++ (void)reportSharePanelExpWithPullShareSheetScene:(int)arg1 feedId:(id)arg2 feedUsername:(id)arg3;
++ (void)reportSharePanelClkWithPullShareSheetScene:(int)arg1 feedId:(id)arg2 feedUsername:(id)arg3;
++ (void)reportSharePanelExpWithIsGroupChat:(BOOL)arg1 pullShareSheetScene:(int)arg2;
++ (void)reportSharePanelClkWithIsGroupChat:(BOOL)arg1 pullShareSheetScene:(int)arg2;
++ (void)reportCustomEventWithEventId:(id)arg1 enterScene:(int)arg2 viewId:(id)arg3 extraParams:(id)arg4;
++ (void)reportExpWithViewId:(id)arg1 extraParams:(id)arg2;
++ (int)enterSceneByExtractingFromParams:(id)arg1;
++ (void)reportExpWithViewId:(id)arg1 extraParams:(id)arg2 routeRule:(unsigned long long)arg3;
++ (void)reportClkWithViewId:(id)arg1 extraParams:(id)arg2;
++ (void)reportClkWithViewId:(id)arg1 extraParams:(id)arg2 routeRule:(unsigned long long)arg3;
++ (void)report20507WithValue:(id)arg1;
++ (id)generateAndCacheClkId;
++ (id)consumeCachedClkId;
++ (BOOL)shouldInjectClkIdForEventId:(id)arg1;
++ (void)injectClkIdIntoMutableParams:(id)arg1;
++ (void)injectClkIdIntoSrcInfoOfMutableParams:(id)arg1;
++ (id)mutableSrcInfoFromParams:(id)arg1 extraParams:(id)arg2;
++ (id)jsonStringFromDictionary:(id)arg1;
++ (unsigned long long)pageIdWithIsGroupChat:(BOOL)arg1;
++ (id)paramsWithViewId:(id)arg1 enterScene:(int)arg2 chatName:(id)arg3;
++ (id)paramsWithViewId:(id)arg1 enterScene:(int)arg2 chatName:(id)arg3 isFromMe:(id)arg4;
++ (id)sharePanelParamsWithPullShareSheetScene:(int)arg1;
++ (id)sharePanelParamsWithPullShareSheetScene:(int)arg1 feedId:(id)arg2 feedUsername:(id)arg3;
++ (void)reportWithPageId:(unsigned long long)arg1 eventId:(id)arg2 params:(id)arg3;
+@end

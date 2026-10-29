@@ -1,0 +1,82 @@
+@interface MTFontMathTable : NSObject
+{
+    unsigned long long _unitsPerEm; // +0x8
+    double _fontSize; // +0x10
+    NSDictionary * _mathTable; // +0x18
+    MTFont * _font; // +0x20
+}
+- (id)initWithFont:(id)arg1 mathTable:(id)arg2;
+- (double)fontUnitsToPt:(int)arg1;
+- (double)muUnit;
+- (double)constantFromTable:(id)arg1;
+- (double)percentFromTable:(id)arg1;
+- (double)fractionNumeratorDisplayStyleShiftUp;
+- (double)fractionNumeratorShiftUp;
+- (double)fractionDenominatorDisplayStyleShiftDown;
+- (double)fractionDenominatorShiftDown;
+- (double)fractionNumeratorDisplayStyleGapMin;
+- (double)fractionNumeratorGapMin;
+- (double)fractionDenominatorDisplayStyleGapMin;
+- (double)fractionDenominatorGapMin;
+- (double)fractionRuleThickness;
+- (double)skewedFractionHorizontalGap;
+- (double)skewedFractionVerticalGap;
+- (double)fractionDelimiterSize;
+- (double)fractionDelimiterDisplayStyleSize;
+- (double)superscriptShiftUp;
+- (double)superscriptShiftUpCramped;
+- (double)subscriptShiftDown;
+- (double)superscriptBaselineDropMax;
+- (double)subscriptBaselineDropMin;
+- (double)superscriptBottomMin;
+- (double)subscriptTopMax;
+- (double)subSuperscriptGapMin;
+- (double)superscriptBottomMaxWithSubscript;
+- (double)spaceAfterScript;
+- (double)radicalRuleThickness;
+- (double)radicalExtraAscender;
+- (double)radicalVerticalGap;
+- (double)radicalDisplayStyleVerticalGap;
+- (double)radicalKernBeforeDegree;
+- (double)radicalKernAfterDegree;
+- (double)radicalDegreeBottomRaisePercent;
+- (double)upperLimitGapMin;
+- (double)upperLimitBaselineRiseMin;
+- (double)lowerLimitGapMin;
+- (double)lowerLimitBaselineDropMin;
+- (double)limitExtraAscenderDescender;
+- (double)axisHeight;
+- (double)scriptScaleDown;
+- (double)scriptScriptScaleDown;
+- (double)mathLeading;
+- (double)delimitedSubFormulaMinHeight;
+- (double)accentBaseHeight;
+- (double)flattenedAccentBaseHeight;
+- (double)displayOperatorMinHeight;
+- (double)overbarExtraAscender;
+- (double)overbarRuleThickness;
+- (double)overbarVerticalGap;
+- (double)underbarExtraDescender;
+- (double)underbarRuleThickness;
+- (double)underbarVerticalGap;
+- (double)stackBottomDisplayStyleShiftDown;
+- (double)stackBottomShiftDown;
+- (double)stackDisplayStyleGapMin;
+- (double)stackGapMin;
+- (double)stackTopDisplayStyleShiftUp;
+- (double)stackTopShiftUp;
+- (double)stretchStackBottomShiftDown;
+- (double)stretchStackGapAboveMin;
+- (double)stretchStackGapBelowMin;
+- (double)stretchStackTopShiftUp;
+- (id)getVerticalVariantsForGlyph:(unsigned short)arg1;
+- (id)getHorizontalVariantsForGlyph:(unsigned short)arg1;
+- (id)getVariantsForGlyph:(unsigned short)arg1 inDictionary:(id)arg2;
+- (unsigned short)getLargerGlyph:(unsigned short)arg1;
+- (double)getItalicCorrection:(unsigned short)arg1;
+- (double)getTopAccentAdjustment:(unsigned short)arg1;
+- (double)minConnectorOverlap;
+- (id)getVerticalGlyphAssemblyForGlyph:(unsigned short)arg1;
+- (id)font;
+- (void).cxx_destruct;
+@end

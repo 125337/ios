@@ -1,0 +1,2 @@
+@interface WAMiniToolShareCellView : WAAppPageCellView
+@end

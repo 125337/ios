@@ -1,0 +1,3 @@
+@interface FLTPathProviderApiCodecReader : FlutterStandardReader
+@end
+

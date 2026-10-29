@@ -1,0 +1,36 @@
+@interface UILabel (MultiLineFixHeight)
++ (id /* block */)zz_create;
+- (void)sizeToFitWidth:(double)arg1 lineBreakMode:(long long)arg2;
+- (void)sizeToFitWidth:(double)arg1;
+- (id)zz_setup;
+- (void)heightToFit;
+- (void)heightToFitInLimitLines;
+- (void)widthToFit;
+- (void)autoFit;
+- (void)autoFitAllowMultipleLines;
+- (void)setWXGWidgetfontSize:(id)arg1;
+- (void)setWXGWidgetlineBreakMode:(id)arg1;
+- (void)setWXGWidgetcolor:(id)arg1;
+- (void)setWXGWidgetshadowColor:(id)arg1;
+- (void)setWXGWidgethighlightTextColor:(id)arg1;
+- (void)setWXGWidgettextAlign:(id)arg1;
+- (void)liveSetTextColor:(id)arg1;
+- (void)liveSetText:(id)arg1;
+- (void)setText:(id)arg1 highlightKeyWord:(id)arg2;
+- (void)setText:(id)arg1 highlightKeyWord:(id)arg2 startIndex:(unsigned long long)arg3;
+- (void)setText:(id)arg1 highlightKeyWord:(id)arg2 range:(_NSRange)arg3;
+- (void)setText:(id)arg1 highlightKeyWord:(id)arg2 range:(_NSRange)arg3 highlightFont:(id)arg4;
+- (void)setText:(id)arg1 highlightKeyWord:(id)arg2 range:(_NSRange)arg3 highlightFont:(id)arg4 highlightColor:(id)arg5;
+- (void)configMaxWidth:(double)arg1;
+- (void)sizeFitTwoLineMaxWidth:(double)arg1;
+- (void)setTextColorWithHex:(id)arg1;
+- (void)setExpFrame:(CGRect)arg1;
+- (CGRect)expFrame;
+- (void)setExpOrigin:(CGPoint)arg1;
+- (CGPoint)expOrigin;
+- (double)expY;
+- (double)expH;
+- (double)expBottom;
+- (void)layoutWithText:(id)arg1 width:(double)arg2 lineHeight:(double)arg3 alignment:(long long)arg4;
+@end
+

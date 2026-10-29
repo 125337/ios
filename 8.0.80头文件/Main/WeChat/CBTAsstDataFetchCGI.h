@@ -1,0 +1,20 @@
+@interface CBTAsstDataFetchCGI : NSObject
+{
+    TaskIdConvertor task_id_convertor; // +0x8
+    shared_ptr<chatbot::CBTAsstDataFetchCGICppCover> cpp_cover; // +0x80
+    weak_ptr<chatbot::CBTAsstDataFetchCGIDispatcher> cpp_dispatcher; // +0x90
+}
++ (id)shareInstance;
++ (id)buildZidlObjForHolder:(const void *)arg1 svrIdentity:(const void *)arg2 refCntManager:(void *)arg3;
+- (shared_ptr<chatbot::CBTAsstDataFetchCGIDispatcher>)getDispatcher;
+- (void)setDispatcher:(const void *)arg1;
+- (id)initForZidlPrivate;
+- (id)zidlObjToHolder;
+- (void)assistantDataFetchAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)assistantDataFetchAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)manageUserToolAsync:(id)arg1 completion:(id /* block */)arg2;
+- (void)manageUserToolAsync:(id)arg1 on:(id)arg2 completion:(id /* block */)arg3;
+- (void)dealloc;
+- (void).cxx_destruct;
+- (id).cxx_construct;
+@end

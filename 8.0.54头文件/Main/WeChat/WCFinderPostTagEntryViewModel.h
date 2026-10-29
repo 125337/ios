@@ -1,0 +1,3 @@
+@interface WCFinderPostTagEntryViewModel : NSObject
+@end
+

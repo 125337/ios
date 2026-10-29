@@ -1,0 +1,3 @@
+@interface QSpotFollowCameraLight : QCommonLight
+@end
+

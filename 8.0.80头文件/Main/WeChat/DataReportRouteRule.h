@@ -1,0 +1,2 @@
+@interface DataReportRouteRule : AmoebaRouteRule
+@end

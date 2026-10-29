@@ -1,0 +1,3 @@
+@interface MMUIResponder : UIResponder
+@end
+

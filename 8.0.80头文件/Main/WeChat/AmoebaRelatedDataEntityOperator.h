@@ -1,0 +1,34 @@
+@interface AmoebaRelatedDataEntityOperator : NSObject
++ (void)setPageId:(id)arg1 pageId:(unsigned long long)arg2;
++ (unsigned long long)getPageId:(id)arg1;
++ (void)setPageName:(id)arg1 pageName:(id)arg2;
++ (id)getPageName:(id)arg1;
++ (void)setBizGroupId:(id)arg1 bizGroupId:(unsigned long long)arg2;
++ (unsigned long long)getBizGroupId:(id)arg1;
++ (void)setViewId:(id)arg1 viewId:(id)arg2;
++ (id)getViewId:(id)arg1;
++ (void)setViewExposeMinTime:(id)arg1 timeMills:(unsigned long long)arg2;
++ (void)setViewExposeMinRate:(id)arg1 rate:(double)arg2;
++ (void)setReportPolicy:(id)arg1 reportPolicy:(unsigned long long)arg2 routeRule:(unsigned long long)arg3 isRtReport:(BOOL)arg4;
++ (unsigned long long)getReportPolicy:(id)arg1;
++ (void)setParam:(id)arg1 key:(id)arg2 value:(id)arg3;
++ (void)setParams:(id)arg1 params:(id)arg2;
++ (void)removeParam:(id)arg1 key:(id)arg2;
++ (void)removeParams:(id)arg1;
++ (void)reset:(id)arg1;
++ (id)getParams:(id)arg1;
++ (void)addDynamicParamsBlock:(id)arg1 block:(id /* block */)arg2 key:(id)arg3;
++ (void)removeDynamicParamsBlock:(id)arg1 key:(id)arg2;
++ (id)getDynamicParamsBlocks:(id)arg1;
++ (id /* block */)getDynamicParamsBlock:(id)arg1 key:(id)arg2;
++ (id)getDynamicParams:(id)arg1 eventId:(id)arg2;
++ (void)addReportBreakerBlock:(id)arg1 block:(id /* block */)arg2 key:(id)arg3;
++ (void)removeReportBreakerBlock:(id)arg1 key:(id)arg2;
++ (id)getReportBreakerBlocks:(id)arg1;
++ (id /* block */)getReportBreakerBlock:(id)arg1 key:(id)arg2;
++ (id)getPageDataEntity:(id)arg1 needCreate:(BOOL)arg2;
++ (id)getViewDataEntity:(id)arg1 needCreate:(BOOL)arg2;
++ (void)relateTarget:(id)arg1 toModel:(id)arg2;
++ (id)getRelatedModelByTarget:(id)arg1;
++ (id)getRelatedTargetByModel:(id)arg1;
+@end

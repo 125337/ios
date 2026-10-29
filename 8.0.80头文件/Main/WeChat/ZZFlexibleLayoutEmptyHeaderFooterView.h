@@ -1,0 +1,2 @@
+@interface ZZFlexibleLayoutEmptyHeaderFooterView : UICollectionReusableView
+@end

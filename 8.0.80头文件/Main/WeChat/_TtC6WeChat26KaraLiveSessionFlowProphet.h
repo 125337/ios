@@ -1,0 +1,2 @@
+@interface _TtC6WeChat26KaraLiveSessionFlowProphet : _TtC6WeChat17KaraProphetModule
+@end

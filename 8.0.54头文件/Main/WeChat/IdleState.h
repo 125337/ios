@@ -1,0 +1,3 @@
+@interface IdleState : BaseState
+@end
+

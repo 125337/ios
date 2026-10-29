@@ -1,0 +1,3 @@
+@interface QRegionAnimation : CABasicAnimation
+@end
+

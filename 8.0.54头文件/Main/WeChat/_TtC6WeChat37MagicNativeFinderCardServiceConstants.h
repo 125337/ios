@@ -1,0 +1,3 @@
+@interface _TtC6WeChat37MagicNativeFinderCardServiceConstants : _TtCs12_SwiftObject
+@end
+

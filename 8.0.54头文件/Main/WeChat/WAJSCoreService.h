@@ -1,0 +1,502 @@
+@interface WAJSCoreService : WAJSNativeBufferBase <WAJSServicePluginContextProtocol, MMUDPHandleLogDelegate, MMTCPHandleLogDelegate, MMLockstepHandleLogDelegate, MMLockstepHandleReportDelegate, WXWASMLogDelegate, WXFileLoaderDelegate, wxAudioNativeLogDelegate, wxAudioFileLoaderDelegate, wxAudioStateDelegate, wxAudioCommonDelegate, WeMediaDelegate, WAMagicARAdaptorDelegate, WAMagicARPixelBufferDelegate, WeXNetLogDelegate, WeXNetAdaptorDelegate, WXFileLoaderDelegate, WAJSEventHandlerContextDelegate, WAJSServiceProtocol>
+{
+    unsigned int _workerFlowId; // +0x8
+    unsigned int _debugModeType; // +0xc
+    BOOL _isDebugAndVConsoleOpen; // +0x10
+    BOOL _isIgnoreRemoteCheckDomain; // +0x11
+    WxaExternalInfo * _wxaExternalInfo; // +0x18
+    unsigned long long _appVersion; // +0x20
+    unsigned int _appServiceMaxDataSize; // +0x28
+    WAAppTaskExtInfo * _taskExtInfo; // +0x30
+    NSString * _enterPath; // +0x38
+    unsigned int _enterScene; // +0x40
+    NSArray * _templates; // +0x48
+    WAContact * _contact; // +0x50
+    WAPackageConfig * _packageConfig; // +0x58
+    unsigned long long _taskRunningState; // +0x60
+    BOOL _jsThreadSuspended; // +0x68
+    BOOL _jsThreadDying; // +0x69
+    NSCondition * _condition; // +0x70
+    NSString * lastError; // +0x78
+    NSMutableSet * _setInjectedModule; // +0x80
+    unsigned int _subContextId; // +0x88
+    int _enterJsErrorFunctionCount; // +0x8c
+    BOOL _stopReportJsErrorFunction; // +0x90
+    NSString * _relativeServiceJSUrl; // +0x98
+    BOOL _userScriptInjected; // +0xa0
+    BOOL _extendedPrefixScriptInjected; // +0xa1
+    MMUDPHandle * _udpHandle; // +0xa8
+    MMTCPHandle * _tcpHandle; // +0xb0
+    MMLockstepHandle * _lockstepHandle; // +0xb8
+    WXAudioNative * _wxaudionative; // +0xc0
+    WeMediaApi * _wemedia_api; // +0xc8
+    GameEngineApp * _gameEngineApp; // +0xd0
+    WasmAdaptor * _wasmAdaptor; // +0xd8
+    NSObject<IWXPhysxAdaptorAPI> * _physxAdaptor; // +0xe0
+    BOOL _isWasmInit; // +0xe8
+    BOOL _isGameEngineInit; // +0xe9
+    unsigned long long _closeTimeStampInMs; // +0xf0
+    unsigned int _adWorkerId; // +0xf8
+    WAMagicARAdaptor * _magicARAdaptor; // +0x100
+    id /* block */ _magicARCheckAvailableBlock; // +0x108
+    WAJSBindingUtilsAdaptor * _commonUtilsAdaptor; // +0x110
+    WeXNetAdaptor * _mnxnetAdaptor; // +0x118
+    BOOL _threadInjected; // +0x120
+    BOOL _publiclibInjectFinished; // +0x121
+    BOOL _m_bIsStartFromPreloadAppTask; // +0x122
+    BOOL _shouldUseComponentLazyLoad; // +0x123
+    BOOL _directInvokeJs; // +0x124
+    BOOL _hasInjectErr; // +0x125
+    BOOL _threadIdAssigned; // +0x126
+    BOOL _directInvokeOc; // +0x127
+    unsigned int _developerMarkedScene; // +0x128
+    unsigned int _preloadMoment; // +0x12c
+    unsigned int _coldlaunchCostTimeInMs; // +0x130
+    unsigned int _aliveSeed; // +0x134
+    unsigned int _threadId; // +0x138
+    unsigned int _codeCacheVersion; // +0x13c
+    NSString * _appID; // +0x140
+    double _threadInjectTime; // +0x148
+    JSVirtualMachine * _jsVirtualMachine; // +0x150
+    WAProvideApiConfig * _provideApiCfg; // +0x158
+    NSString * _instanceId; // +0x160
+    id <WAJSServiceProtocol> _serviceProtocol; // +0x168
+    id <WAJSCoreServiceDelegate> _delegate; // +0x170
+    id <WAJSCoreServiceRemoteDelegate> _remoteDelegate; // +0x178
+    WAWebViewController * _currentWebView; // +0x180
+    id <IWASkylineRuntime> _skylineRuntime; // +0x188
+    NSString * _serviceJSUrl; // +0x190
+    WAJSContextPluginScheduler * _pluginScheduler; // +0x198
+    unsigned long long _runningState; // +0x1a0
+    WAJSCoreServiceOpenData * _launchData; // +0x1a8
+    unsigned long long _preloadFinishTimeInMs; // +0x1b0
+    NSMutableDictionary * _weAppWorkers; // +0x1b8
+    WAApptaskPublicResLogic * _publicResLogic; // +0x1c0
+    WAJSDebuggerConnection * _jsDebugConnection; // +0x1c8
+    MMContext * _userContext; // +0x1d0
+    NSThread * _thread; // +0x1d8
+    NSMutableDictionary * _subContexts; // +0x1e0
+    JSContext * _renderContext; // +0x1e8
+    NSMutableDictionary * _workerFlows; // +0x1f0
+    NSMutableDictionary * _timerObjs; // +0x1f8
+    NSMutableSet * _eventHandlers; // +0x200
+    NSMutableArray * _prevEvents; // +0x208
+    NSMutableArray * _useCodeCacheFileNameListPubLib; // +0x210
+    NSMutableArray * _useCodeCacheFileNameListUsr; // +0x218
+    NSMutableDictionary * _extraInfo; // +0x220
+    NSObject<IWXCanvasAdaptorAPI> * _bindingApp; // +0x228
+    WAOpenGLView * _glview; // +0x230
+    NSMutableDictionary * _dicCheckAliveBlock; // +0x238
+    unsigned long long _xlog_pthreadId; // +0x240
+    MMTimer * _stopCFRunLoopTimer; // +0x248
+    NSMutableDictionary * _dicEventIdToSemaphore; // +0x250
+    NSMutableDictionary * _dicEventIdToSyncResult; // +0x258
+    WAJSCServiceInjectExtendScriptModel * _extendScriptModel; // +0x260
+    WAJSThread * _jsDebugThread; // +0x268
+    NSMutableArray * _preloadEvaluateRet; // +0x270
+    NSMutableArray * _codeLaunchEvaluateRet; // +0x278
+    NSMutableDictionary * _dictWXAudioExpt; // +0x280
+}
++ (void)setRefererInfo:(id)arg1 toDicParam:(id)arg2;
++ (void)setTransitInfo:(id)arg1 toDicParam:(id)arg2;
+- (unsigned long long)servicePlugin_getEnvironmentType;
+- (id)init;
+- (void)dealloc;
+- (id)description;
+- (void)internalInit;
+- (id)initForPreloadAppTask:(id)arg1;
+- (id)getPreloadAppLaunchConfigJSVarInjectTool;
+- (id)getPreloadAppLaunchConfig;
+- (void)injectPublicServiceJSForPreload;
+- (unsigned int)preloadMoment;
+- (void)loadAppConfig;
+- (void)serviceThreadWillStart;
+- (void)setThreadPriorityWithQosClass:(unsigned int)arg1 schedPriority:(int)arg2;
+- (void)changeServiceThreadPriorityToHigh;
+- (void)changeServiceThreadPriorityToNormal;
+- (void)runThread:(id)arg1;
+- (void)startServiceThread:(unsigned long long)arg1;
+- (void)addServiceBlock:(id /* block */)arg1;
+- (void)runServiceBlock:(id /* block */)arg1;
+- (void)startServiceThread;
+- (void)updateServiceThreadName;
+- (void)updateContextName;
+- (id)publibBytecodeIdentifierWithFileName:(id)arg1;
+- (id)publibSourceUrlWithFileName:(id)arg1;
+- (id)usrBytecodeIdentifierWithFileName:(id)arg1;
+- (id)usrFileSourceUrlWithFileName:(id)arg1;
+- (unsigned int)engineType;
+- (BOOL)bytecodeEnbaled;
+- (unsigned int)getCodeCacheVersion;
+- (unsigned int)gameRenderMode;
+- (void)serviceThread_checkAliveWithAliveJS:(id)arg1;
+- (void)checkAlive:(id /* block */)arg1;
+- (void)checkAliveReturn:(id)arg1;
+- (void)checkAliveTimeOut:(id)arg1;
+- (void)setCurrentWebView:(id)arg1;
+- (void)injectNewJsDebugScript;
+- (void)startDebugNew;
+- (void)stopDebugNew;
+- (void)evaluateNewDebugScript:(id)arg1;
+- (void)_evaluateNewDebugScript:(id)arg1;
+- (void)setupWeixinWorker;
+- (void)sendWorkerMessage:(unsigned int)arg1 msg:(id)arg2;
+- (BOOL)shouldEnableJSContextInspectable:(id)arg1;
+- (void)prepareJSContextInspectable:(id)arg1;
+- (void)setupSubContext:(BOOL)arg1;
+- (void)reportInitialUserScriptInjectReady;
+- (void)injectExtendedScriptIfNeededWith:(id)arg1 contact:(id)arg2;
+- (void)startAppBrand:(id)arg1 packageConfig:(id)arg2 extraInfo:(id)arg3;
+- (void)setupContact:(id)arg1;
+- (void)stopAppBrand:(BOOL)arg1;
+- (void)registerLeakDetector;
+- (void)stopAppBrandAndThread;
+- (void)stopCFRunLoop;
+- (void)startProvideApi:(id)arg1 extraInfo:(id)arg2;
+- (void)stopProvideApi;
+- (unsigned int)getThreadId;
+- (void)asyncRunOperationBlockOnWorkThread:(id /* block */)arg1;
+- (void)workThread_runOperationBlock:(id /* block */)arg1;
+- (void)sendErrorEvent:(id)arg1;
+- (void)sendReturnSyncEventToService:(id)arg1 webViewId:(unsigned int)arg2;
+- (void)webviewApiResult:(id)arg1;
+- (void)sendWebviewEventToService:(id)arg1 webViewId:(unsigned int)arg2;
+- (void)sendJSEventToWorker:(id)arg1 param:(id)arg2 workerId:(unsigned int)arg3;
+- (void)sendJSEventToService:(id)arg1 param:(id)arg2 webViewId:(unsigned int)arg3;
+- (void)sendJSEventToPreloadService:(id)arg1 param:(id)arg2;
+- (void)sendJSEventToService:(id)arg1;
+- (void)innerSendJSEventToService:(id)arg1;
+- (void)workthread_sendJSEventToService:(id)arg1;
+- (void)sendAppBrandEvent:(long long)arg1 param:(id)arg2 webviewID:(unsigned long long)arg3;
+- (void)sendInnerAppBrandEvent:(long long)arg1 param:(id)arg2 webviewID:(unsigned long long)arg3;
+- (void)sendInnerAppBrandEvent:(long long)arg1 serviceParam:(id)arg2 pluginParam:(id)arg3 webviewID:(unsigned long long)arg4;
+- (id)makeSubscribeInvoker:(id)arg1 param:(id)arg2 webviewID:(unsigned int)arg3;
+- (id)makeSubscribeInvoker:(id)arg1 param:(id)arg2 srcWebviewID:(unsigned int)arg3 dstWebviewID:(unsigned int)arg4;
+- (void)performEventOnThread:(id)arg1;
+- (void)performEventOnThread:(id)arg1 afterThreadInject:(BOOL)arg2;
+- (BOOL)isJSInjected;
+- (void)onAppBeforPushNavigation:(id)arg1 packageConfig:(id)arg2 extraInfo:(id)arg3;
+- (void)tryInjectJavaScript;
+- (id)getPermissionWithJSAPI:(id)arg1 appId:(id)arg2 byTempPermission:(id)arg3;
+- (BOOL)checkJSAPIRunMode:(id)arg1;
+- (BOOL)checkJSAPIRunInMainThread:(id)arg1;
+- (void)checkUserAuthWithJSAPI:(id)arg1 permissionAppID:(id)arg2 model:(id)arg3 handler:(id /* block */)arg4 failHandler:(id /* block */)arg5 transferHandler:(id /* block */)arg6;
+- (void)triggerStrictBanMode:(id)arg1;
+- (void)setEnterPath:(id)arg1 withScene:(unsigned int)arg2 taskExtInfo:(id)arg3;
+- (void)initJSContext:(id)arg1;
+- (void)releaseJSContext;
+- (void)releaseWorkerFlows;
+- (void)injectJavaScript;
+- (id)getServerModeInfo;
+- (id)getAppLaunchConfigJSVarInjectToolForWebView:(BOOL)arg1;
+- (id)getAppLaunchConfigForWebView:(BOOL)arg1;
+- (id)getSystemInfo;
+- (void)getScreenWidth:(double *)arg1 screenHeight:(double *)arg2;
+- (id)getUserConfig;
+- (id)getServiceSDKContentString;
+- (id)getServiceSDKFilePath;
+- (id)getServiceSubContextContentString:(BOOL)arg1;
+- (id)getServiceSubContextFilePath:(BOOL)arg1;
+- (id)getPrivateNativeContextJSString;
+- (id)getPrivateNativeContextFilePath;
+- (id)getPubLibEvaluateRet;
+- (id)getUserScriptEvaluateRet;
+- (id)wxAppInfoDicWithTemplate:(id)arg1 contactAttribute:(id)arg2;
+- (id)getCurrentWebView;
+- (id)genContextNameWithMainContext:(BOOL)arg1 contextId:(unsigned int)arg2;
+- (id)genContextNameWithVMType:(id)arg1 vmId:(unsigned int)arg2 contextType:(id)arg3 contextId:(unsigned int)arg4;
+- (void)reportJSError:(id)arg1;
+- (void)reportJSErrorOnIsolatedContext:(id)arg1 context:(id)arg2;
+- (void)initJSCProfiler:(id)arg1;
+- (void)initOnJITMode;
+- (void)initNativeGlobal;
+- (void)setNativeGlobalConfig;
+- (void)logError:(id)arg1 target:(long long)arg2;
+- (void)logInfo:(id)arg1 target:(long long)arg2;
+- (void)logWarning:(id)arg1 target:(long long)arg2;
+- (void)logDebug:(id)arg1 target:(long long)arg2;
+- (void)lockStepIDKeyStat:(const void *)arg1;
+- (void)lockStepKVStat:(long long)arg1 kv:(id)arg2;
+- (void)injectJSBaseForAppBrandThread:(id)arg1 sdkScript:(id)arg2 extendedScriptModel:(id)arg3 userScriptFile:(id)arg4 fromPreload:(BOOL)arg5;
+- (void)markThreadInjected;
+- (void)sendJsContextToSkylineServiceThread;
+- (void)sendJsContextToSkyline;
+- (void)setupSystemLog:(id)arg1;
+- (BOOL)getFeaturePermission:(unsigned int)arg1 withappId:(id)arg2;
+- (void)setupNativeClient:(id)arg1 withappId:(id)arg2;
+- (void)setupInvokeHandler:(id)arg1 appId:(id)arg2 param:(id)arg3 callbackId:(unsigned int)arg4 contextId:(unsigned int)arg5 workerId:(unsigned int)arg6 responseUseBase64:(BOOL)arg7;
+- (void)setupAPIBlock:(id)arg1 contextId:(unsigned int)arg2;
+- (id)setupWeixinJSCore;
+- (void)setupTimerBlock:(id)arg1;
+- (void)contextWillBeDestroyed:(id)arg1;
+- (BOOL)shouldReportPubLibCoverage;
+- (void)reportPubLibCoverageIfNeededWithAppid:(id)arg1 publibStringVersion:(id)arg2 publibStringUpdateTime:(id)arg3;
+- (void)workThread_reportPubLibCoverageIfNeededWithAppid:(id)arg1 publibStringVersion:(id)arg2 publibStringUpdateTime:(id)arg3;
+- (void)workThread_reportPubLibCoverageForJSContext:(id)arg1 appid:(id)arg2 publibStringVersion:(id)arg3 publibStringUpdateTime:(id)arg4;
+- (BOOL)isMonopolizeBackgroundAudio;
+- (BOOL)isPlayingBackgroundAudio;
+- (void)stopPlayingBackgroundAudio;
+- (BOOL)isPlayingInnerAudio;
+- (BOOL)isPlayingWxAudio;
+- (BOOL)isPlayingWeMedia;
+- (void)notifyJSInjectedOnMainThread:(id)arg1;
+- (unsigned int)addTimer:(unsigned int)arg1 withTime:(float)arg2 isRepeat:(BOOL)arg3;
+- (void)onTimer:(id)arg1;
+- (void)endWithResult:(id)arg1 handler:(id)arg2;
+- (void)endWithResult:(id)arg1 handler:(id)arg2 callbackID:(unsigned int)arg3 contextId:(unsigned int)arg4 workerId:(unsigned int)arg5;
+- (void)workThread_invokeCallbackHandler:(id)arg1;
+- (void)reportApiCallResult:(id)arg1;
+- (void)reportRequstPaymentApiPreOKCallResult:(id)arg1 forEvent:(unsigned int)arg2;
+- (void)removeHandler:(id)arg1;
+- (id)getEventHandler:(id)arg1;
+- (id)getAppId;
+- (id)getWAContact;
+- (void)sendResultBeforeEnd:(id)arg1 resultType:(long long)arg2 handler:(id)arg3;
+- (id)getParentViewController;
+- (unsigned long long)getLaunchScene;
+- (id)getLaunchPagePath;
+- (id)getCurrentPagePath;
+- (id)getCurrentPageRelativePath;
+- (BOOL)isParentViewControllerDidAppear:(id)arg1;
+- (id)sourceOpenSDKAppID;
+- (id)getCurrentPageQuery;
+- (unsigned long long)getEnvironmentType;
+- (unsigned int)getAppType;
+- (unsigned long long)getAppVersion;
+- (unsigned int)getDebugModeType;
+- (BOOL)isDebugAndVConsoleOpen;
+- (void)setIsDebugAndVConsoleOpen:(BOOL)arg1;
+- (BOOL)isIgnoreRemoteCheckDomain;
+- (void)setIsIgnoreRemoteCheckDomain:(BOOL)arg1;
+- (id)getWxaExternalInfo;
+- (BOOL)isService;
+- (BOOL)isGameApp;
+- (BOOL)isGameClass;
+- (unsigned int)getCurTaskRunningState;
+- (id)getCurPubResLogic;
+- (void)setWxaExternalInfo:(id)arg1;
+- (id)GetWeAppPluginByName:(id)arg1;
+- (id)GetWebViewPluginByName:(id)arg1;
+- (id)currentAppearance;
+- (void)printConsoleLog:(id)arg1;
+- (void)printConsoleLog:(id)arg1 level:(long long)arg2;
+- (void)asyncPrintConsoleLogToCurrentWebView:(id)arg1;
+- (void)onWeAppEnterBackground:(long long)arg1;
+- (void)onWeAppEnterForeground:(id)arg1 isFromSystemAwake:(BOOL)arg2;
+- (void)onRunningStateWillChanged:(unsigned long long)arg1;
+- (void)onRunningStateDidChanged:(unsigned long long)arg1;
+- (void)checkWorkingThreadStatusWhenRunningStateChanged;
+- (void)suspendWorkingThread;
+- (void)threadDidReceiveSuspend;
+- (void)resumeWorkingThreadToDie:(BOOL)arg1;
+- (void)threadDidReceiveForeground;
+- (void)threadDidReceiveBackground;
+- (void)addDelayToForegroundJSAPI:(id /* block */)arg1 jsapiName:(id)arg2;
+- (void)executeDelayToForegroundJSAPI;
+- (void)trimNavigateJSAPIFromDelayToForegroundPool;
+- (id)publicResLogic;
+- (void)injectModuleAppServiceWithModuleName:(id)arg1;
+- (void)workThread_injectModuleAppServiceScript:(id)arg1;
+- (void)sendSubPkgReadyEvent:(id)arg1;
+- (void)markSubPkgInjected:(id)arg1;
+- (void)sendJsInvoker:(id)arg1;
+- (void)evaluateJavascript:(id)arg1 withSourceURL:(id)arg2;
+- (id)evaluateJavaScriptFromStringInRenderContext:(id)arg1;
+- (void)evaluateJavascriptFile:(id)arg1 withSourceURL:(id)arg2;
+- (BOOL)performOnService:(id)arg1 selector:(SEL)arg2 withObject:(id)arg3;
+- (void)invokeOnServiceThreadImpl:(id /* block */)arg1;
+- (void)invokeOnServiceThread:(id /* block */)arg1;
+- (void)reportScriptInjectTime:(id)arg1 length:(long long)arg2 startTime:(unsigned long long)arg3 endTime:(unsigned long long)arg4 preload:(unsigned int)arg5 codeCacheDetail:(id)arg6;
+- (void)reportScriptInjectTime:(id)arg1 length:(long long)arg2 startTime:(unsigned long long)arg3 endTime:(unsigned long long)arg4 preload:(unsigned int)arg5 engineType:(int)arg6 codeCacheDetail:(id)arg7 jitLiteMode:(unsigned int)arg8;
+- (void)reportUserScriptInjectTime:(id)arg1 length:(long long)arg2 startTime:(unsigned long long)arg3 pluginId:(id)arg4 pluginVersion:(long long)arg5 codeCacheDetail:(id)arg6;
+- (void)reportUserScriptInjectTime:(id)arg1 length:(long long)arg2 startTime:(unsigned long long)arg3 pluginId:(id)arg4 pluginVersion:(long long)arg5 engineType:(int)arg6 encryptLibCanUseBatchInject:(BOOL)arg7 codeCacheDetail:(id)arg8 jitLiteMode:(unsigned int)arg9;
+- (void)recordUserScriptBatchInjectDetail:(id)arg1;
+- (void)setColdlaunchCostTimeInMs:(unsigned int)arg1;
+- (BOOL)isDidFinishColdLaunch;
+- (void)didFinishColdLaunch;
+- (void)pluginCodeUsageHit:(id)arg1 version:(unsigned long long)arg2;
+- (void)startRemoteDebug;
+- (void)alterWillStop;
+- (void)stopRemoteDebug;
+- (void)webCore_invoke:(id)arg1 param:(id)arg2;
+- (void)jSCore_publishHandler:(id)arg1 param:(id)arg2 webViewIDs:(id)arg3;
+- (void)jSCore_invokeHandler:(id)arg1 param:(id)arg2 callbackID:(unsigned int)arg3 contextID:(unsigned int)arg4;
+- (BOOL)isLegacyDebugMode;
+- (BOOL)isNewDubugMode;
+- (BOOL)hasLocalJSCore;
+- (BOOL)hasRemoreDebugger;
+- (BOOL)jsCore_setupJSCDebuggerConnection:(id /* block */)arg1 jsCoreIDWrap:(id)arg2;
+- (void)jsCore_disconnectJSCoreIDWrap:(id)arg1;
+- (void)jsCore_sendMessageToJSCDebugger:(id)arg1 jsCoreIDWrap:(id)arg2;
+- (id)jsCoreForIDWrap:(id)arg1;
+- (id)getBindingApp;
+- (void)setupLazyInitMagicBrushCore;
+- (void)releaseMagicBrushCore;
+- (BOOL)isNativeWeApp;
+- (BOOL)hasWebViewId:(unsigned long long)arg1;
+- (id)systemTheme;
+- (void)executeOnWorker:(unsigned int)arg1 invoker:(id)arg2;
+- (id)getExtJSModels;
+- (id)extJSBeforeSubContextPublib;
+- (id)extJSBeforeMainContextPublib;
+- (id)extJSOnTarget:(unsigned long long)arg1 atTiming:(unsigned long long)arg2;
+- (id)extJSModelOnTarget:(unsigned long long)arg1 atTiming:(unsigned long long)arg2;
+- (unsigned long long)getMainVMJSFootprintMemoryInBytes;
+- (unsigned long long)getWorkersVMJSFootprintMemoryInBytes;
+- (unsigned long long)getAllVMJSFootprintMemoryInBytes;
+- (void)getMainVMJSFootprintMemoryInBytesWithCompletion:(id /* block */)arg1;
+- (void)getWorkersVMJSFootprintMemoryInBytesWithCompletion:(id /* block */)arg1;
+- (void)getAllVMJSFootprintMemoryInBytesWithCompletion:(id /* block */)arg1;
+- (void)setupWeAppWorker;
+- (void)sendWorkerMessageToService:(unsigned int)arg1 msg:(id)arg2;
+- (id)getWeAppWorker:(unsigned int)arg1;
+- (void)sendWeAppWorkerCreated:(unsigned int)arg1 error:(id)arg2;
+- (void)initWASM:(id)arg1 mb:(id)arg2;
+- (void)initGameEngine:(id)arg1 mb:(id)arg2;
+- (id)getTaskExtInfo;
+- (id)geExtroInfo;
+- (id)getArrUseCodeCacheFileNameListPubLib;
+- (id)getArrUseCodeCacheFileNameListUsr;
+- (id)getAudioNative;
+- (id)getWeMediaApi;
+- (void)weMediaLOG:(int)arg1 log:(const char *)arg2;
+- (BOOL)weMediaGetExternalConfig:(id)arg1 defaultVal:(BOOL)arg2;
+- (BOOL)weMediaTryStartAudioDevice:(unsigned long long)arg1;
+- (void)weMediaTryStopAudioDevice:(unsigned long long)arg1;
+- (id)weMediaGetAbsolutePath:(id)arg1;
+- (BOOL)weMediaRegisterExternaImage:(const char *)arg1 dataLen:(unsigned long long)arg2 imageId:(int)arg3 width:(int)arg4 height:(int)arg5;
+- (void)weMediaUnregisterExternaImage:(int)arg1;
+- (id)getFileData:(id)arg1;
+- (void)canPlayNowAndAutoActive:(unsigned long long)arg1 block:(id /* block */)arg2;
+- (void)onWXAudioState:(int)arg1 audioId:(unsigned long long)arg2;
+- (BOOL)onWXAudioGetABTestBool:(id)arg1 defaultVal:(BOOL)arg2;
+- (id)getAudioFilePath:(id)arg1;
+- (id)localPathByAudioData:(id)arg1 pathExtension:(id)arg2;
+- (id)audioTmpPathByfileName:(id)arg1;
+- (id)audioTmpRootPath;
+- (id)wxaudioTmpRootPath;
+- (unsigned int)adWorkerId;
+- (void)onLibWorkerCreated:(unsigned int)arg1;
+- (void)checkIsMagicARAvailableNeedCamera:(BOOL)arg1 completion:(id /* block */)arg2;
+- (basic_string<char, std::char_traits<char>, std::allocator<char>>)getFilePath:(basic_string<char, std::char_traits<char>, std::allocator<char>>)arg1;
+- (OSDConfig)magicarGetOSDConfig;
+- (WAAppInfo)magicarGetAppInfo;
+- (FaceConfig)magicarGetFaceConfig;
+- (OCRConfig)magicarGetOCRConfig;
+- (BodyConfig)magicarGetBodyConfig;
+- (HandConfig)magicarGetHandConfig;
+- (MonoDepthConfig)magicarGetDepthConfig;
+- (ShoeConfig)magicarGetShoeConfig;
+- (void)OnCheckAccessCameraAndShowAlertFinish:(id)arg1;
+- (void)modifyWebGLTexture:(OpaqueJSValue *)arg1 glTexture:(unsigned int)arg2;
+- (void *)getEGLContext:(OpaqueJSValue *)arg1;
+- (__CVBuffer *)getPixelBufferBy:(unsigned int)arg1;
+- (unsigned int)developerMarkedScene;
+- (void)setDeveloperMarkedScene:(unsigned int)arg1;
+- (id)appID;
+- (void)setAppID:(id)arg1;
+- (double)threadInjectTime;
+- (void)setThreadInjectTime:(double)arg1;
+- (BOOL)threadInjected;
+- (void)setThreadInjected:(BOOL)arg1;
+- (id)jsVirtualMachine;
+- (void)setJsVirtualMachine:(id)arg1;
+- (id)provideApiCfg;
+- (void)setProvideApiCfg:(id)arg1;
+- (BOOL)publiclibInjectFinished;
+- (void)setPubliclibInjectFinished:(BOOL)arg1;
+- (id)instanceId;
+- (void)setInstanceId:(id)arg1;
+- (id)serviceProtocol;
+- (void)setServiceProtocol:(id)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)remoteDelegate;
+- (void)setRemoteDelegate:(id)arg1;
+- (id)currentWebView;
+- (id)skylineRuntime;
+- (void)setSkylineRuntime:(id)arg1;
+- (id)serviceJSUrl;
+- (void)setServiceJSUrl:(id)arg1;
+- (id)pluginScheduler;
+- (void)setPluginScheduler:(id)arg1;
+- (unsigned long long)runningState;
+- (void)setRunningState:(unsigned long long)arg1;
+- (id)launchData;
+- (void)setLaunchData:(id)arg1;
+- (BOOL)m_bIsStartFromPreloadAppTask;
+- (void)setM_bIsStartFromPreloadAppTask:(BOOL)arg1;
+- (void)setPreloadMoment:(unsigned int)arg1;
+- (unsigned long long)preloadFinishTimeInMs;
+- (void)setPreloadFinishTimeInMs:(unsigned long long)arg1;
+- (id)weAppWorkers;
+- (void)setWeAppWorkers:(id)arg1;
+- (void)setPublicResLogic:(id)arg1;
+- (BOOL)shouldUseComponentLazyLoad;
+- (void)setShouldUseComponentLazyLoad:(BOOL)arg1;
+- (BOOL)directInvokeJs;
+- (void)setDirectInvokeJs:(BOOL)arg1;
+- (unsigned int)coldlaunchCostTimeInMs;
+- (id)jsDebugConnection;
+- (void)setJsDebugConnection:(id)arg1;
+- (id)userContext;
+- (void)setUserContext:(id)arg1;
+- (id)thread;
+- (void)setThread:(id)arg1;
+- (id)subContexts;
+- (void)setSubContexts:(id)arg1;
+- (id)renderContext;
+- (void)setRenderContext:(id)arg1;
+- (id)workerFlows;
+- (void)setWorkerFlows:(id)arg1;
+- (BOOL)hasInjectErr;
+- (void)setHasInjectErr:(BOOL)arg1;
+- (id)timerObjs;
+- (void)setTimerObjs:(id)arg1;
+- (id)eventHandlers;
+- (void)setEventHandlers:(id)arg1;
+- (id)prevEvents;
+- (void)setPrevEvents:(id)arg1;
+- (id)useCodeCacheFileNameListPubLib;
+- (void)setUseCodeCacheFileNameListPubLib:(id)arg1;
+- (id)useCodeCacheFileNameListUsr;
+- (void)setUseCodeCacheFileNameListUsr:(id)arg1;
+- (id)extraInfo;
+- (void)setExtraInfo:(id)arg1;
+- (id)bindingApp;
+- (void)setBindingApp:(id)arg1;
+- (id)glview;
+- (void)setGlview:(id)arg1;
+- (id)dicCheckAliveBlock;
+- (void)setDicCheckAliveBlock:(id)arg1;
+- (unsigned int)aliveSeed;
+- (void)setAliveSeed:(unsigned int)arg1;
+- (unsigned int)threadId;
+- (void)setThreadId:(unsigned int)arg1;
+- (BOOL)threadIdAssigned;
+- (void)setThreadIdAssigned:(BOOL)arg1;
+- (unsigned long long)xlog_pthreadId;
+- (void)setXlog_pthreadId:(unsigned long long)arg1;
+- (id)stopCFRunLoopTimer;
+- (void)setStopCFRunLoopTimer:(id)arg1;
+- (id)dicEventIdToSemaphore;
+- (void)setDicEventIdToSemaphore:(id)arg1;
+- (id)dicEventIdToSyncResult;
+- (void)setDicEventIdToSyncResult:(id)arg1;
+- (id)extendScriptModel;
+- (void)setExtendScriptModel:(id)arg1;
+- (unsigned int)codeCacheVersion;
+- (void)setCodeCacheVersion:(unsigned int)arg1;
+- (id)jsDebugThread;
+- (void)setJsDebugThread:(id)arg1;
+- (BOOL)directInvokeOc;
+- (void)setDirectInvokeOc:(BOOL)arg1;
+- (id)preloadEvaluateRet;
+- (void)setPreloadEvaluateRet:(id)arg1;
+- (id)codeLaunchEvaluateRet;
+- (void)setCodeLaunchEvaluateRet:(id)arg1;
+- (id)dictWXAudioExpt;
+- (void)setDictWXAudioExpt:(id)arg1;
+- (void).cxx_destruct;
+@end
+

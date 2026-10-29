@@ -1,0 +1,2 @@
+@interface MJComposingCreationMusicPickingController : MMBGMSelectHalfScreenViewController
+@end

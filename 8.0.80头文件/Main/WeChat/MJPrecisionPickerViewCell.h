@@ -1,0 +1,2 @@
+@interface MJPrecisionPickerViewCell : UICollectionViewCell
+@end

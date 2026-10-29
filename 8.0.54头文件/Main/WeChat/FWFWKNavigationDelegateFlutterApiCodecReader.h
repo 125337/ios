@@ -1,0 +1,3 @@
+@interface FWFWKNavigationDelegateFlutterApiCodecReader : FlutterStandardReader
+@end
+

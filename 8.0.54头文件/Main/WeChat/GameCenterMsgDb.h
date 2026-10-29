@@ -1,0 +1,67 @@
+@interface GameCenterMsgDb : NSObject
+{
+    WCTDatabase * _db; // +0x8
+    WCTTable * _table; // +0x10
+}
+- (BOOL)initDb;
+- (void)batchUpdate:(id)arg1;
+- (void)runTransaction:(id /* block */)arg1;
+- (unsigned int)saveMsgToDB:(id)arg1;
+- (id)getMsgByLocalId:(unsigned int)arg1;
+- (BOOL)deleteAllMsg;
+- (BOOL)deleteMsgByServerId:(id)arg1;
+- (BOOL)deleteMsgByLocalId:(int)arg1;
+- (BOOL)deleteMsgBeforeTimeStamp:(unsigned int)arg1;
+- (BOOL)deleteMsgByReportType:(unsigned int)arg1;
+- (BOOL)deleteMsgByShowType:(unsigned int)arg1;
+- (BOOL)hideAllMsgByShowType:(unsigned int)arg1;
+- (BOOL)unhideAllMsgByShowType:(unsigned int)arg1;
+- (BOOL)deleteMsgByLocalIdList:(id)arg1;
+- (BOOL)updateContentIdCanNotShow:(id)arg1;
+- (id)getClickMsgWithSameContentIdWithMsg:(id)arg1;
+- (BOOL)updateMsg:(unsigned int)arg1 exposureCnt:(unsigned int)arg2;
+- (BOOL)updateMsg:(unsigned int)arg1 completeExposureCnt:(unsigned int)arg2;
+- (BOOL)updateMsg:(unsigned int)arg1 msgState:(int)arg2;
+- (BOOL)updateMsgFirstExposureTime:(id)arg1;
+- (BOOL)updateMsgWithSvrMsgId:(id)arg1 score:(float)arg2;
+- (BOOL)updateMsg:(id)arg1 withExposureState:(unsigned long long)arg2;
+- (id)getReExposureMsgList;
+- (id)getAllQueueType1StateNoneMsgList;
+- (id)getMsgCenterUnreadList;
+- (id)getMsgCenterReadListBefore:(unsigned int)arg1;
+- (id)getMsgCenterListWithShowType:(int)arg1 readState:(int)arg2 oldThan:(unsigned int)arg3 maxCount:(unsigned int)arg4;
+- (id)getMsgListByPageForJsApi:(int)arg1 lastLocalId:(int)arg2 onlyUnRead:(BOOL)arg3 maxCount:(int)arg4 subMsgType:(int)arg5;
+- (id)getMsgListByPage:(int)arg1 lastLocalId:(int)arg2 maxCount:(int)arg3;
+- (BOOL)setMsgCenterOneMsgRead:(unsigned int)arg1;
+- (BOOL)setMsgCenterAllRead;
+- (BOOL)setMsgCenterAllReadWithShowType:(unsigned int)arg1;
+- (BOOL)setMsgReadWithLocalIdList:(id)arg1;
+- (BOOL)setExistRedPointCanNotShow;
+- (id)getAllMsg;
+- (BOOL)createTable;
+- (BOOL)isMsgExistBySvrMsgId:(id)arg1;
+- (id)getMsgBySvrMsgId:(id)arg1;
+- (id)getMsgListByPushId:(id)arg1;
+- (void)closeDbBeforeInit;
+- (id)getDbPath;
+- (Expression)buildWhereCondition:(int)arg1 lastLocalId:(int)arg2 showType:(int)arg3 onlyUnRead:(BOOL)arg4;
+- (Expression)buildWhereCondition:(int)arg1 lastLocalId:(int)arg2 showType:(int)arg3 readState:(int)arg4;
+- (id)getMsgNeedMergeWith:(id)arg1;
+- (id)getNewMsgNeedMergeWith:(id)arg1;
+- (id)getLastUnreadMsgWithType:(int)arg1;
+- (unsigned int)getMsgUnreadCoutWithShowType:(int)arg1;
+- (id)getLastMessageWithShowType:(int)arg1;
+- (unsigned int)getCountWithReportType:(unsigned int)arg1 unRead:(BOOL)arg2;
+- (void)updateInteractMsgWithLocalId:(unsigned int)arg1 isGreet:(BOOL)arg2 relationType:(unsigned int)arg3;
+- (BOOL)cleanMsgByShowType:(unsigned int)arg1 beforeTimestamp:(unsigned int)arg2;
+- (BOOL)cleanMsgByShowType:(unsigned int)arg1 retainCount:(unsigned int)arg2;
+- (unsigned int)getAllRecordCount;
+- (id)debugDBStatus;
+- (void)reddotReExposure;
+- (id)db;
+- (void)setDb:(id)arg1;
+- (id)table;
+- (void)setTable:(id)arg1;
+- (void).cxx_destruct;
+@end
+

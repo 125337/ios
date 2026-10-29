@@ -1,0 +1,3 @@
+@interface QCustomLayerTileOverlayView : QTileOverlayView
+@end
+

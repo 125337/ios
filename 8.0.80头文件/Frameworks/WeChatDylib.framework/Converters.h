@@ -1,0 +1,34 @@
+@interface Converters : NSObject
++ (id)vector_Point_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Point:(id)arg1;
++ (id)vector_Point2f_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Point2f:(id)arg1;
++ (id)vector_Point2d_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Point2d:(id)arg1;
++ (id)vector_Point3i_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Point3i:(id)arg1;
++ (id)vector_Point3f_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Point3f:(id)arg1;
++ (id)vector_Point3d_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Point3d:(id)arg1;
++ (id)vector_float_to_Mat:(id)arg1;
++ (id)Mat_to_vector_float:(id)arg1;
++ (id)vector_uchar_to_Mat:(id)arg1;
++ (id)Mat_to_vector_uchar:(id)arg1;
++ (id)vector_char_to_Mat:(id)arg1;
++ (id)Mat_to_vector_char:(id)arg1;
++ (id)vector_int_to_Mat:(id)arg1;
++ (id)Mat_to_vector_int:(id)arg1;
++ (id)vector_Rect_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Rect:(id)arg1;
++ (id)vector_Rect2d_to_Mat:(id)arg1;
++ (id)Mat_to_vector_Rect2d:(id)arg1;
++ (id)vector_KeyPoint_to_Mat:(id)arg1;
++ (id)Mat_to_vector_KeyPoint:(id)arg1;
++ (id)vector_double_to_Mat:(id)arg1;
++ (id)Mat_to_vector_double:(id)arg1;
++ (id)vector_DMatch_to_Mat:(id)arg1;
++ (id)Mat_to_vector_DMatch:(id)arg1;
++ (id)vector_RotatedRect_to_Mat:(id)arg1;
++ (id)Mat_to_vector_RotatedRect:(id)arg1;
+@end

@@ -1,0 +1,2 @@
+@interface MMLivePureAudioModeMinimizeContentView : UIView
+@end

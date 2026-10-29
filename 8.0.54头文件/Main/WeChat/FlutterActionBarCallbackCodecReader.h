@@ -1,0 +1,3 @@
+@interface FlutterActionBarCallbackCodecReader : FlutterStandardReader
+@end
+

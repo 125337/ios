@@ -1,0 +1,3 @@
+@interface ForceCrashException : NSException
+@end
+

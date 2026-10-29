@@ -1,0 +1,113 @@
+@interface CBTAsstBoardStreamTextCellView : CBTAsstBoardBaseCellView <CBTAsstBoardStreamTextViewModelUIDelegate, CBTStreamMDTextViewDelegate, MMRTCMenuEventDelegate>
+{
+    BOOL _isLongPressMenuVisible; // +0x8
+    BOOL _hasLastLongPressPoint; // +0x9
+    BOOL _hasSharedMenuTargetRect; // +0xa
+    BOOL _coopV2ContentCardHostVisible; // +0xb
+    CBTStreamMDTextView * _contentTextView; // +0x10
+    CGPoint _lastLongPressPointInContentTextView; // +0x18
+    CGRect _sharedMenuTargetRect; // +0x28
+}
+- (BOOL)needsBubbleBackground;
+- (BOOL)isBubbleRightAligned;
+- (id)getBubbleColor;
+- (void)setupCellWithViewModel:(id)arg1;
+- (void)setupQueryDisplayedReportingWithViewModel:(id)arg1;
+- (BOOL)isInAnimation;
+- (void)prepareForReuse;
+- (BOOL)needsLeftShiftForSelectMode;
+- (double)checkboxArrowCenterYInBubbleView;
+- (void)setIsSelectMode:(BOOL)arg1;
+- (void)layoutSubviews;
+- (void)setupUI;
+- (id)textViewModel;
+- (id)streamID;
+- (id)getAllAttributeStringContent;
+- (double)effectiveContentWidth;
+- (void)layoutContentTextView;
+- (BOOL)isUserASRContent;
+- (BOOL)isStreamTextStop;
+- (BOOL)disablesLongPressMenu;
+- (BOOL)isLongPressMenuEnabled;
+- (void)reloadTextContentWithAppendString:(id)arg1;
+- (id)getCurrentLayoutedContent;
+- (void)reloadAttachmentView:(id)arg1;
+- (id)getStreamMDTextView;
+- (void)onStreamComplete;
+- (void)onStreamRenderFinished;
+- (void)refreshStreamContentExposure;
+- (id)footnoteDefInfoList;
+- (id)sourceUrlForImageUrl:(id)arg1;
+- (id)hostTraceInfoForStreamMDTextView:(id)arg1;
+- (id)reportCommonParamsForStreamMDTextView:(id)arg1;
+- (id)contentCardExposureRegistryForStreamMDTextView:(id)arg1;
+- (id)richLinkExposureRegistryForStreamMDTextView:(id)arg1;
+- (id)chatBotLinkExposureRegistryForStreamMDTextView:(id)arg1;
+- (void)setupLongPressGesture;
+- (id)menuAnchorView;
+- (id)copyableText;
+- (void)selectAllForLongPressMenu;
+- (void)onTextViewLongPress:(id)arg1 point:(CGPoint)arg2;
+- (CGPoint)clampPointToContentTextView:(CGPoint)arg1;
+- (BOOL)canPerformAction:(SEL)arg1 withSender:(id)arg2;
+- (id)menuTargetCoordinateView;
+- (CGRect)buildSharedMenuTargetRect;
+- (CGRect)sharedMenuTargetRectIfNeeded;
+- (void)resetSharedMenuTargetRect;
+- (void)showLongPressMenu;
+- (BOOL)pressIntoSelectCopyStatusWithPoint:(CGPoint)arg1;
+- (BOOL)addCoverViewToTableView:(id)arg1 touchPoint:(CGPoint)arg2;
+- (id)generateCoverViewMenuItemsWithMenuResponder:(id)arg1;
+- (void)menuResponder:(id)arg1 didCopyText:(id)arg2;
+- (void)menuResponderDidForward:(id)arg1;
+- (void)menuResponderDidSelectAll:(id)arg1;
+- (BOOL)shouldShowDebugLogMenuItem;
+- (void)onCoverViewMultiSelect:(id)arg1;
+- (void)onCoverViewRefer:(id)arg1;
+- (void)reportTextSelectionReferClickWithFullSelection:(BOOL)arg1;
+- (id)extraLongPressMenuItems;
+- (id)buildFlowingMenuItems;
+- (id)buildReadAloudMenuItem;
+- (BOOL)hasLiveVoipSession;
+- (void)mmReadAloudAction:(id)arg1;
+- (void)onPartialSelectAction:(id)arg1;
+- (void)menuControllerWillHide:(id)arg1;
+- (void)clearSelectionIfIdle;
+- (void)dismissTextSelectionIfNeeded;
+- (void)onTextViewSelectionDidChange:(id)arg1;
+- (void)mmCopyAction:(id)arg1;
+- (void)onTextViewWidthChange:(id)arg1 width:(double)arg2;
+- (void)onTextViewHeightChange:(id)arg1 height:(double)arg2;
+- (void)onClickLink:(id)arg1;
+- (void)onClickBusinessJumpCard:(id)arg1;
+- (id)getBackgroundColor;
+- (void)refreshTheme;
+- (unsigned long long)contentLineCount;
+- (BOOL)shouldExpandAIBubbleToMaxWidth;
+- (BOOL)isSingleLineContent;
+- (void)relayoutBubbleAndTextFrames;
+- (CGRect)getBubbleFrame;
+- (BOOL)isLocationInGestureResponderView:(CGPoint)arg1;
+- (id)gesturesThatBlockTableViewScroll;
+- (id)hitTest:(CGPoint)arg1 withEvent:(id)arg2;
+- (void)onAppear;
+- (void)onDisappear;
+- (void)updateMaxExpPct:(long long)arg1;
+- (void)_onPickerLinkDeactivated:(id)arg1;
+- (void)_applyPickerLinkDeactivatedStyle;
+- (id)contentTextView;
+- (void)setContentTextView:(id)arg1;
+- (BOOL)isLongPressMenuVisible;
+- (void)setIsLongPressMenuVisible:(BOOL)arg1;
+- (CGPoint)lastLongPressPointInContentTextView;
+- (void)setLastLongPressPointInContentTextView:(CGPoint)arg1;
+- (BOOL)hasLastLongPressPoint;
+- (void)setHasLastLongPressPoint:(BOOL)arg1;
+- (CGRect)sharedMenuTargetRect;
+- (void)setSharedMenuTargetRect:(CGRect)arg1;
+- (BOOL)hasSharedMenuTargetRect;
+- (void)setHasSharedMenuTargetRect:(BOOL)arg1;
+- (BOOL)coopV2ContentCardHostVisible;
+- (void)setCoopV2ContentCardHostVisible:(BOOL)arg1;
+- (void).cxx_destruct;
+@end

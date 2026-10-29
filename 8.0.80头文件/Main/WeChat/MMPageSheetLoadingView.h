@@ -1,0 +1,2 @@
+@interface MMPageSheetLoadingView : MMLoadingView
+@end

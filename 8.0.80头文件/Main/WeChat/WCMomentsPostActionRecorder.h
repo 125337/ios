@@ -1,0 +1,2 @@
+@interface WCMomentsPostActionRecorder : NSObject
+@end

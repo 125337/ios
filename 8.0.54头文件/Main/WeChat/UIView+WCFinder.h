@@ -1,0 +1,42 @@
+@interface UIView (WCFinder)
+- (void)loopChilds:(id /* block */)arg1;
+- (void)loopSetStyles:(id /* block */)arg1;
+- (void)applyLayout;
+- (void)applyLayoutInWidth:(WCValue)arg1 height:(WCValue)arg2;
+- (void)addTapTarget:(id)arg1 action:(SEL)arg2;
+- (void)addLongPressTarget:(id)arg1 action:(SEL)arg2;
+- (id /* block */)wc_frame;
+- (id /* block */)wc_top;
+- (id /* block */)wc_left;
+- (id /* block */)wc_bottom;
+- (id /* block */)wc_right;
+- (id /* block */)wc_width;
+- (id /* block */)wc_height;
+- (id /* block */)wc_hPadding;
+- (id /* block */)wc_vPadding;
+- (id /* block */)wc_padding;
+- (id /* block */)wc_aspectRadio;
+- (id /* block */)wc_grow;
+- (id /* block */)wc_shrink;
+- (id /* block */)wc_maxWidth;
+- (id /* block */)wc_maxHeight;
+- (id /* block */)wc_minWidth;
+- (id /* block */)wc_minHeight;
+- (id /* block */)wc_font;
+- (id /* block */)wc_fontSize;
+- (id /* block */)wc_fgColor;
+- (id /* block */)wc_bgColor;
+- (id /* block */)wc_hidden;
+- (id /* block */)wc_cornerRadius;
+- (id /* block */)wc_clipped;
+- (id /* block */)wc_lineLimit;
+- (id /* block */)wc_mask;
+- (id /* block */)wc_border;
+- (id /* block */)wc_shadow;
+- (id /* block */)wc_darkMode;
+- (id /* block */)wc_onLongPress;
+- (id /* block */)wc_onTap;
+- (id /* block */)ref;
+- (id)takeSnapshot;
+@end
+

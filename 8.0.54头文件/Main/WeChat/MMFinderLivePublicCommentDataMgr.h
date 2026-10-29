@@ -1,0 +1,3 @@
+@interface MMFinderLivePublicCommentDataMgr : MMFinderLiveCommentDataMgr
+@end
+

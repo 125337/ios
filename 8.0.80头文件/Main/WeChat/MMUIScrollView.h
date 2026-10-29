@@ -1,0 +1,2 @@
+@interface MMUIScrollView : UIScrollView
+@end

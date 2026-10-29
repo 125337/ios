@@ -1,0 +1,267 @@
+@interface MinimizeTaskMgr : MMUserService <MinimizeEventRouteDelegate, TextStateMediaStatusExt, MinimizeWindowDelegate, MinimizeTaskDataSource, MMUIViewControllerExt, IMMImagePickerManagerExt, MMKernelExt, WAPluginEventExt, IWSVideoExt, WCStoryPreviewStatusExt, MMSightCameraExtention, IMPVideoExt, IHDHeadImageViewExt, MMServiceProtocol, MinimizeTransitionInterface>
+{
+    BOOL _isMainWindowResignKeyWindow; // +0x8
+    BOOL _isFullScreenPlaying; // +0x9
+    BOOL _isMMMusicPlayerActive; // +0xa
+    BOOL _isWillShowImagePicker; // +0xb
+    BOOL _isForcedHiddenByMMMVPlayer; // +0xc
+    int _gestureMode; // +0x10
+    NSMutableArray * _passiveStateTaskList; // +0x18
+    MinimizationWindow * _minimizeWindow; // +0x20
+    MinimizeTaskNewSessionInfoSmall * _smallSessionInfo; // +0x28
+    NSString * _pendingNewTaskKeyForReport; // +0x30
+    unsigned long long _minimizeWindowState; // +0x38
+    NSString * _lastAdsorbFloatingViewSessionId; // +0x40
+    unsigned long long _lastAdsorbFloatingViewCreateTime; // +0x48
+    unsigned long long _lastAbsorbFloatingViewFoldTime; // +0x50
+    NSMutableDictionary * _dicTaskKey2NotifyDelegate; // +0x58
+    NSString * _lastestOutContainerTaskBizName; // +0x60
+    MinimizeTaskData * _currentTransitioningTaskData; // +0x68
+    NSMutableArray * _tmpSnapshotViewListWhenSwitchTask; // +0x70
+    NSString * _taskKeyWithGesture; // +0x78
+    UIViewController * _prevWillAppearViewController; // +0x80
+    MemoryMappedKV * _mappedKV; // +0x88
+    CGPoint _lastAdsorbFloatingViewPosition; // +0x90
+}
++ (id)newTransitionControllerForTaskKey:(id)arg1 TaskBizKey:(id)arg2;
+- (void)showMinimizeAnimationFrom:(id)arg1 complete:(id /* block */)arg2;
+- (void)addMinimizeTaskAnimationForActionSheetWithTaskData:(id)arg1 animationViewImage:(id)arg2 fromViewFrame:(CGRect)arg3 completion:(id /* block */)arg4;
+- (void)addMinimizeTaskAnimationForActionSheetWithTaskData:(id)arg1 animationView:(id)arg2 fromViewFrame:(CGRect)arg3 completion:(id /* block */)arg4;
+- (void)addMinimizeTaskAnimationWithTaskData:(id)arg1 animationView:(id)arg2 fromViewFrame:(CGRect)arg3 completion:(id /* block */)arg4;
+- (BOOL)saveLastAdsorbFloatingViewPosition:(CGPoint)arg1;
+- (BOOL)saveLastAdsorbFloatingViewSessionId:(id)arg1;
+- (BOOL)saveLastAdsorbFloatingViewInfo:(CGPoint)arg1 AggreSessionId:(id)arg2;
+- (id)recoverLastAdsorbFloatingViewInfo;
+- (BOOL)checkIfTaskValid:(id)arg1;
+- (BOOL)recoverNotifyDelegate:(id)arg1;
+- (id)notifityDelegateRecoverIfNeed:(id)arg1;
+- (BOOL)callMinimizeTaskDataEntered:(id)arg1 openContext:(id)arg2 enterTaskScene:(unsigned int)arg3;
+- (void)callMinimizeTaskDataExposed:(id)arg1;
+- (void)callMinimizeTaskDataRemoved:(id)arg1;
+- (void)callMinimizeTaskUpdateSnapshot:(id)arg1 preferredSize:(CGSize)arg2;
+- (void)checkAndMigrateOldNormalList;
+- (unsigned long long)getTotalTaskCount;
+- (void)genExtInfoAndReportNewTask:(id)arg1;
+- (void)tryGenExtInfoAndReportNewTask:(id)arg1 overloadedType:(unsigned long long)arg2;
+- (void)tryReportWhenUpdateTask:(id)arg1 NewTask:(id)arg2;
+- (long long)getTaskOrder:(id)arg1;
+- (long long)getIndexFromTaskList:(id)arg1 CurrentTask:(id)arg2;
+- (int)getReportState:(id)arg1;
+- (id)getMiniSessionIdList:(id)arg1;
+- (id)trySaveAggreSessionId:(BOOL)arg1;
+- (void)reportExitTaskListPage:(unsigned long long)arg1 exitType:(unsigned long long)arg2;
+- (void)reportMaximizeOperation:(id)arg1 EnterTaskScene:(unsigned int)arg2;
+- (void)tryReportMinimizeOperation:(id)arg1 OpType:(unsigned long long)arg2;
+- (void)fillOperationCommonInfo:(id)arg1 Task:(id)arg2;
+- (void)tryReportRemoveTaskOperation:(id)arg1 IsLastTask:(BOOL)arg2 FromCloseButtonInListPage:(BOOL)arg3;
+- (unsigned long long)opTypeFromMaximizeScene:(unsigned int)arg1;
+- (void)tryReportRemovePassiveStateTaskOperation:(id)arg1 UserTrigger:(BOOL)arg2;
+- (void)reportMoveContainerOperationWithMoveContext:(id)arg1 toPoint:(CGPoint)arg2;
+- (void)tryReportAbsorbFloatingViewFoldStateChange:(BOOL)arg1;
+- (void)generalReportWithTaskData:(id)arg1 eventType:(unsigned int)arg2 andScene:(unsigned int)arg3;
+- (void)reportSmallSessionStartWithTaskData:(id)arg1 scene:(unsigned int)arg2;
+- (void)reportSmallSessionEndWithScene:(unsigned int)arg1;
+- (unsigned int)bizTypeFromTaskBizName:(id)arg1;
+- (unsigned int)addSceneForViewControllerName:(id)arg1;
+- (void)processNewXmlStarcmd:(id)arg1 andNsUsrName:(id)arg2;
+- (void)OnGetNewXmlMsg:(id)arg1 Type:(id)arg2 MsgWrap:(id)arg3;
+- (BOOL)checkIsNeedOperateDataSyn:(id)arg1 isAdd:(BOOL)arg2;
+- (BOOL)operateMinimizeTaskDataSyn:(id)arg1 isAdd:(BOOL)arg2;
+- (BOOL)checkIsNeedSynData:(id)arg1;
+- (id)filterArrTaskDataInSwitchClose:(id)arg1;
+- (void)handleServiceDataSynInit;
+- (void)addTaskAndMinimizeToAff:(id)arg1;
+- (void)delteTaskAndMinimizeInAff:(id)arg1;
+- (id)getArrTaskDataFromAff;
+- (id)mergeArrTaskDataInLocalAndAff:(id)arg1;
+- (void)analyzeArrSyncTaskData:(id)arg1 dicAddTaskData:(id)arg2 dicDeleteTaskData:(id)arg3;
+- (void)handleAffStarSyncDataChange:(id)arg1;
+- (id)transformMinimizeTaskDataToStarOpt:(id)arg1;
+- (id)transformMinimizeTaskDataToAffStarOpt:(id)arg1;
+- (id)transformAffStarDataToMinimizeTaskData:(id)arg1;
+- (void)onServiceInit;
+- (void)loadTaskListFromFileAndShowAbsorbFloatingView;
+- (void)onServiceClearData;
+- (id)mappedKV;
+- (id)getTransitionFloatingView:(id)arg1 TaskBizKey:(id)arg2;
+- (id)getOutterTaskListFloatingView:(id)arg1 TaskBizKey:(id)arg2;
+- (id)getTransitionFloatingView:(id)arg1;
+- (id)getCurrentFloatingView;
+- (id)getCurrentAbsorbFloatingView;
+- (id)getCurrentMaskPathConvertedToCurrentScreenCoordinates;
+- (CGRect)getConvertedVisibleFrame:(id)arg1 TaskBizKey:(id)arg2;
+- (CGRect)getConvertedVisibleFrame:(id)arg1 TaskBizKey:(id)arg2 toWindow:(id)arg3;
+- (CGRect)getConvertedVisbleFrameWithOuterContentSize:(CGSize)arg1;
+- (void)performMinimizeAnimationWithTaskBizName:(id)arg1 taskBizKey:(id)arg2;
+- (void)performMinimizeAnimationWithTaskBizName:(id)arg1 taskBizKey:(id)arg2 animated:(BOOL)arg3;
+- (void)resetMinimizeAnimationTaskData;
+- (void)onMinimizeAnimationBegin:(id)arg1 TaskBizKey:(id)arg2 FromFrame:(CGRect)arg3 toFrame:(CGRect)arg4 duration:(double)arg5;
+- (void)onMinimizeAnimationBegin:(id)arg1 FromFrame:(CGRect)arg2 toFrame:(CGRect)arg3 duration:(double)arg4;
+- (void)onMinimizeAnimationEnd:(id)arg1 TaskBizKey:(id)arg2;
+- (void)onMinimizeAnimationEnd:(id)arg1;
+- (BOOL)checkInCurrentTransionWithTaskBizName:(id)arg1 taskBizKey:(id)arg2;
+- (void)delayRemoveTmpSnapShotViews;
+- (id)minimizeTaskListWithTaskBizName:(id)arg1;
+- (BOOL)canShowMinimizeOperation;
+- (BOOL)canShowMinimizeOperationWithTaskBizName:(id)arg1;
+- (BOOL)checkTaskMaxCountOrShowTipsBeforeAdd:(id)arg1 pendingTaskContext:(id)arg2;
+- (BOOL)maximizeTask:(id)arg1 TaskBizKey:(id)arg2;
+- (BOOL)tryAddTaskAndMinimize:(id)arg1 NotiDelegate:(id)arg2;
+- (BOOL)tryAddTaskAndMinimize:(id)arg1 notiDelegate:(id)arg2 errCode:(unsigned int *)arg3;
+- (BOOL)checkAndAddOrReplaceTaskData:(id)arg1 isNotify:(BOOL)arg2;
+- (BOOL)p_tryAddTaskAndMinimize:(id)arg1 notiDelegate:(id)arg2 errCode:(unsigned int *)arg3;
+- (BOOL)p_checkAndAddTask:(id)arg1 notifyDelegate:(id)arg2 errCode:(unsigned int *)arg3 isNotify:(BOOL)arg4;
+- (BOOL)p_checkAndUpdateTask:(id)arg1 notifyDelegate:(id)arg2 errCode:(unsigned int *)arg3 isNotify:(BOOL)arg4;
+- (BOOL)updateTaskSnapshot:(id)arg1 taskBizName:(id)arg2 taskBizKey:(id)arg3;
+- (id)taskSnapShotImageWithTaskData:(id)arg1;
+- (id)getTask:(id)arg1 TaskBizKey:(id)arg2;
+- (BOOL)isTaskInForground:(id)arg1 TaskBizKey:(id)arg2;
+- (BOOL)hasTask:(id)arg1 TaskBizKey:(id)arg2;
+- (id)getBizNameFromURL:(id)arg1;
+- (BOOL)isMPArticleURL:(id)arg1;
+- (BOOL)tryUpdateTaskText:(id)arg1 NewTaskData:(id)arg2;
+- (BOOL)updateTaskWithTaskData:(id)arg1;
+- (BOOL)updateTask:(id)arg1 WithTaskData:(id)arg2;
+- (BOOL)updateTaskState:(id)arg1 NewTaskData:(id)arg2;
+- (BOOL)replaceTask:(id)arg1 TaskList:(id)arg2;
+- (BOOL)removeTask:(id)arg1 TaskList:(id)arg2;
+- (BOOL)tryAdjustTaskListOrderIfNeed:(id)arg1 NewTaskData:(id)arg2;
+- (BOOL)removeTask:(id)arg1 TaskBizKey:(id)arg2;
+- (BOOL)removeTask:(id)arg1 TaskBizKey:(id)arg2 animationType:(int)arg3;
+- (BOOL)appendOrUpdateUsedTaskData:(id)arg1 notifyDelegate:(id)arg2;
+- (BOOL)removeUsedTaskData:(id)arg1;
+- (id)currentOutterContainerTask;
+- (void)setRelatedVCForContainer:(id)arg1 taskBizName:(id)arg2 taskBizKey:(id)arg3;
+- (id)lastestContainerTaskBizName;
+- (id)getTask:(id)arg1;
+- (id)getPassiveTask:(id)arg1;
+- (void)setTaskIsForegournd:(BOOL)arg1 taskKey:(id)arg2;
+- (id)getAllOutterTaskList;
+- (id)getAllBackgroundTaskList;
+- (BOOL)hasOuterContentTaskOfBizName:(id)arg1;
+- (BOOL)hasOutterContainerTask;
+- (void)markWidgetFullScreen:(BOOL)arg1;
+- (void)onFloatingViewTap:(id)arg1 FromFloatingView:(id)arg2 WillEnterBackgroundTaskKey:(id)arg3 EnterTaskScene:(unsigned int)arg4;
+- (void)realEnterTask:(id)arg1 FromFloatingView:(id)arg2 EnterTaskScene:(unsigned int)arg3;
+- (BOOL)tryDeleteTaskFromList:(id)arg1;
+- (BOOL)tryDeleteTaskRelatedData:(id)arg1;
+- (void)onFloatingViewMoveToTrash:(id)arg1;
+- (void)onRetryAddPendingTaskAfterUserDeleteOneTask:(id)arg1;
+- (void)onClearPendingTask:(id)arg1 bAddNewTask:(BOOL)arg2;
+- (void)onPositiveTaskCloseBtnClick:(id)arg1 CloseFromState:(BOOL)arg2;
+- (void)onEnterTaskList;
+- (void)onOuterContentViewSizeDidChanged:(id)arg1 From:(CGSize)arg2 To:(CGSize)arg3;
+- (void)onTaskCountExceedMaxWhenSlideToAddNewTask:(id)arg1;
+- (void)onExitTaskListPage:(unsigned long long)arg1 ExitType:(unsigned long long)arg2;
+- (void)onUpdateAbsorbFloatingViewLastPosition:(CGPoint)arg1 moveContext:(id)arg2;
+- (BOOL)hasSpecialTask;
+- (BOOL)needShowMinimizeWindow;
+- (void)minimizeWindowWillShow:(BOOL)arg1;
+- (void)notifyTaskContainerMinimizeWindowWillHide:(id)arg1 animated:(BOOL)arg2;
+- (void)minimizeWindowWillHide:(BOOL)arg1;
+- (void)onAbsorbFloatingViewFoldStateChange:(BOOL)arg1;
+- (void)onRemoveCurrentOuterContentTask;
+- (void)beginPopBackGesture:(id)arg1 TaskBizKey:(id)arg2;
+- (void)beginPopBackGesture:(id)arg1;
+- (BOOL)updatePopBackGesture:(id)arg1 TaskBizKey:(id)arg2 Progress:(double)arg3 TouchPoint:(CGPoint)arg4 ShouldCancel:(BOOL *)arg5;
+- (BOOL)updatePopBackGesture:(id)arg1 Progress:(double)arg2 TouchPoint:(CGPoint)arg3 ShouldCancel:(BOOL *)arg4;
+- (void)endPopBackGesture:(id)arg1 TaskBizKey:(id)arg2 isComplete:(BOOL)arg3;
+- (void)endPopBackGesture:(id)arg1 taskBizKey:(id)arg2 isComplete:(BOOL)arg3 pendingTaskContext:(id)arg4;
+- (void)clearGestureRelatedData;
+- (BOOL)routeEnterTaskEventWithTaskKey:(id)arg1 openContext:(id)arg2 enterTaskScene:(unsigned int)arg3;
+- (void)routeRemoveTaskEventWithTaskKey:(id)arg1;
+- (void)routeExposedTaskEventWithTaskKey:(id)arg1;
+- (void)setWindowMinimizationState:(unsigned long long)arg1;
+- (void)onManulLoginOK;
+- (void)onLoginOK;
+- (void)onStoryPreviewStatusHide;
+- (void)onStoryPreviewStatusShow;
+- (void)MMSightCameraWillBePresent;
+- (void)MMSightCameraWillBeDismissed;
+- (void)MMSightCameraWillBeDealloc;
+- (void)MMSightCameraWillBePushed;
+- (void)MMSightCameraWillBePoped;
+- (void)markImagePicking:(BOOL)arg1;
+- (void)onHDHeadImageWillAppear;
+- (void)onHDHeadImageWillDisappear;
+- (void)mvPlayer:(id)arg1 didUpdateShowMinimizeWindow:(BOOL)arg2;
+- (void)onTextStateMusicStart;
+- (void)onTextStateMusicEnd;
+- (void)onMMImagePickerManagerFinish;
+- (void)onMMImagePickerManagerShow;
+- (void)checkAndHandleCurrentTopViewControllerAppearance;
+- (void)handleViewControllerAppearanceEvent:(id)arg1;
+- (void)MMUIViewControllerWillAppear:(id)arg1;
+- (void)MMUIViewControllerWillDisppear:(id)arg1;
+- (void)MMUIViewControllerDidBeDismissed:(id)arg1;
+- (BOOL)isViewControllerNeedHideMinimization:(id)arg1;
+- (BOOL)isCurrentContainerRelatedVCInViewStacks;
+- (BOOL)isCurrentContainerBlockDisplay;
+- (BOOL)isViewControllerInViewStacks:(id)arg1;
+- (BOOL)isForbidResetFullScreenPlayingStatusWhenVcWillAppear:(id)arg1;
+- (BOOL)shouldIgnoreAppearAndDisappearEventForVC:(id)arg1;
+- (void)UIWindowDidBecomeKeyNotification:(id)arg1;
+- (void)onWAVideoPlayFullScreen:(BOOL)arg1;
+- (void)onWSVideoPlayFullScreen:(BOOL)arg1;
+- (void)onMPVideoPlayFullScreen:(BOOL)arg1;
+- (void)onWCWebSameLayerVideoPlayFullScreen:(BOOL)arg1;
+- (long long)availableNormalTaskCount;
+- (void)removeAllFloatingTaskAndNotify;
+- (void)beginAddMinimizeInteraction;
+- (BOOL)updateAddMinimizeInteractionWithProgress:(double)arg1 TouchPoint:(CGPoint)arg2 ShouldCancel:(BOOL *)arg3;
+- (void)endAddMinimizeInteractionComplete:(BOOL)arg1;
+- (void)absorbToWindow;
+- (void)foldToWindow;
+- (void)absorbToWindowWithTaskBizName:(id)arg1 andTaskBizKey:(id)arg2;
+- (void)absorbToWindowWithTaskBizName:(id)arg1 andTaskBizKey:(id)arg2 animated:(BOOL)arg3;
+- (void)foldToWindowWithTaskBizName:(id)arg1 andTaskBizKey:(id)arg2;
+- (void)foldToWindowWithTaskBizName:(id)arg1 andTaskBizKey:(id)arg2 animated:(BOOL)arg3;
+- (BOOL)isFloatingViewFold;
+- (void)resetInputViewStatus;
+- (unsigned int)currentTaskTransitionType;
+- (id)passiveStateTaskList;
+- (void)setPassiveStateTaskList:(id)arg1;
+- (id)minimizeWindow;
+- (void)setMinimizeWindow:(id)arg1;
+- (id)smallSessionInfo;
+- (void)setSmallSessionInfo:(id)arg1;
+- (id)pendingNewTaskKeyForReport;
+- (void)setPendingNewTaskKeyForReport:(id)arg1;
+- (unsigned long long)minimizeWindowState;
+- (void)setMinimizeWindowState:(unsigned long long)arg1;
+- (CGPoint)lastAdsorbFloatingViewPosition;
+- (void)setLastAdsorbFloatingViewPosition:(CGPoint)arg1;
+- (id)lastAdsorbFloatingViewSessionId;
+- (void)setLastAdsorbFloatingViewSessionId:(id)arg1;
+- (unsigned long long)lastAdsorbFloatingViewCreateTime;
+- (void)setLastAdsorbFloatingViewCreateTime:(unsigned long long)arg1;
+- (unsigned long long)lastAbsorbFloatingViewFoldTime;
+- (void)setLastAbsorbFloatingViewFoldTime:(unsigned long long)arg1;
+- (id)dicTaskKey2NotifyDelegate;
+- (void)setDicTaskKey2NotifyDelegate:(id)arg1;
+- (id)lastestOutContainerTaskBizName;
+- (void)setLastestOutContainerTaskBizName:(id)arg1;
+- (id)currentTransitioningTaskData;
+- (void)setCurrentTransitioningTaskData:(id)arg1;
+- (id)tmpSnapshotViewListWhenSwitchTask;
+- (void)setTmpSnapshotViewListWhenSwitchTask:(id)arg1;
+- (id)taskKeyWithGesture;
+- (void)setTaskKeyWithGesture:(id)arg1;
+- (int)gestureMode;
+- (void)setGestureMode:(int)arg1;
+- (BOOL)isMainWindowResignKeyWindow;
+- (void)setIsMainWindowResignKeyWindow:(BOOL)arg1;
+- (BOOL)isFullScreenPlaying;
+- (void)setIsFullScreenPlaying:(BOOL)arg1;
+- (BOOL)isMMMusicPlayerActive;
+- (void)setIsMMMusicPlayerActive:(BOOL)arg1;
+- (BOOL)isWillShowImagePicker;
+- (void)setIsWillShowImagePicker:(BOOL)arg1;
+- (BOOL)isForcedHiddenByMMMVPlayer;
+- (void)setIsForcedHiddenByMMMVPlayer:(BOOL)arg1;
+- (id)prevWillAppearViewController;
+- (void)setPrevWillAppearViewController:(id)arg1;
+- (void)setMappedKV:(id)arg1;
+- (void).cxx_destruct;
+@end
+

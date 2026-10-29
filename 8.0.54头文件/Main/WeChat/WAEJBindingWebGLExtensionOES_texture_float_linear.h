@@ -1,0 +1,3 @@
+@interface WAEJBindingWebGLExtensionOES_texture_float_linear : WAEJBindingWebGLExtension
+@end
+

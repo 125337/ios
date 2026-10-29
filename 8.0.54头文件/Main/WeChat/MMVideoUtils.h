@@ -1,0 +1,43 @@
+@interface MMVideoUtils : NSObject
++ (opaqueCMSampleBuffer *)newAudioSample:(void *)arg1 size:(unsigned int)arg2 timingInfo:(struct)arg3 numberChannels:(int)arg4 SampleRate:(int)arg5;
++ (opaqueCMSampleBuffer *)newVideoSample:(__CVBuffer *)arg1 time:(struct)arg2;
++ (opaqueCMSampleBuffer *)newVideoSample:(__CVBuffer *)arg1 timescale:(int)arg2 timeStamp:(unsigned long long)arg3;
++ (__CVBuffer *)copyPixelBuffer:(__CVBuffer *)arg1;
++ (__CVBuffer *)copyPixelBuffer:(__CVBuffer *)arg1 pixelBufferAttributes:(id)arg2;
++ (opaqueCMSampleBuffer *)copySampleBuffer:(opaqueCMSampleBuffer *)arg1;
++ (opaqueCMSampleBuffer *)copySampleBuffer:(opaqueCMSampleBuffer *)arg1 time:(struct)arg2;
++ (opaqueCMSampleBuffer *)copySampleBufferShallow:(opaqueCMSampleBuffer *)arg1 time:(struct)arg2;
++ (__CVBuffer *)createEmptyYUVPixelBuffer:(CGSize)arg1;
++ (__CVBuffer *)imageToYUVPixelBuffer:(id)arg1;
++ (__CVBuffer *)imageToRGBPixelBuffer:(id)arg1;
++ (id)scaleImage:(id)arg1 scaleToSize:(CGSize)arg2;
++ (id)scaleImageAspectFill:(id)arg1 scaleToSize:(CGSize)arg2;
++ (id)createImageWithColor:(id)arg1 andSize:(CGSize)arg2;
++ (id)gsImage:(id)arg1 withGsNumber:(double)arg2;
++ (id)imageFromImage:(id)arg1 inRect:(CGRect)arg2;
++ (id)composeImage:(id)arg1 image2:(id)arg2;
++ (id)getFileSHA1Signature:(id)arg1;
++ (id)renameFile:(id)arg1 newFileName:(id)arg2;
++ (void)removeCacheFile:(id)arg1;
++ (void)removeCacheFiles:(id)arg1;
++ (void)checkVideoPath:(id)arg1;
++ (void)clearFileType:(id)arg1 AtFolderPath:(id)arg2;
++ (id)getCacheFolderPath;
++ (id)getRandomFileName:(id)arg1 fileType:(id)arg2;
++ (id)imageFromPixelBuffer:(__CVBuffer *)arg1;
++ (int)savePixelBuffer:(__CVBuffer *)arg1 ToJPEGPath:(id)arg2;
++ (__CVBuffer *)createGLCompatiblePixelBufferWithWidth:(unsigned long long)arg1 height:(unsigned long long)arg2;
++ (opaqueCMSampleBuffer *)createSampleBufferFromPixelBuffer:(__CVBuffer *)arg1;
++ (void)save:(id)arg1 ToPath:(id)arg2;
++ (id)loadThumbNail:(id)arg1;
++ (AudioBuffer)getAudioBuffer:(opaqueCMSampleBuffer *)arg1;
++ (id)quickJoinVideoS:(id)arg1 outputPath:(id)arg2 result:(id /* block */)arg3;
++ (CGSize)getSize:(opaqueCMSampleBuffer *)arg1;
++ (double)getPts:(opaqueCMSampleBuffer *)arg1;
++ (double)getValue:(struct)arg1;
++ (id)dictionaryWithJsonString:(id)arg1;
++ (BOOL)supportVBR;
++ (BOOL)supportBFrame;
++ (int)alignTo16:(int)arg1;
+@end
+

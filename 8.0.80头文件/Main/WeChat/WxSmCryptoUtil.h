@@ -1,0 +1,33 @@
+@interface WxSmCryptoUtil : NSObject
++ (void)initialize;
++ (id)getVersion;
++ (int)getError;
++ (void)release;
++ (id)getRandomBytes:(unsigned long long)arg1;
++ (id)sm2GenKeyPair;
++ (id)sm2GenPublicKey:(id)arg1;
++ (id)sm2Encrypt:(id)arg1 publicKey:(id)arg2;
++ (id)sm2Encrypt:(id)arg1 publicKey:(id)arg2 cipherMode:(long long)arg3;
++ (id)sm2Decrypt:(id)arg1 priKey:(id)arg2;
++ (id)sm2Decrypt:(id)arg1 priKey:(id)arg2 cipherMode:(long long)arg3;
++ (id)sm2Sign:(id)arg1 uid:(id)arg2 priKey:(id)arg3 publicKey:(id)arg4;
++ (id)sm2Sign:(id)arg1 uid:(id)arg2 priKey:(id)arg3 publicKey:(id)arg4 signMode:(long long)arg5;
++ (BOOL)sm2Verify:(id)arg1 uid:(id)arg2 sign:(id)arg3 publicKey:(id)arg4;
++ (BOOL)sm2Verify:(id)arg1 uid:(id)arg2 sign:(id)arg3 publicKey:(id)arg4 signMode:(long long)arg5;
++ (id)sm3:(id)arg1;
++ (id)sm2SealEnvelope:(id)arg1 cert:(id)arg2 mode:(long long)arg3;
++ (id)sm2UnsealEnvelope:(id)arg1 privateKey:(id)arg2;
++ (id)sm3Hmac:(id)arg1 key:(id)arg2;
++ (id)generateSM4Key;
++ (id)sm4CbcEncrypt:(id)arg1 key:(id)arg2 iv:(id)arg3 noPadding:(BOOL)arg4;
++ (id)sm4CbcDecrypt:(id)arg1 key:(id)arg2 iv:(id)arg3 noPadding:(BOOL)arg4;
++ (id)sm4CtrEncrypt:(id)arg1 key:(id)arg2 iv:(id)arg3;
++ (id)sm4CtrDecrypt:(id)arg1 key:(id)arg2 iv:(id)arg3;
++ (id)sm4GcmEncrypt:(id)arg1 key:(id)arg2 iv:(id)arg3 aad:(id)arg4;
++ (id)sm4GcmDecrypt:(id)arg1 tag:(id)arg2 key:(id)arg3 iv:(id)arg4 aad:(id)arg5;
++ (id)encryptWithSM4:(id)arg1;
++ (id)hashWithSM4:(id)arg1;
++ (id)sha256:(id)arg1;
++ (id)sha1:(id)arg1;
++ (id)md5:(id)arg1;
+@end

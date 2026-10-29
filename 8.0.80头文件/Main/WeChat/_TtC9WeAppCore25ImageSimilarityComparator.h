@@ -1,0 +1,2 @@
+@interface _TtC9WeAppCore25ImageSimilarityComparator : _TtCs12_SwiftObject
+@end

@@ -1,0 +1,3 @@
+@interface WCFinderChangeIndexPath : NSObject
+@end
+

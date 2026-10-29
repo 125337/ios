@@ -1,0 +1,2 @@
+@interface WCFinderFeedSelfLikeViewModel : NSObject
+@end

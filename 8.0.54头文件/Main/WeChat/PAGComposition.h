@@ -1,0 +1,48 @@
+@interface PAGComposition : PAGLayer
++ (id)Make:(CGSize)arg1;
+- (void)replaceTextsWith:(id)arg1;
+- (BOOL)containsTextLayerWithName:(id)arg1;
+- (id)firstTextLayerWithName:(id)arg1;
+- (id)allTextLayersWithName:(id)arg1;
+- (id)textOfFirstTextLayerWithName:(id)arg1;
+- (void)setText:(id)arg1 forFirstTextLayerWithName:(id)arg2;
+- (void)setText:(id)arg1 forAllTextLayersWithName:(id)arg2;
+- (void)resetTextForFirstTextLayerWithName:(id)arg1;
+- (void)resetTextForAllTextLayersWithName:(id)arg1;
+- (BOOL)containsImageLayerWithName:(id)arg1;
+- (id)firstImageLayerWithName:(id)arg1;
+- (id)allImageLayersWithName:(id)arg1;
+- (id)defaultImageOfFirstImageLayerWithName:(id)arg1;
+- (CGSize)sizeOfFirstImageLayerWithName:(id)arg1;
+- (void)setImage:(id)arg1 forFirstImageLayerWithName:(id)arg2;
+- (void)setImage:(id)arg1 forAllImageLayersWithName:(id)arg2;
+- (void)setImage:(id)arg1 withContentMode:(long long)arg2 forFirstImageLayerWithName:(id)arg3;
+- (void)setImage:(id)arg1 withContentMode:(long long)arg2 forAllImageLayersWithName:(id)arg3;
+- (void)setPagImage:(id)arg1 forFirstImageLayerWithName:(id)arg2;
+- (void)setPagImage:(id)arg1 forAllImageLayersWithName:(id)arg2;
+- (void)resetImageForFirstImageLayerWithName:(id)arg1;
+- (void)resetImageForAllImageLayersWithName:(id)arg1;
+- (id)pagImageFromImage:(id)arg1 contentMode:(long long)arg2;
+- (long long)width;
+- (long long)height;
+- (void)setContentSize:(CGSize)arg1;
+- (long long)numChildren;
+- (id)getLayerAt:(int)arg1;
+- (long long)getLayerIndex:(id)arg1;
+- (void)setLayerIndex:(long long)arg1 layer:(id)arg2;
+- (id)audioBytes;
+- (long long)audioStartTime;
+- (CGRect)getBounds;
+- (BOOL)addLayer:(id)arg1;
+- (BOOL)addLayer:(id)arg1 atIndex:(int)arg2;
+- (BOOL)contains:(id)arg1;
+- (id)removeLayer:(id)arg1;
+- (id)removeLayerAt:(int)arg1;
+- (void)removeAllLayers;
+- (void)swapLayer:(id)arg1 withLayer:(id)arg2;
+- (void)swapLayerAt:(int)arg1 withIndex:(int)arg2;
+- (id)audioMarkers;
+- (id)getLayersByName:(id)arg1;
+- (id)getLayersUnderPoint:(CGPoint)arg1;
+@end
+

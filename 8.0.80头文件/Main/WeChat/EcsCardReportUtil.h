@@ -1,0 +1,37 @@
+@interface EcsCardReportUtil : NSObject
++ (void)reportOpenCard:(int)arg1 scene:(int)arg2 useCache:(BOOL)arg3 openSuccess:(BOOL)arg4;
++ (void)reportFakeNativeCardThumbUrlFallbackWithMessageWrap:(id)arg1 rawUrl:(id)arg2;
++ (void)reportProductCardCgiResult:(id)arg1 duration:(unsigned long long)arg2 result:(int)arg3 netErrType:(int)arg4 netErrCode:(int)arg5 bizRet:(int)arg6 errMsg:(id)arg7 itemRets:(id)arg8;
++ (void)reportShopCardCgiResult:(id)arg1 duration:(unsigned long long)arg2 result:(int)arg3 netErrType:(int)arg4 netErrCode:(int)arg5 bizRet:(int)arg6 errMsg:(id)arg7 itemRets:(id)arg8;
++ (void)reportBulkBuyCardCgiResult:(id)arg1 duration:(unsigned long long)arg2 result:(int)arg3 netErrType:(int)arg4 netErrCode:(int)arg5 bizRet:(int)arg6 errMsg:(id)arg7;
++ (void)reportNativeCardCgiResult:(id)arg1 duration:(unsigned long long)arg2 result:(int)arg3 netErrType:(int)arg4 netErrCode:(int)arg5 bizRet:(int)arg6 errMsg:(id)arg7;
++ (void)reportCgiResult:(int)arg1 reqType:(int)arg2 duration:(unsigned long long)arg3 cgiResult:(int)arg4 netErrType:(int)arg5 netErrCode:(int)arg6 bizRet:(int)arg7 errMsg:(id)arg8 itemRets:(id)arg9 params:(id)arg10;
++ (id)reportDataToString:(id)arg1;
++ (void)reportEcsDataWithEventId:(id)arg1 eventName:(id)arg2 params:(id)arg3 target:(id)arg4;
++ (void)reportEcsShareDataWithCardId:(id)arg1 bizReportData:(id)arg2 scene:(unsigned long long)arg3 event:(unsigned long long)arg4 target:(id)arg5;
++ (void)reportEcsShareDataWithCardId:(id)arg1 bizReportData:(id)arg2 cgiReportData:(id)arg3 scene:(unsigned long long)arg4 event:(unsigned long long)arg5 target:(id)arg6;
++ (void)reportEcsShareDataWithCardId:(id)arg1 bizReportData:(id)arg2 cgiReportData:(id)arg3 appId:(id)arg4 scene:(unsigned long long)arg5 event:(unsigned long long)arg6 target:(id)arg7;
++ (void)reportEcsCardDataWithEventId:(id)arg1 eventName:(id)arg2 cardId:(id)arg3 shareUsrName:(id)arg4 bizReportData:(id)arg5 scene:(unsigned long long)arg6 target:(id)arg7;
++ (id)eventIdForEvent:(unsigned long long)arg1;
++ (id)getLiveStatus:(BOOL)arg1;
++ (id)getChatScene:(BOOL)arg1;
++ (id)getShopIconTypeWithShareItem:(id)arg1;
++ (id)getShopIconTypeWithProductItem:(id)arg1;
++ (id)commonChatStaticParamsForViewModel:(id)arg1;
++ (long long)ecsSessionTypeForTalker:(id)arg1;
++ (void)bindShopWindowCardReportForView:(id)arg1 viewModel:(id)arg2;
++ (void)bindProductCardReportForView:(id)arg1 viewModel:(id)arg2 extraStaticParams:(id)arg3;
++ (void)bindNativeAppCardReportForView:(id)arg1 viewModel:(id)arg2;
++ (void)reportLiveCardEventId:(id)arg1 viewModel:(id)arg2 target:(id)arg3;
++ (void)bindFeedCardReportForView:(id)arg1 viewModel:(id)arg2;
++ (void)bindProfileCardReportForView:(id)arg1 viewModel:(id)arg2;
++ (void)bindSnsFinderFeedCardReportForView:(id)arg1 dataItem:(id)arg2;
++ (void)bindEcsCardReportForView:(id)arg1 viewModel:(id)arg2 viewId:(id)arg3 staticParams:(id)arg4 dynamicParamsBlock:(id /* block */)arg5;
++ (void)fillJumpTypeAndInfoFromReaderWrap:(id)arg1 outputType:(unsigned int *)arg2 outputInfo:(id *)arg3;
++ (id)templateMsgContentFromMessageWrap:(id)arg1 readerWrap:(id)arg2;
++ (id)buildEcsJumpInfoReportParamsWithViewId:(id)arg1 jumpInfo:(id)arg2 messageWrap:(id)arg3 containerType:(unsigned int)arg4;
++ (void)reportTemplateMsgOverallEcsJumpInfoEventWithMessageWrap:(id)arg1 eventId:(id)arg2 containerType:(unsigned int)arg3 target:(id)arg4;
++ (void)reportTemplateMsgLineItemEcsJumpInfoEventWithMessageWrap:(id)arg1 opItem:(id)arg2 eventId:(id)arg3 containerType:(unsigned int)arg4 target:(id)arg5;
++ (void)reportTemplateMsgEcsJumpInfoExposureWithMessageWrap:(id)arg1 containerType:(unsigned int)arg2 target:(id)arg3;
++ (void)reportFinderLiveEvent:(id)arg1 finderUsername:(id)arg2;
+@end

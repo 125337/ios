@@ -1,0 +1,33 @@
+@interface FavoritesCommonUtil : NSObject
++ (void)sortArrFavData:(id)arg1;
++ (BOOL)SelectFavItem:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3 TimeIntervalToOpen:(unsigned int)arg4 SearchTagScene:(unsigned int)arg5;
++ (BOOL)SelectFavItem:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3 thumbView:(id)arg4 TimeIntervalToOpen:(unsigned int)arg5 SearchTagScene:(unsigned int)arg6;
++ (BOOL)SelectFavItem:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3 FromScene:(unsigned int)arg4 FavIndex:(unsigned int)arg5 SearchText:(id)arg6;
++ (BOOL)SelectFavItem:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3 FromScene:(unsigned int)arg4 FavIndex:(unsigned int)arg5 SearchText:(id)arg6 thumbView:(id)arg7;
++ (BOOL)SelectFavItem:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3 FromScene:(unsigned int)arg4 FavIndex:(unsigned int)arg5 SearchText:(id)arg6 thumbView:(id)arg7 TimeIntervalToOpen:(unsigned int)arg8 SearchTagScene:(unsigned int)arg9;
++ (BOOL)SelectFavItem:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3 FromScene:(unsigned int)arg4 FavIndex:(unsigned int)arg5 SearchText:(id)arg6 thumbView:(id)arg7 TimeIntervalToOpen:(unsigned int)arg8 SearchTagScene:(unsigned int)arg9 IsSearchResult:(BOOL)arg10 SearchListIndex:(unsigned int)arg11 FavListIndex:(unsigned int)arg12;
++ (unsigned long long)internalOpenFavDataTypeWebPageWithReturnValue:(id)arg1 fromViewController:(id)arg2 targetUrl:(id)arg3;
++ (void)playTingItem:(id)arg1 withOptions:(id)arg2 fromViewController:(id)arg3;
++ (BOOL)openMusicItem:(id)arg1 fromViewController:(id)arg2;
++ (void)openMusicDataWrap:(id)arg1 fromViewController:(id)arg2;
++ (BOOL)_openTingAudio:(id)arg1 favItem:(id)arg2 favData:(id)arg3 fromViewController:(id)arg4;
++ (BOOL)openTingAudioWithFavItem:(id)arg1 fromViewController:(id)arg2;
++ (BOOL)openTingAudio:(id)arg1 fromViewController:(id)arg2;
++ (BOOL)openTingListWithFavItem:(id)arg1 fromViewController:(id)arg2;
++ (BOOL)openTingList:(id)arg1 fromViewController:(id)arg2;
++ (void)openBrandMpVideoByFavItem:(id)arg1 dataField:(id)arg2 fromViewController:(id)arg3 thumbView:(id)arg4;
++ (BOOL)goToMPShareVideoPageWithFavoritesUrlItem:(id)arg1 targetUrl:(id)arg2 fromViewController:(id)arg3;
++ (BOOL)goToWSVideoFlowPageWithFavoritesUrlItem:(id)arg1 fromViewController:(id)arg2;
++ (id)genNodeContentView:(id)arg1;
++ (void)SelectFavDataItemWrap:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3;
++ (void)SelectFavDataItemWrap:(id)arg1 FromViewController:(id)arg2 thumbImageView:(id)arg3 Delegate:(id)arg4;
++ (void)SelectFavDataItemWrap:(id)arg1 FromViewController:(id)arg2 thumbImageView:(id)arg3 soundable:(BOOL)arg4 Delegate:(id)arg5;
++ (void)internalOpenFavDataTypeWebPage:(id)arg1 fromViewController:(id)arg2 targetUrl:(id)arg3;
++ (void)selectLocationData:(id)arg1 FromViewController:(id)arg2 Delegate:(id)arg3;
++ (void)selectFileData:(id)arg1 FromViewController:(id)arg2;
++ (BOOL)SelectCanvasFavItem:(id)arg1 FromViewController:(id)arg2 thumbView:(id)arg3 TimeIntervalToOpen:(unsigned int)arg4 SearchTagScene:(unsigned int)arg5;
++ (BOOL)SelectCanvasFavItem:(id)arg1 FromViewController:(id)arg2 thumbView:(id)arg3 showNavigationBar:(BOOL)arg4 TimeIntervalToOpen:(unsigned int)arg5 SearchTagScene:(unsigned int)arg6;
++ (void)SelectWeAppMsg:(id)arg1 FromViewController:(id)arg2;
++ (void)OpenWeApp:(id)arg1 pagePath:(id)arg2 debugMode:(unsigned long long)arg3 originalMsgSender:(id)arg4 messageExtraData:(id)arg5 fromViewController:(id)arg6;
++ (void)OpenBizProfile:(id)arg1 favData:(id)arg2 fromViewController:(id)arg3;
+@end

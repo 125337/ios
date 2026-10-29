@@ -1,0 +1,114 @@
+@interface WCFinderProfileOverviewPage : WCFinderStreamProfileViewPage <UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, WCFinderProfileOverviewPageModelDelegate, WCFInderProfileOverviewPageDelegateLayout, WCFinderProfileOverviewBaseSectionDelegate, WCGeneralMonitorDelegate, WCFinderJustWatchEvent, WCFinderStreamFooterViewActionDelegate, WCFinderStreamLoadingStateDelegate, WCFinderProfileFeedFetchFirstJustWatchDelegate, WCFinderZoomAnimatorBehavior, WCFinderProfileOverviewHeaderDelegate>
+{
+    unsigned long long _refreshTime; // +0x8
+    WCFinderStreamFooterView * _footerView; // +0x10
+    WCFinderProfileOverviewHeader * _measureHeader; // +0x18
+    NSMutableDictionary * _exposeObjectMap; // +0x20
+    WCFinderCollectionViewDataSource * _dataSource; // +0x28
+    WCFinderFeedStaticCoverCollectionViewCell * _checkedJustWatchCell; // +0x30
+}
+- (id)init;
+- (void)viewDidLoad;
+- (void)viewWillAppear;
+- (void)viewDidAppear;
+- (void)viewDidDisappear;
+- (void)pageSizeDidChanged;
+- (id)createDiffSnapshot;
+- (id)currentDisplayCtrls;
+- (void)setViewModel:(id)arg1;
+- (id)loadView;
+- (id)overPageForSectonCtrl:(id)arg1;
+- (void)preloadVideoFirstFrame;
+- (void)onOverviewpageSectionsChanged:(id)arg1 forPageLoadFinish:(BOOL)arg2;
+- (id)findJustWatchCellItem:(id)arg1 tid:(id)arg2;
+- (void)onOverviewpage:(id)arg1 sectionDidUpdate:(id)arg2;
+- (void)onOverviewpageFetchStateChanged:(id)arg1;
+- (void)onPullableFeedArrayChanged:(id)arg1 change:(id)arg2;
+- (void)_applyNewSnapshot:(BOOL)arg1;
+- (void)onOverviewpagePreFeedFeedChanged:(id)arg1;
+- (void)onOverviewPageMoreFeedFeedChanged:(id)arg1;
+- (id)secIdentForSection:(long long)arg1;
+- (id)cellIdentForPath:(id)arg1;
+- (void)collectionView:(id)arg1 didSelectItemAtIndexPath:(id)arg2;
+- (id)displayCellForIndexPath:(id)arg1 identifier:(id)arg2;
+- (id)innerCellForSec:(id)arg1 indexPath:(id)arg2;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 sizeForItemAtIndexPath:(id)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 minimumInteritemSpacingForSectionAtIndex:(long long)arg3;
+- (double)collectionView:(id)arg1 layout:(id)arg2 minimumLineSpacingForSectionAtIndex:(long long)arg3;
+- (UIEdgeInsets)collectionView:(id)arg1 layout:(id)arg2 insetForSectionAtIndex:(long long)arg3;
+- (id)supplementaryViewForIndexPath:(id)arg1 elementKind:(id)arg2;
+- (id)innerSupplementaryViewForIndexPath:(id)arg1 elementKind:(id)arg2 secInfo:(id)arg3;
+- (void)_updateHeader:(id)arg1 forSecInfo:(id)arg2 forMeasure:(BOOL)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 referenceSizeForHeaderInSection:(long long)arg3;
+- (CGSize)collectionView:(id)arg1 layout:(id)arg2 referenceSizeForFooterInSection:(long long)arg3;
+- (long long)collectionView:(id)arg1 layout:(id)arg2 seperatorForSection:(long long)arg3;
+- (UIEdgeInsets)collectionView:(id)arg1 layout:(id)arg2 contentInsetsForSetion:(long long)arg3 position:(long long)arg4;
+- (void)collectionView:(id)arg1 willDisplayCell:(id)arg2 forItemAtIndexPath:(id)arg3;
+- (void)collectionView:(id)arg1 didEndDisplayingCell:(id)arg2 forItemAtIndexPath:(id)arg3;
+- (void)collectionView:(id)arg1 willDisplaySupplementaryView:(id)arg2 forElementKind:(id)arg3 atIndexPath:(id)arg4;
+- (void)scrollViewDidScroll:(id)arg1;
+- (void)scrollViewDidEndDecelerating:(id)arg1;
+- (void)scrollViewDidEndDragging:(id)arg1 willDecelerate:(BOOL)arg2;
+- (void)onOverviewHeaderClickHeader:(id)arg1;
+- (void)onOverviewHeaderClickExpandAll:(id)arg1;
+- (void)onOverviewHeaderLayoutShouldRefresh:(id)arg1;
+- (void)_delayRelayout;
+- (void)reloadOverviewSectionHeader:(id)arg1 beforeUpdate:(id /* block */)arg2 reload:(BOOL)arg3 traceLog:(id)arg4;
+- (void)onClickBottomMore:(id)arg1;
+- (id)getSortedExposingFeeds;
+- (id)sectionCtrlFetchVisiableIndexPaths:(id)arg1;
+- (id)sectionCtrl:(id)arg1 requestCellForSection:(id)arg2 identifier:(id)arg3;
+- (void)sectionCtrl:(id)arg1 requestJumpToTab:(int)arg2 completion:(id /* block */)arg3;
+- (void)sectionCtrlReloadStatusView:(id)arg1;
+- (void)sectionCtrlRequestReloadData:(id)arg1;
+- (void)sectionCtrlRequestRelayout:(id)arg1;
+- (void)sectionCtrlRequestReloadSelf:(id)arg1;
+- (void)sectionCtrl:(id)arg1 requestReloadSection:(id)arg2;
+- (void)sectionCtrl:(id)arg1 requestReloadItems:(id)arg2;
+- (void)sectionCtrl:(id)arg1 requestScrollToSection:(id)arg2 item:(id)arg3;
+- (void)sectionCtrl:(id)arg1 onClickFeed:(id)arg2;
+- (id)indexPathForFeedTid:(id)arg1;
+- (id)indexPathForAnimator:(id)arg1;
+- (void)onAnimatorWillBeginClosure:(id)arg1;
+- (id)zoomAnimatorTransitionSnapView:(id)arg1 cornerRaidus:(double *)arg2;
+- (void)onAnimatorDidEndClosure:(id)arg1;
+- (void)scrollToJustWatchItem:(id)arg1;
+- (void)updateStateView;
+- (void)checkLoadMore;
+- (void)didClickStreamFooterRefresh:(id)arg1;
+- (void)setupAllBtnReport:(id)arg1 section:(id)arg2;
+- (void)monitorView:(id)arg1 newExposedItems:(id)arg2 lastExposedItems:(id)arg3;
+- (void)monitorView:(id)arg1 unExposedCells:(id)arg2;
+- (void)onItemExpose:(id)arg1;
+- (void)onItemUnExpose:(id)arg1;
+- (CGRect)liveMorphDismissRectWithCustomKey:(id)arg1;
+- (void)onJustWatchControllerRequiredDisplay:(id /* block */)arg1;
+- (void)afterPageLoadedJustWatchControllerRequiredDisplay:(id /* block */)arg1;
+- (void)onJustWatchControllerCleanJustWatch;
+- (void)onJustWatchControllerRequiredJumpToFeed:(id)arg1;
+- (void)onEnsurePullableJustWatchDataCouldDirectScrollToFeed;
+- (void)onEnsurePullableJustWatchDataNeedReplaceFeedArray:(id)arg1;
+- (void)onLoadingStateChanged:(id)arg1;
+- (void)updateTopRefreshState:(id)arg1;
+- (BOOL)tryScrollToJustWatchFeed;
+- (void)checkJustWatchCellDisplay:(id)arg1 cell:(id)arg2;
+- (void)checkJustWatchCellOnScroll;
+- (id)findVisiableJustWatchItem;
+- (id)findCurrentDisplayedJustWatchItem:(id)arg1;
+- (id)_findCellIdentifierForFeedTid:(id)arg1 snapshot:(id)arg2;
+- (void)tapRetry;
+- (void)reportPageScrollDown;
+- (unsigned long long)refreshTime;
+- (void)setRefreshTime:(unsigned long long)arg1;
+- (id)footerView;
+- (void)setFooterView:(id)arg1;
+- (id)measureHeader;
+- (void)setMeasureHeader:(id)arg1;
+- (id)exposeObjectMap;
+- (void)setExposeObjectMap:(id)arg1;
+- (id)dataSource;
+- (void)setDataSource:(id)arg1;
+- (id)checkedJustWatchCell;
+- (void)setCheckedJustWatchCell:(id)arg1;
+- (void).cxx_destruct;
+@end

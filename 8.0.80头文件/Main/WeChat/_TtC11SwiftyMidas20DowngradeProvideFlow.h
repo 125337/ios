@@ -1,0 +1,2 @@
+@interface _TtC11SwiftyMidas20DowngradeProvideFlow : _TtC11SwiftyMidas11ProvideFlow
+@end

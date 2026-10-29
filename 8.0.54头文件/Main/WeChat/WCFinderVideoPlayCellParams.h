@@ -1,0 +1,3 @@
+@interface WCFinderVideoPlayCellParams : NSObject
+@end
+

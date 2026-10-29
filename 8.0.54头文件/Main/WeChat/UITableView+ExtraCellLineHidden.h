@@ -1,0 +1,44 @@
+@interface UITableView (ExtraCellLineHidden)
++ (id /* block */)zz_createWithStyle;
++ (id /* block */)zz_create;
+- (void)setReorder:(id)arg1;
+- (id)reorder;
+- (id)zz_setup;
+- (id)monitorDelegate;
+- (void)setMonitorDelegate:(id)arg1;
+- (id)generalMonitor;
+- (void)setGeneralMonitor:(id)arg1;
+- (void)setGm_observerType:(unsigned long long)arg1;
+- (unsigned long long)gm_observerType;
+- (id)gm_cellToIndexPathMap;
+- (void)monitorView:(id)arg1 newExposedItems:(id)arg2 lastExposedItems:(id)arg3;
+- (void)monitorView:(id)arg1 newExposedIds:(id)arg2;
+- (void)monitorView:(id)arg1 newExposedCells:(id)arg2;
+- (void)monitorView:(id)arg1 unExposedItems:(id)arg2;
+- (void)monitorView:(id)arg1 unExposedCells:(id)arg2;
+- (void)setGm_sectionHeaderTopPadding:(double)arg1;
+- (double)gm_sectionHeaderTopPadding;
+- (void)triggerGeneralMonitorCheck;
+- (void)setIsInPage:(BOOL)arg1;
+- (id)gm_cellForRowAtIndexPath:(id)arg1;
+- (void)setObserverType:(unsigned long long)arg1;
+- (double)contentOffsetX;
+- (void)setContentOffsetX:(double)arg1;
+- (double)contentOffsetY;
+- (void)setContentOffsetY:(double)arg1;
+- (double)contentInsetTop;
+- (void)setContentInsetTop:(double)arg1;
+- (double)contentInsetBottom;
+- (void)setContentInsetBottom:(double)arg1;
+- (double)contentInsetLeft;
+- (void)setContentInsetLeft:(double)arg1;
+- (double)contentInsetRight;
+- (void)setContentInsetRight:(double)arg1;
+- (void)safeScrollToRowAtIndexPath:(id)arg1 atScrollPosition:(long long)arg2 animated:(BOOL)arg3;
+- (void)registerHeaderFooterClass:(Class)arg1;
+- (id)dequeueHeaderFooterClass:(Class)arg1;
+- (void)registerCellClass:(Class)arg1;
+- (id)dequeueCellClass:(Class)arg1 forIndexPath:(id)arg2;
+- (void)setExtraCellLineHidden;
+@end
+

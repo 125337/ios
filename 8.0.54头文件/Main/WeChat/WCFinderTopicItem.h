@@ -1,0 +1,16 @@
+@interface WCFinderTopicItem : NSObject
++ (id)checkBinds:(id)arg1 inText:(id)arg2;
++ (id)handleTextToXML:(id)arg1 bindArray:(id)arg2;
++ (id)handleTextToXML:(id)arg1;
++ (id)genTextToXML:(id)arg1 bindRangeArray:(id)arg2;
++ (id)parseFromTid:(id)arg1 XMLString:(id)arg2 contentTitle:(id)arg3;
++ (id)filterPreURLByContent:(id)arg1;
++ (id)handlePureContentParseLogic:(id)arg1 highlightRangeObjectArray:(id)arg2 curContent:(id)arg3;
++ (unsigned long long)getPrefixWellSymbolCount:(id)arg1;
++ (id)removeHeadRearWellSymbol:(id)arg1;
++ (id)connectUrl:(id)arg1 url:(id)arg2;
++ (id)appendParamsDic:(id)arg1 toUrl:(id)arg2;
++ (BOOL)xmlIsAllTopicContentWithTopicsArray:(id)arg1 content:(id)arg2;
++ (id)topicColorStyle;
+@end
+

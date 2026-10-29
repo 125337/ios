@@ -1,0 +1,26 @@
+@interface TingAIChatControllerCpp : TingAudioModuleListenerCpp <TingAIChatController>
+- (BOOL)addListener:(id)arg1;
+- (void)removeListener:(id)arg1;
+- (void)stop;
+- (void)preload;
+- (void)startVoiceChatInput:(id)arg1;
+- (void)finishVoiceChatInput;
+- (void)cancelVoiceChatInput;
+- (void)startNonVoiceChat:(id)arg1;
+- (int)getStatus;
+- (BOOL)didStartRecording;
+- (id)getDisplayText;
+- (double)getVoiceRecordPeakPower;
+- (void)executeTasks;
+- (void)skipUnplayableTasks;
+- (void)resetSession;
+- (void)setBizContext:(id)arg1;
+- (id)getBizContext;
+- (id)exportHistoryDebugInfo;
+- (void)onPlayTtsProgressUpdate:(int)arg1 duration:(int)arg2 loudness:(double)arg3;
+- (void)onASRResult:(id)arg1;
+- (void)onASRDetectUserSpoken;
+- (void)onVADEnd;
+- (void)onBuffer:(id)arg1;
+- (void)onAudioRecorderStarted;
+@end

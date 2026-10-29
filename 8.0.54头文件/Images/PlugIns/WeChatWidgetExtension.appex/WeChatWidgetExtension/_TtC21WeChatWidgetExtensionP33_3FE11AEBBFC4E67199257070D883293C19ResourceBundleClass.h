@@ -1,0 +1,3 @@
+@interface _TtC21WeChatWidgetExtensionP33_3FE11AEBBFC4E67199257070D883293C19ResourceBundleClass : _TtCs12_SwiftObject
+@end
+

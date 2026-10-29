@@ -1,0 +1,9 @@
+@interface TXSampleBufferWrapper : NSObject
+{
+    opaqueCMSampleBuffer * _sampleBuffer; // +0x8
+}
+- (id)initWithSampleBuffer:(opaqueCMSampleBuffer *)arg1;
+- (void)dealloc;
+- (opaqueCMSampleBuffer *)sampleBuffer;
+- (void)setSampleBuffer:(opaqueCMSampleBuffer *)arg1;
+@end

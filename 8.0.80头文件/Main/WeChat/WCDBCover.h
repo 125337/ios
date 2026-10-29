@@ -1,0 +1,45 @@
+@interface WCDBCover : NSObject <WCTTableCoding>
+{
+    int _codingType; // +0x8
+    NSString * _username; // +0x10
+    NSString * _tid; // +0x18
+    NSData * _buffer; // +0x20
+    long long _snsCoverOffset; // +0x28
+}
++ (const void *)objectRelationalMapping;
++ (const void *)allProperties;
++ (id)allBridgeProperties;
++ (id)__wcdbtyper;
++ (const void *)username;
++ (const void *)__wcdb_synthesize_66:(void *)arg1;
++ (id)swift_username;
++ (const void *)tid;
++ (const void *)__wcdb_synthesize_67:(void *)arg1;
++ (id)swift_tid;
++ (const void *)buffer;
++ (const void *)__wcdb_synthesize_68:(void *)arg1;
++ (id)swift_buffer;
++ (const void *)codingType;
++ (const void *)__wcdb_synthesize_69:(void *)arg1;
++ (id)swift_codingType;
++ (const void *)snsCoverOffset;
++ (const void *)__wcdb_synthesize_70:(void *)arg1;
++ (id)swift_snsCoverOffset;
++ (void)__wcdb_column_constraint_71:(void *)arg1;
++ (void)__wcdb_column_constraint_72:(void *)arg1;
++ (void)__wcdb_column_constraint_73:(void *)arg1;
++ (void)__wcdb_column_constraint_74:(void *)arg1;
++ (void)__wcdb_column_constraint_75:(void *)arg1;
++ (void)__wcdb_column_constraint_76:(void *)arg1;
+- (id)username;
+- (void)setUsername:(id)arg1;
+- (id)tid;
+- (void)setTid:(id)arg1;
+- (id)buffer;
+- (void)setBuffer:(id)arg1;
+- (int)codingType;
+- (void)setCodingType:(int)arg1;
+- (long long)snsCoverOffset;
+- (void)setSnsCoverOffset:(long long)arg1;
+- (void).cxx_destruct;
+@end

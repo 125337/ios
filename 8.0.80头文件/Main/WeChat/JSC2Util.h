@@ -1,0 +1,33 @@
+@interface JSC2Util : NSObject
++ (void)setEnable:(BOOL)arg1;
++ (BOOL)isEnable;
++ (unsigned int)engineOptions;
++ (void)setOptions:(unsigned int)arg1;
++ (void)addOptions:(unsigned int)arg1;
++ (void)setBytecodeEnable:(BOOL)arg1;
++ (BOOL)isBytecodeEnable;
++ (void)setCEvaluateJSScriptEnable:(BOOL)arg1;
++ (BOOL)isCEvaluateJSScriptEnable;
++ (void)setUseAutorelease:(BOOL)arg1;
++ (void)hook;
++ (void)setByteCodeDirPath:(id)arg1 forJSVM:(id)arg2;
++ (id)byteCodeDirPathForJSVM:(id)arg1;
++ (void)setByteCodeDirPath:(id)arg1 forJSContext:(id)arg2;
++ (id)byteCodeDirPathForJSContext:(id)arg1;
++ (void)setByteCodeSwitch:(unsigned long long)arg1 forJSContext:(id)arg2;
++ (unsigned long long)byteCodeSwitchTypeForJSContext:(id)arg1;
++ (void)setByteCodeSwitch:(unsigned long long)arg1 forJSVM:(id)arg2;
++ (unsigned long long)byteCodeSwitchTypeForJSVM:(id)arg1;
++ (void)reportWithKey:(unsigned long long)arg1;
++ (void)clearAllCodeCache;
++ (void)codeCacheSource:(id)arg1 setByteCodeSwitchType:(unsigned long long)arg2;
++ (unsigned long long)codeCacheSourceByteCodeSwitchType:(id)arg1;
++ (void)codeCacheSource:(id)arg1 setByteCodeDirPath:(id)arg2;
++ (id)codeCacheSourceByteCodeDirPath:(id)arg1;
++ (id)codeCacheSourceByteCodeIdentifier:(id)arg1;
++ (void)codeCacheSource:(id)arg1 setByteCodeIdentifier:(id)arg2;
++ (id)codeCacheSourceCodeCacheDetail:(id)arg1;
++ (void)codeCacheSource:(id)arg1 setCodeCacheDetail:(id)arg2;
++ (BOOL)isScriptLengthCanBeCached:(id)arg1;
++ (BOOL)isScriptLengthCanBeCachedWithLength:(unsigned int)arg1;
+@end

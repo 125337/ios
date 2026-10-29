@@ -1,0 +1,2 @@
+@interface WCAdvertiseCommonModelDef : NSObject
+@end

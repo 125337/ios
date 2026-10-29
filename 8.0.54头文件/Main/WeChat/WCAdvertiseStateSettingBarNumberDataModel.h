@@ -1,0 +1,3 @@
+@interface WCAdvertiseStateSettingBarNumberDataModel : WCAdvertiseLikeNumberDataModel
+@end
+

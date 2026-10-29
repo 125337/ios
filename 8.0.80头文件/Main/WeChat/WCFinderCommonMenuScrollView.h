@@ -1,0 +1,2 @@
+@interface WCFinderCommonMenuScrollView : UIScrollView
+@end

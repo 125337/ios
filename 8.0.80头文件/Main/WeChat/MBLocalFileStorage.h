@@ -1,0 +1,31 @@
+@interface MBLocalFileStorage : NSObject
++ (id)localIDPrefixWithName:(id)arg1;
++ (BOOL)isHomePath:(id)arg1;
++ (BOOL)isTempLocalID:(id)arg1;
++ (BOOL)isStoreLocalID:(id)arg1;
++ (BOOL)isUsrLocalID:(id)arg1;
++ (id)tempDirName;
++ (id)cacheSandboxRootDir;
++ (id)tempLocalIDPrefix;
++ (id)storeLocalIDPrefix;
++ (id)usrLocalIDPrefix;
++ (id)tempFileDirWithBizName:(id)arg1;
++ (id)storeFileDirWithBizName:(id)arg1;
++ (void)createFileStorageDirWithBizName:(id)arg1;
++ (id)filePathWithBizName:(id)arg1 localID:(id)arg2;
++ (BOOL)ak_isSymlink:(id)arg1;
++ (id)usrFilePathWithBizName:(id)arg1 localID:(id)arg2;
++ (id)usrFilePathWithBizName:(id)arg1 subPath:(id)arg2;
++ (id)tmpOrStorefilePathWithBizName:(id)arg1 localID:(id)arg2;
++ (BOOL)isMD5StringValid:(id)arg1;
++ (id)fileExtensionFromMIMEType:(id)arg1;
++ (BOOL)generateTempLocalID:(id *)arg1 path:(id *)arg2 withBizName:(id)arg3 fileType:(id)arg4;
++ (BOOL)generatLocalID:(id *)arg1 path:(id *)arg2 withBizName:(id)arg3 fileType:(id)arg4 fileDir:(id)arg5 localIDPrefix:(id)arg6;
++ (unsigned long long)localIDGeneratorIncreaseID;
++ (id)localIDWithLocalIDPrefix:(id)arg1 md5:(id)arg2 fileType:(id)arg3;
++ (BOOL)RenameFileWithLimitChecking:(id)arg1 To:(id)arg2 ForBiz:(id)arg3;
++ (BOOL)isTempPath:(id)arg1 bizName:(id)arg2;
++ (BOOL)haveFreeSpace:(id)arg1 writeSize:(unsigned long long)arg2 usrPath:(id)arg3;
++ (BOOL)haveFreeTmpSpace:(id)arg1 writeSize:(unsigned long long)arg2;
++ (BOOL)haveFreeTmpSpace:(id)arg1;
+@end

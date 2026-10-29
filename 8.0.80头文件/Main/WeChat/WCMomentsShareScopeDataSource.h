@@ -1,0 +1,2 @@
+@interface WCMomentsShareScopeDataSource : WCBaseDataSource
+@end

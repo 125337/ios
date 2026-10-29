@@ -1,0 +1,3 @@
+@interface MMLiveFlowTerminalActionBase : MMLiveFlowActionBase
+@end
+

@@ -1,0 +1,31 @@
+@interface MJShootComposingTemplatePanelHalfScreenViewController : MMPageSheetBaseViewController <MJShootComposingTemplatePanelViewDelegate>
+{
+    BOOL _useIphoneUIStyleInIpad; // +0x68
+    UIColor * _maskBackgroundColor; // +0x70
+    id <MJShootComposingTemplatePanelHalfScreenViewControllerDelegate> _delegate; // +0x78
+    MJShootComposingTemplatePanelViewModel * _viewModel; // +0x80
+    MJShootComposingTemplatePanelView * _panelView; // +0x88
+}
+- (id)initWithViewModel:(id)arg1;
+- (void)viewDidLoad;
+- (void)setupPageSheetConfig;
+- (void)pageSheetWillClose:(BOOL)arg1;
+- (void)pageSheetDidClose:(BOOL)arg1;
+- (void)pageSheetDidChangeVisibleHeight:(double)arg1;
+- (void)shootTemplatePanelView:(id)arg1 didSelectItem:(id)arg2 tabID:(unsigned long long)arg3 atIndex:(unsigned long long)arg4;
+- (void)shootTemplatePanelView:(id)arg1 willDisplayTemplateItem:(id)arg2 tabID:(unsigned long long)arg3 atIndex:(unsigned long long)arg4;
+- (void)shootTemplatePanelView:(id)arg1 didEndDisplayingTemplateItem:(id)arg2 tabID:(unsigned long long)arg3 atIndex:(unsigned long long)arg4;
+- (void)shootTemplatePanelView:(id)arg1 didSelectTab:(unsigned long long)arg2;
+- (void)reloadData;
+- (id)maskBackgroundColor;
+- (void)setMaskBackgroundColor:(id)arg1;
+- (BOOL)useIphoneUIStyleInIpad;
+- (void)setUseIphoneUIStyleInIpad:(BOOL)arg1;
+- (id)delegate;
+- (void)setDelegate:(id)arg1;
+- (id)viewModel;
+- (id)panelView;
+- (void)setPanelView:(id)arg1;
+- (void).cxx_destruct;
+@end
+

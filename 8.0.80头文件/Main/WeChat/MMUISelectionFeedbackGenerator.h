@@ -1,0 +1,2 @@
+@interface MMUISelectionFeedbackGenerator : NSObject
+@end

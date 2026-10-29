@@ -1,0 +1,2 @@
+@interface WCFinderPrivacyContactSelectionCell : MMDetailDescriptionStyleTableViewCell
+@end

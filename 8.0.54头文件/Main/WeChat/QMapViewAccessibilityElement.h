@@ -1,0 +1,3 @@
+@interface QMapViewAccessibilityElement : QBaseAccessibilityElement
+@end
+

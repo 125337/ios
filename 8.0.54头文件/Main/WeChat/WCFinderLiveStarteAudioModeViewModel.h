@@ -1,0 +1,3 @@
+@interface WCFinderLiveStarteAudioModeViewModel : WCFinderStarterLiveBaseViewModel
+@end
+

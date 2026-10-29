@@ -1,0 +1,3 @@
+@interface MMUserService : MMBaseService
+@end
+

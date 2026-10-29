@@ -1,0 +1,3 @@
+@interface _TtC9WeSwiftUIP33_A8BC6160A59EEC4AA377FFE53B9EF00719ResourceBundleClass : _TtCs12_SwiftObject
+@end
+

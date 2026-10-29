@@ -1,0 +1,3 @@
+@interface _TtC6WeChat38MagicWxGameDynamicCardServiceConstants : _TtCs12_SwiftObject
+@end
+

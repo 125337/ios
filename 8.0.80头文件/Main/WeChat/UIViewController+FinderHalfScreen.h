@@ -1,0 +1,26 @@
+@interface UIViewController (FinderHalfScreen)
+- (void)setFinderHalfScreenState;
+- (void)setFinderHalfScreenStateBindVC:(id)arg1;
+- (void)setFinderHalfScreenStateBindVC:(id)arg1 mediaPlayObject:(id)arg2 wasPlayingBeforePresent:(BOOL)arg3;
+- (void)_setFinderHalfScreenStateBindVC:(id)arg1 mediaPlayObject:(id)arg2 wasPlayingBeforePresent:(BOOL)arg3 preserveTopViewController:(BOOL)arg4;
+- (void)pauseFinderHalfScreenMediaForTTSIfNeeded;
+- (void)restoreFinderHalfScreenMediaPlayStateIfNeeded;
+- (id)_finderTopViewControllerBeforeForwardAppearance;
+- (void)_finderRestoreTopViewControllerAfterForwardAppearance:(id)arg1;
+- (void)hookVCForFinderVideoPlayStatus;
+- (BOOL)_finderShouldNotifyDisappearEvent;
+- (void)removeFinderHalfScreenState;
+- (void)unHookVCForFinderVideoPlayStatus;
+- (void)tagHasAlreadyDisplay;
+- (id)findPreViewController;
+- (id)_getBindContainerView;
+- (id)_getBindTransformView;
+- (id)_getBindDismissTransition;
+- (BOOL)checkFinderHalfScreenVisibility;
+- (void)bindListenProgressObjectModel:(id)arg1;
+- (void)_observeViewFrameChanged:(id)arg1 changeBlock:(id /* block */)arg2;
+- (void)setPresentedHalfScreenStatusBarHidden:(BOOL)arg1;
+- (BOOL)presentedHalfScreenStatusBarHidden;
+- (void)setJumpInfoPresentedFlag:(BOOL)arg1 type:(int)arg2;
+- (BOOL)isPresentedByJumpInfo;
+@end

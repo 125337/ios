@@ -1,0 +1,35 @@
+@interface _TtC6WeChat26MagicBrandServiceConstants : NSObject
++ (long long)BrandFeeds;
++ (long long)BrandRecFeeds;
++ (long long)BrandOftenRead;
++ (id)FrameSetRootPathOftenRead;
++ (long long)DynamicCardTypeOftenReadAd;
++ (long long)OftenReadExposeTypeValid;
++ (id)EventOnBrandServiceBoxExpose;
++ (id)EventOnBrandServiceBoxClick;
++ (id)EventOnBrandServiceBoxQuit;
++ (id)EventOnBrandServiceAdInfo;
++ (id)EventOnBrandServiceAdFlutterCardExpose;
++ (id)EventOnOftenReadEnter;
++ (id)EventOnOftenReadExit;
++ (id)EventOnOftenReadAccountChanged;
++ (long long)createByBrandServiceBoxClick;
++ (long long)createByBrandServiceBoxExpose;
++ (long long)createByBrandServiceRecreate;
++ (long long)createByReceiveMsgOutOfBox;
++ (long long)createByReceiveNotifyResort;
++ (long long)createByNewFlutterEngineAttach;
++ (long long)createByOftenReadAd;
++ (id)brandServiceAutoDestroyScenes;
++ (long long)destroyByFlutterEngineDestroy;
++ (long long)destroyByAppEnterBackGround;
++ (long long)destroyTimeout;
++ (long long)destroyByAccountSwitch;
++ (long long)destroyByNewFlutterEngineAttach;
++ (long long)destroyByAppWillSuspend;
++ (id)ResortTypePreResort;
++ (id)ResortTypeResortStart;
++ (id)ResortTypeResortEnd;
+- (id)init;
+- (void).cxx_destruct;
+@end

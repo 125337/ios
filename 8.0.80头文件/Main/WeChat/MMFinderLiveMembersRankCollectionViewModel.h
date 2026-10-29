@@ -1,0 +1,2 @@
+@interface MMFinderLiveMembersRankCollectionViewModel : NSObject
+@end

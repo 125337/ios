@@ -1,0 +1,2 @@
+@interface SOSOMapEngine : NSObject
+@end

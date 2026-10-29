@@ -1,0 +1,3 @@
+@interface WcoTalkMainWindow : MultiTalkMainWindow
+@end
+

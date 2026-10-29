@@ -1,0 +1,2 @@
+@interface WXQRCodePayResp : BaseResp
+@end

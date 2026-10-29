@@ -1,0 +1,28 @@
+@interface UIViewController (ModalView)
+- (void)PresentModalViewController:(id)arg1 animated:(BOOL)arg2;
+- (void)PresentModalViewController:(id)arg1 animated:(BOOL)arg2 completion:(id /* block */)arg3;
+- (void)PresentModalViewController:(id)arg1 animated:(BOOL)arg2 forceFullScreen:(BOOL)arg3 completion:(id /* block */)arg4;
+- (void)PresentModalViewController:(id)arg1 animated:(BOOL)arg2 forceFullScreen:(BOOL)arg3 isAutoRotatePortrait:(BOOL)arg4 completion:(id /* block */)arg5;
+- (BOOL)isPrimaryViewControllerForSplitView;
+- (void)checkInstallCommonInteractiveController;
+- (BOOL)DismissModalViewControllerAnimated:(BOOL)arg1;
+- (BOOL)DismissModalViewControllerAnimated:(BOOL)arg1 completion:(id /* block */)arg2;
+- (id)currentTopPresentingViewController;
+- (BOOL)DismissMyselfAnimated:(BOOL)arg1;
+- (BOOL)DismissMyselfAnimated:(BOOL)arg1 completion:(id /* block */)arg2;
+- (void)DismissMyselfAndOther:(BOOL)arg1;
+- (void)DismissMyselfAndOther:(BOOL)arg1 completion:(id /* block */)arg2;
+- (id)previousViewController;
+- (BOOL)shouldPresentInSplitView;
+- (id)presentedBythisVC;
+- (id)presentingThisVC;
+- (id)modalPresentFromThisVC;
+- (BOOL)isBeingDismissedAsFirstPresented;
+- (void)setIsBeingDismissedAsFirstPresented:(BOOL)arg1;
+- (BOOL)isForceFullScreen;
+- (void)setIsForceFullScreen:(BOOL)arg1;
+- (BOOL)isForceShowToPrimaryViewController;
+- (void)setIsForceShowToPrimaryViewController:(BOOL)arg1;
+- (BOOL)isForbidPageSheet;
+- (void)setIsForbidPageSheet:(BOOL)arg1;
+@end

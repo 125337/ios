@@ -74,6 +74,7 @@ static IMP orig_viewDidAppear         = NULL;
 static IMP orig_reloadSessions        = NULL;
 static IMP orig_reloadAll             = NULL;
 static IMP orig_insertSessionCell     = NULL;
+static BOOL s_insertTwoArg            = NO;   // insertSessionCell 命中签名：YES=2参(8.0.6x+) NO=1参(8.0.54)
 static IMP orig_deleteSessionCell     = NULL;
 static IMP orig_insertRow             = NULL;
 static IMP orig_deleteSessionCellAt   = NULL;
@@ -1558,16 +1559,29 @@ static void hook_reloadAll(id self, SEL _cmd) {
 // 关键教训：deleteSessionCell:atSection:withUser: 真实签名为 (unsigned int row, long long section, id user)，
 // 前两个参数是整数。hook 绝不能把 x2/x3 当对象接——错位消息派发时编译器对 x2 做 objc_retain 会
 // retain 垃圾指针 → SIGSEGV（退群闪退根因，probe_segv 实测 lr=0x4c8c4）
-static void hook_insertSessionCell(id self, SEL _cmd, NSArray *indexes) {
+
+// 透传：按安装时命中的签名调 orig（两代只差尾参 scrollToCell:）。BOOL 是寄存器直传
+// 不走 retain——1 参调用时该寄存器是垃圾值，但被 s_insertTwoArg 守卫不使用，
+// 无下方 deleteSessionCell 教训里的 retain 错位风险
+static void SGInsertForward(id self, SEL _cmd, NSArray *indexes, BOOL scrollToCell) {
+    if (s_insertTwoArg)
+        ((void (*)(id, SEL, id, BOOL))orig_insertSessionCell)(self, _cmd, indexes, scrollToCell);
+    else
+        ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
+}
+
+// 插入 hook（单函数吃两代签名：8.0.6x+ 为 2 参 scrollToCell:，8.0.54 为 1 参，
+// 安装时探测命中哪个，见 install 处）
+static void hook_insertSessionCell(id self, SEL _cmd, NSArray *indexes, BOOL scrollToCell) {
     if (!SGActive(self) || !orig_insertSessionCell) {
-        if (orig_insertSessionCell) ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
+        if (orig_insertSessionCell) SGInsertForward(self, _cmd, indexes, scrollToCell);
         return;
     }
     SGScheduleRefresh(self); // WCR: scheduleRefreshForTrigger 先行
     // 注意：不能用 WCR 的 setDisableTableAnimation: 包裹——8.0.60 该属性是 id 类型
     // （NewMainFrameViewController.h:83），传 BOOL 会被 setter 当对象 retain(0x1) 崩溃
     [UIView performWithoutAnimation:^{
-        ((void (*)(id, SEL, id))orig_insertSessionCell)(self, _cmd, indexes);
+        SGInsertForward(self, _cmd, indexes, scrollToCell);
     }];
 }
 
@@ -1703,7 +1717,6 @@ static void SGHook(Class cls, SEL sel, IMP newIMP, IMP *origOut) {
     HOOK(tableView:heightForHeaderInSection:, orig_heightForHeader, hook_heightForHeader)
     HOOK(reloadSessions, orig_reloadSessions, hook_reloadSessions)
     HOOK(reloadAll, orig_reloadAll, hook_reloadAll)
-    HOOK(insertSessionCellAtIndexes:, orig_insertSessionCell, hook_insertSessionCell)
     HOOK(deleteSessionCellAtIndexes:, orig_deleteSessionCell, hook_deleteSessionCell)
     HOOK(insertRow:, orig_insertRow, hook_insertRow)
     HOOK(deleteSessionCell:atSection:withUser:, orig_deleteSessionCellAt, hook_deleteSessionCellAt)
@@ -1711,6 +1724,14 @@ static void SGHook(Class cls, SEL sel, IMP newIMP, IMP *origOut) {
 
     #undef HOOK
     #undef CAPTURE
+
+    // insertSessionCell 双签名安装：先探 2 参（8.0.64/8.0.80 实锤），回落 1 参（8.0.54 实锤）。
+    // 单 hook 函数 + s_insertTwoArg 标志区分签名（见 SGInsertForward），两版本通吃
+    SEL insSel2 = NSSelectorFromString(@"insertSessionCellAtIndexes:scrollToCell:");
+    SEL insSel1 = NSSelectorFromString(@"insertSessionCellAtIndexes:");
+    s_insertTwoArg = class_getInstanceMethod(cls, insSel2) != NULL;
+    SGHook(cls, s_insertTwoArg ? insSel2 : insSel1,
+           (IMP)hook_insertSessionCell, &orig_insertSessionCell);
 
     // header 去粘滞：swizzle MainFrameTableView.layoutSubviews（WCR installMainFrameTableHookIfNeeded
     // 同款，Misc_part4.c:2274-2363；类缺失时跳过，functionality 降级为原生 sticky）

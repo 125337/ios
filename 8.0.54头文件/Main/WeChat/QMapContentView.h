@@ -1,0 +1,3 @@
+@interface QMapContentView : UIView
+@end
+

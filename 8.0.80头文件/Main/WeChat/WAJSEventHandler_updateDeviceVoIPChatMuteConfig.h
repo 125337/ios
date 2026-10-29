@@ -1,0 +1,2 @@
+@interface WAJSEventHandler_updateDeviceVoIPChatMuteConfig : WAJSEventHandler_updateVoIPChatMuteConfig
+@end

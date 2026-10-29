@@ -1,0 +1,2 @@
+@interface _TtC6WeChat25KaraTingEntryAudioProphet : _TtC6WeChat17KaraProphetModule
+@end

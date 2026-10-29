@@ -1,0 +1,3 @@
+@interface MMUIImpactFeedbackGenerator : UIImpactFeedbackGenerator
+@end
+

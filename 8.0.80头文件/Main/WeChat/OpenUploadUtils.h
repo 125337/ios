@@ -1,0 +1,2 @@
+@interface OpenUploadUtils : NSObject
+@end

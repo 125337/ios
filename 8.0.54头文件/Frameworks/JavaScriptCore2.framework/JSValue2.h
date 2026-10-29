@@ -1,0 +1,76 @@
+@interface JSValue2 : NSObject
+{
+    OpaqueJSValue * m_value; // +0x8
+    JSContext2 * _context; // +0x10
+}
++ (id)valueWithJSValueRef:(OpaqueJSValue *)arg1 inContext:(id)arg2;
++ (SEL)selectorForStructToValue:(const char *)arg1;
++ (SEL)selectorForValueToStruct:(const char *)arg1;
++ (id)valueWithPoint:(CGPoint)arg1 inContext:(id)arg2;
++ (id)valueWithRange:(_NSRange)arg1 inContext:(id)arg2;
++ (id)valueWithRect:(CGRect)arg1 inContext:(id)arg2;
++ (id)valueWithSize:(CGSize)arg1 inContext:(id)arg2;
++ (id)valueWithObject:(id)arg1 inContext:(id)arg2;
++ (id)valueWithBool:(BOOL)arg1 inContext:(id)arg2;
++ (id)valueWithDouble:(double)arg1 inContext:(id)arg2;
++ (id)valueWithInt32:(int)arg1 inContext:(id)arg2;
++ (id)valueWithUInt32:(unsigned int)arg1 inContext:(id)arg2;
++ (id)valueWithNewObjectInContext:(id)arg1;
++ (id)valueWithNewArrayInContext:(id)arg1;
++ (id)valueWithNewRegularExpressionFromPattern:(id)arg1 flags:(id)arg2 inContext:(id)arg3;
++ (id)valueWithNewErrorFromMessage:(id)arg1 inContext:(id)arg2;
++ (id)valueWithNullInContext:(id)arg1;
++ (id)valueWithUndefinedInContext:(id)arg1;
++ (id)valueWithNewSymbolFromDescription:(id)arg1 inContext:(id)arg2;
++ (id)valueWithNewPromiseInContext:(id)arg1 fromExecutor:(id /* block */)arg2;
++ (id)valueWithNewPromiseResolvedWithResult:(id)arg1 inContext:(id)arg2;
++ (id)valueWithNewPromiseRejectedWithReason:(id)arg1 inContext:(id)arg2;
+- (id)init;
+- (id)initWithValue:(OpaqueJSValue *)arg1 inContext:(id)arg2;
+- (id)objectForKeyedSubscript:(id)arg1;
+- (id)objectAtIndexedSubscript:(unsigned long long)arg1;
+- (void)setObject:(id)arg1 forKeyedSubscript:(id)arg2;
+- (void)setObject:(id)arg1 atIndexedSubscript:(unsigned long long)arg2;
+- (CGPoint)toPoint;
+- (_NSRange)toRange;
+- (CGRect)toRect;
+- (CGSize)toSize;
+- (void)dealloc;
+- (id)description;
+- (OpaqueJSValue *)JSValueRef;
+- (id)toObject;
+- (id)toObjectOfClass:(Class)arg1;
+- (BOOL)toBool;
+- (double)toDouble;
+- (int)toInt32;
+- (unsigned int)toUInt32;
+- (id)toNumber;
+- (id)toString;
+- (id)toDate;
+- (id)toArray;
+- (id)toDictionary;
+- (id)valueForProperty:(id)arg1;
+- (void)setValue:(id)arg1 forProperty:(id)arg2;
+- (BOOL)deleteProperty:(id)arg1;
+- (BOOL)hasProperty:(id)arg1;
+- (void)defineProperty:(id)arg1 descriptor:(id)arg2;
+- (id)valueAtIndex:(unsigned long long)arg1;
+- (void)setValue:(id)arg1 atIndex:(unsigned long long)arg2;
+- (BOOL)isUndefined;
+- (BOOL)isNull;
+- (BOOL)isBoolean;
+- (BOOL)isNumber;
+- (BOOL)isString;
+- (BOOL)isObject;
+- (BOOL)isSymbol;
+- (BOOL)isArray;
+- (BOOL)isDate;
+- (BOOL)isEqualToObject:(id)arg1;
+- (BOOL)isEqualWithTypeCoercionToObject:(id)arg1;
+- (BOOL)isInstanceOf:(id)arg1;
+- (id)callWithArguments:(id)arg1;
+- (id)constructWithArguments:(id)arg1;
+- (id)invokeMethod:(id)arg1 withArguments:(id)arg2;
+- (id)context;
+@end
+

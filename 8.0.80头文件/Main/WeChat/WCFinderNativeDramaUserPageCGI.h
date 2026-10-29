@@ -1,0 +1,18 @@
+@interface WCFinderNativeDramaUserPageCGI : WCFinderBaseCgi
+{
+    WCFinderNativeDramaUserPageCGIParams * _params; // +0x8
+    id /* block */ _successBlock; // +0x10
+    id /* block */ _failBlock; // +0x18
+}
+- (id)initWithParams:(id)arg1 success:(id /* block */)arg2 fail:(id /* block */)arg3;
+- (void)_setupRequest;
+- (void)didGetResponse:(id)arg1;
+- (void)didFailWithError:(id)arg1 response:(id)arg2;
+- (id)params;
+- (void)setParams:(id)arg1;
+- (id /* block */)successBlock;
+- (void)setSuccessBlock:(id /* block */)arg1;
+- (id /* block */)failBlock;
+- (void)setFailBlock:(id /* block */)arg1;
+- (void).cxx_destruct;
+@end

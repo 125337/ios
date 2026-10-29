@@ -1,0 +1,3 @@
+@interface HBResp : BaseResp
+@end
+

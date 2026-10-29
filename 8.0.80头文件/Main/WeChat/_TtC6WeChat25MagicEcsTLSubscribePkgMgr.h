@@ -1,0 +1,2 @@
+@interface _TtC6WeChat25MagicEcsTLSubscribePkgMgr : _TtC6WeChat18MagicEcsBasePkgMgr
+@end

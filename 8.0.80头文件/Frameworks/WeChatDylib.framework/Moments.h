@@ -1,0 +1,62 @@
+@interface Moments : NSObject
+{
+    Moments native; // +0x8
+}
++ (id)fromNative:(Moments *)arg1;
+- (Moments *)nativeRef;
+- (double)m00;
+- (void)setM00:(double)arg1;
+- (double)m10;
+- (void)setM10:(double)arg1;
+- (double)m01;
+- (void)setM01:(double)arg1;
+- (double)m20;
+- (void)setM20:(double)arg1;
+- (double)m11;
+- (void)setM11:(double)arg1;
+- (double)m02;
+- (void)setM02:(double)arg1;
+- (double)m30;
+- (void)setM30:(double)arg1;
+- (double)m21;
+- (void)setM21:(double)arg1;
+- (double)m12;
+- (void)setM12:(double)arg1;
+- (double)m03;
+- (void)setM03:(double)arg1;
+- (double)mu20;
+- (void)setMu20:(double)arg1;
+- (double)mu11;
+- (void)setMu11:(double)arg1;
+- (double)mu02;
+- (void)setMu02:(double)arg1;
+- (double)mu30;
+- (void)setMu30:(double)arg1;
+- (double)mu21;
+- (void)setMu21:(double)arg1;
+- (double)mu12;
+- (void)setMu12:(double)arg1;
+- (double)mu03;
+- (void)setMu03:(double)arg1;
+- (double)nu20;
+- (void)setNu20:(double)arg1;
+- (double)nu11;
+- (void)setNu11:(double)arg1;
+- (double)nu02;
+- (void)setNu02:(double)arg1;
+- (double)nu30;
+- (void)setNu30:(double)arg1;
+- (double)nu21;
+- (void)setNu21:(double)arg1;
+- (double)nu12;
+- (void)setNu12:(double)arg1;
+- (double)nu03;
+- (void)setNu03:(double)arg1;
+- (id)initWithM00:(double)arg1 m10:(double)arg2 m01:(double)arg3 m20:(double)arg4 m11:(double)arg5 m02:(double)arg6 m30:(double)arg7 m21:(double)arg8 m12:(double)arg9 m03:(double)arg10;
+- (id)init;
+- (id)initWithVals:(id)arg1;
+- (void)set:(id)arg1;
+- (void)completeState;
+- (id)description;
+- (id).cxx_construct;
+@end

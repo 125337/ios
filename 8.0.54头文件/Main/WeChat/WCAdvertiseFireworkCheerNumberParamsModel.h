@@ -1,0 +1,3 @@
+@interface WCAdvertiseFireworkCheerNumberParamsModel : WCAdvertiseLikeNumberParamsModel
+@end
+

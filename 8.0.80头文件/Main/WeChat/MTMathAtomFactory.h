@@ -1,0 +1,32 @@
+@interface MTMathAtomFactory : NSObject
++ (id)times;
++ (id)divide;
++ (id)placeholder;
++ (id)placeholderFraction;
++ (id)placeholderRadical;
++ (id)placeholderSquareRoot;
++ (id)operatorWithName:(id)arg1 limits:(BOOL)arg2;
++ (id)atomForCharacter:(unsigned short)arg1;
++ (id)mathListForCharacters:(id)arg1;
++ (id)atomForLatexSymbolName:(id)arg1;
++ (id)latexSymbolNameForAtom:(id)arg1;
++ (void)addLatexSymbol:(id)arg1 value:(id)arg2;
++ (id)supportedLatexSymbolNames;
++ (id)accentWithName:(id)arg1;
++ (id)accentName:(id)arg1;
++ (id)boundaryAtomForDelimiterName:(id)arg1;
++ (id)delimiterNameForBoundaryAtom:(id)arg1;
++ (unsigned long long)fontStyleWithName:(id)arg1;
++ (id)fontNameForStyle:(unsigned long long)arg1;
++ (id)fractionWithNumerator:(id)arg1 denominator:(id)arg2;
++ (id)fractionWithNumeratorStr:(id)arg1 denominatorStr:(id)arg2;
++ (id)tableWithEnvironment:(id)arg1 rows:(id)arg2 error:(id *)arg3;
++ (id)supportedLatexSymbols;
++ (id)aliases;
++ (id)textToLatexSymbolNames;
++ (id)accents;
++ (id)accentValueToName;
++ (id)delimiters;
++ (id)delimValueToName;
++ (id)fontStyles;
+@end
