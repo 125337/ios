@@ -19,7 +19,7 @@
 // 被直接删除——字符串字面量和 stringWithFormat 调用代码都不进二进制（约 -200KB）。
 // 排障时注释掉这行重新构建即可恢复全部日志，业务代码零改动。
 // 注意：静默版参数表达式不求值、无 NSLog 输出（日志参数均为纯读取，无副作用）。
-#define MIO_LOG_SILENT 1
+// #define MIO_LOG_SILENT 1
 
 #ifdef MIO_LOG_SILENT
 

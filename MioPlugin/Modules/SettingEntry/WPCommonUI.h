@@ -23,7 +23,7 @@ UIView *WPMakeCard(CGFloat top, CGFloat w);
 /// 避免直接 [self presentViewController:] 触发 iOS 17 presentingModalViewController 崩溃
 UIViewController *WPGetTopVCForPresentation(void);
 
-/// 轻量 toast：黑底圆角 label 挂 window，1.5 秒后淡出（全局唯一实现，各页面复用）
+/// 统一 toast 入口：顶部灵动岛胶囊弹出（实现在 WPIslandToast，默认 Info 型）
 void WPShowToast(NSString *message);
 
 /// 统一导航栏外观：背景色与页面背景一致（WPBgColor），去底部阴影线

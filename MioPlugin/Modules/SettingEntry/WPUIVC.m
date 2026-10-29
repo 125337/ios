@@ -6,6 +6,7 @@
 #import "../HomeBeautify/HomeCardVC.h"
 #import "../../Settings/Controllers/SettingMsgMergeController.h"
 #import "../../Core/LogManager.h"
+#import "../../Core/ConfigManager.h"
 
 @interface WPUIVC : SettingCategoryController
 @end
@@ -89,6 +90,20 @@
                                cy:hbCy
                             width:w];
     y = [self finishGroup:hbGroup atY:y height:hbCy];
+
+    // ──── 卡片：开关UI ────
+    y = [self addSectionHeader:@"开关UI" y:y width:w];
+    UIView *dnGroup = [self addTableGroupAtY:y width:w];
+    CGFloat dnCy = 0;
+    BOOL dnsOn = [[ConfigManager valueForKey:@"dayNightSkinEnabled"] boolValue];
+    dnCy = [self addSwitchRowInGroup:dnGroup
+                               title:@"日月开关"
+                                desc:nil
+                                 key:@"dayNightSkinEnabled"
+                                isOn:dnsOn
+                                  cy:dnCy
+                               width:w];
+    y = [self finishGroup:dnGroup atY:y height:dnCy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);
     self.scrollView.contentSize = CGSizeMake(w, y + 40);
