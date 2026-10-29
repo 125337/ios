@@ -2,7 +2,18 @@
 
 #import "DayNightSkinConfig.h"
 
+NSString *const MioDayNightSkinEnabledChanged = @"MioDayNightSkinEnabledChanged";
+
 @implementation DayNightSkinConfig
+
+// 自定义 setter：ConfigManager 的 KVC 写入会走到这里，翻转时发通知供 hook 当场清理
+- (void)setDayNightSkinEnabled:(BOOL)dayNightSkinEnabled {
+    if (_dayNightSkinEnabled == dayNightSkinEnabled) return;
+    _dayNightSkinEnabled = dayNightSkinEnabled;
+    [NSNotificationCenter.defaultCenter postNotificationName:MioDayNightSkinEnabledChanged
+                                                      object:nil
+                                                    userInfo:@{@"on": @(dayNightSkinEnabled)}];
+}
 
 + (instancetype)shared {
     static DayNightSkinConfig *instance = nil;

@@ -78,6 +78,39 @@ static BOOL dnsEnabled(void) {
     return [DayNightSkinConfig shared].dayNightSkinEnabled;
 }
 
+#pragma mark - 总开关翻转：当场清理 / 补挂（WCR 关闭当场生效的同款语义）
+
+// 递归遍历视图树：关→摘皮肤；开→标脏触发下一次 layoutSubviews 挂皮肤
+static void dns_sweepView(UIView *v) {
+    if ([v isKindOfClass:[UISwitch class]]) {
+        UISwitch *sw = (UISwitch *)v;
+        if (dnsEnabled()) {
+            [sw setNeedsLayout];
+        } else {
+            dns_removeSkin(sw);
+        }
+    }
+    for (UIView *sub in v.subviews) dns_sweepView(sub);
+}
+
+// 全窗口扫描（总开关翻转时一次性调用，非热路径）
++ (void)sweepAllSkins {
+    NSMutableArray<UIWindow *> *wins = [[NSMutableArray alloc] init];
+    UIWindow *key = nil;
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+            for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+                if (w.isKeyWindow) key = w; else [wins addObject:w];
+            }
+        }
+    }
+    if (!key) key = [UIApplication sharedApplication].keyWindow;
+    if (key) [wins addObject:key];
+    for (UIWindow *w in wins) dns_sweepView(w);
+    WPLog(@"DayNightSkin", @"[DNSHook] 总开关翻转，全窗口扫描完成 (%d 窗口)", (int)wins.count);
+}
+
 #pragma mark - Hook 函数
 
 // layoutSubviews hook：先跑原版，再按开关挂/摘皮肤（WCR @0x6f3110 逻辑）
@@ -170,6 +203,16 @@ static BOOL dns_hookMethod(Class cls, SEL sel, IMP hookImp, IMP *outOrig) {
     }
 
     WPLog(@"DayNightSkin", @"[DNSHook] ✓ 全局换肤安装完成（dayNightSkinEnabled 实时生效）");
+
+    // 总开关翻转 → 主线程当场清理/补挂（WCR 关闭不掉帧清皮肤的同款语义）
+    [[NSNotificationCenter defaultCenter] addObserverForName:MioDayNightSkinEnabledChanged
+                                                      object:nil
+                                                       queue:[NSOperationQueue mainQueue]
+                                                  usingBlock:^(NSNotification *note) {
+        WPLog(@"DayNightSkin", @"[DNSHook] 总开关 -> %@，开始当场清理",
+              [note.userInfo[@"on"] boolValue] ? @"ON" : @"OFF");
+        [DayNightSkinHook sweepAllSkins];
+    }];
 }
 
 @end
