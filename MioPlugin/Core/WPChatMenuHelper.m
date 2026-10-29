@@ -19,7 +19,6 @@ static char kMioPluginMenuItemKey;
 
 static IMP s_orig_generateOperationMenu = NULL;
 static BOOL s_installed = NO;
-static NSInteger s_orderLogBudget = 1; // 一次性顺序验证日志预算
 
 static NSMutableArray *MioSpecs(void) {
     static NSMutableArray *specs = nil;
@@ -114,18 +113,6 @@ static id hooked_generateOperationMenu(id self, SEL _cmd) {
             [(id)self setValue:items forKey:@"m_arrMenuItems"];
         } @catch (NSException *e) {
             WPLog(@"ChatMenu", @"[ChatMenu] 回写 m_arrMenuItems 失败: %@", e);
-        }
-
-        // 一次性顺序日志：验证插件项沉底（真机日志确认一次即可）
-        if (s_orderLogBudget > 0) {
-            s_orderLogBudget--;
-            NSMutableArray *names = [NSMutableArray array];
-            for (id it in items) {
-                NSString *t = MioTitleOfMenuItem(it);
-                [names addObject:t ?: NSStringFromClass([it class])];
-            }
-            WPLog(@"ChatMenu", @"[ORDER] %@ 菜单顺序: %@", NSStringFromClass(cellCls),
-                  [names componentsJoinedByString:@" | "]);
         }
     }
 

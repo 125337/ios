@@ -14,6 +14,21 @@
 
 #import <Foundation/Foundation.h>
 
+// ===== 编译期日志开关 =====
+// 定义 MIO_LOG_SILENT 后，全项目 843 处 WPLog/WPLogDebug 调用点在预处理阶段
+// 被直接删除——字符串字面量和 stringWithFormat 调用代码都不进二进制（约 -200KB）。
+// 排障时注释掉这行重新构建即可恢复全部日志，业务代码零改动。
+// 注意：静默版参数表达式不求值、无 NSLog 输出（日志参数均为纯读取，无副作用）。
+#define MIO_LOG_SILENT 1
+
+#ifdef MIO_LOG_SILENT
+
+/// 静默版：预处理阶段整段剔除
+#define WPLog(tag, fmt, ...)      do {} while(0)
+#define WPLogDebug(tag, fmt, ...) do {} while(0)
+
+#else
+
 /// 普通日志：控制台 + 文件
 /// @param tag  模块标识（如 @"Revoke" / @"AutoTransfer"）
 /// @param fmt  格式化字符串，后接变参
@@ -33,6 +48,8 @@
         NSString *_msg = [NSString stringWithFormat:(fmt), ##__VA_ARGS__]; \
         [_WPLogManager appendLineWithTag:(tag) content:_msg]; \
     } while(0)
+
+#endif // MIO_LOG_SILENT
 
 @interface _WPLogManager : NSObject
 

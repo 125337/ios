@@ -12,8 +12,6 @@
 //   真伪由导入时的魔数校验把关）② 点击动作 mioFontImportAction（导入核心）。
 //   建 MMMenuItem、挂 SEL、沉底排序全部由 helper 统一处理
 
-static NSInteger s_menuDiagBudget = 8; // 菜单诊断日志预算
-
 // 从 cell 取文件消息的本地路径。链路为视图查看器逐层实锤（2026-10-29）：
 //   cell(infoView) → ContentView(taskWrap) → FileTransferTaskWrap(task)
 //   → MsgFileTransferTask(messageWrap) → CMessageWrap 的 msgFilePath 方法
@@ -47,10 +45,6 @@ static NSString *MioFontImportFilePath(id cellView, NSString * _Nullable * _Null
                 if ([ext isEqualToString:@"ttf"] || [ext isEqualToString:@"otf"] ||
                     [ext isEqualToString:@"ttc"]) {
                     *outTaskName = word;
-                    if (s_menuDiagBudget > 0) {
-                        s_menuDiagBudget--;
-                        WPLog(@"FontImport", @"[MENU] taskName ← accessibilityLabel: %@", word);
-                    }
                     break;
                 }
             }
@@ -117,11 +111,6 @@ static void mioFontImportAction(id self, SEL _cmd) {
     spec.shouldShow = ^BOOL(id cellView) {
         NSString *taskName = nil;
         NSString *path = MioFontImportFilePath(cellView, &taskName);
-        if (s_menuDiagBudget > 0) {
-            s_menuDiagBudget--;
-            WPLog(@"FontImport", @"[MENU] cell=%@ path=%@",
-                  NSStringFromClass([cellView class]), path ?: @"nil");
-        }
         return MioLooksLikeFontPath(path);
     };
     [WPChatMenuHelper registerSpec:spec];
