@@ -36,7 +36,6 @@ typedef NS_ENUM(NSInteger, InputValueType) {
 - (CGFloat)addNavRowInGroup:(UIView *)group title:(NSString *)title subtitle:(NSString *)subtitle tag:(NSInteger)tag action:(SEL)action cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSwitchRowInGroup:(UIView *)group title:(NSString *)title desc:(NSString *)desc key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addSubSwitchRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key isOn:(BOOL)on cy:(CGFloat)cy width:(CGFloat)w;
-- (CGFloat)addDayNightRowInGroup:(UIView *)group title:(NSString *)title key:(NSString *)key cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addInfoRowInGroup:(UIView *)group title:(NSString *)title rightValue:(NSString *)value copyText:(nullable NSString *)copyText cy:(CGFloat)cy width:(CGFloat)w;
 - (CGFloat)addInfoRowInGroup:(UIView *)group title:(NSString *)title rightValue:(NSString *)value copyText:(nullable NSString *)copyText showArrow:(BOOL)showArrow cy:(CGFloat)cy width:(CGFloat)w;
 

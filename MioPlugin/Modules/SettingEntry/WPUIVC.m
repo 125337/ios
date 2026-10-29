@@ -95,12 +95,14 @@
     y = [self addSectionHeader:@"开关UI" y:y width:w];
     UIView *dnGroup = [self addTableGroupAtY:y width:w];
     CGFloat dnCy = 0;
-    // WCR 同款：不自绘 UISwitch，直接把 DayNightSwitch 挂到行右侧（所见即所得，无全局 hook）
-    dnCy = [self addDayNightRowInGroup:dnGroup
-                                 title:@"日月开关"
-                                   key:@"dayNightSkinEnabled"
-                                    cy:dnCy
-                                 width:w];
+    // 总控行走原生 UISwitch；开启后全局 hook（DayNightSkinHook）统一换肤，所见即所得
+    dnCy = [self addSwitchRowInGroup:dnGroup
+                               title:@"日月开关"
+                                desc:nil
+                                 key:@"dayNightSkinEnabled"
+                                isOn:[[ConfigManager valueForKey:@"dayNightSkinEnabled"] boolValue]
+                                  cy:dnCy
+                               width:w];
     y = [self finishGroup:dnGroup atY:y height:dnCy];
 
     self.contentView.frame = CGRectMake(0, 0, w, y + 40);

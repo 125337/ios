@@ -4,7 +4,7 @@
 //
 //  日月开关控件（借自 DayNightSwitch 项目，Finn Gaida 2016，MIT）。
 //  纯 CAShapeLayer/UIView 绘图的太阳↔月亮切换动画开关，零外部依赖。
-//  集成说明见 SettingCategoryController.m 的 addDayNightRowInGroup——本控件只管画和摸，不管配置。
+//  集成说明见 DayNightSkinHook.m——本控件只管画和摸，配置与 hook 都在 hook 侧。
 //
 
 #import <UIKit/UIKit.h>
