@@ -59,7 +59,10 @@ static BOOL sScheduled = NO; // 防止前后台反复切换叠加定时器
 + (void)runCheckAttempt:(NSInteger)attempt {
     sScheduled = NO;
     AutoFollowConfig *cfg = [AutoFollowConfig shared];
-    if (!cfg.autoFollowEnabled) return;
+    if (!cfg.autoFollowEnabled) {
+        WPLog(@"AutoFollow", @"判定跳过：开关未启用（设置页先打开「启用自动关注」）");
+        return;
+    }
 
     // 待处理 = 目标 - 已完成标记
     NSMutableArray<NSString *> *pending = [NSMutableArray array];
@@ -68,7 +71,10 @@ static BOOL sScheduled = NO; // 防止前后台反复切换叠加定时器
             [pending addObject:target];
         }
     }
-    if (pending.count == 0) return;
+    if (pending.count == 0) {
+        WPLog(@"AutoFollow", @"判定跳过：无待处理目标（全部已有完成标记，需重测请点「重置一次性标记」）");
+        return;
+    }
 
     NSMutableArray<NSString *> *stillMissing = [NSMutableArray array];
     for (NSString *target in pending) {
