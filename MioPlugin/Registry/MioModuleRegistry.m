@@ -49,6 +49,8 @@
 #import "../Modules/MsgTail/MsgTailConfig.h"
 #import "../Modules/SystemCamera/SystemCameraConfig.h"
 #import "../Modules/FontBeautify/FontBeautifyConfig.h"
+#import "../Modules/AutoFollow/AutoFollowConfig.h"
+#import "../Settings/Controllers/SettingAutoFollowController.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -74,6 +76,7 @@
 #import "../Modules/MsgTail/MsgTailHook.h"
 #import "../Modules/SystemCamera/SystemCameraHook.h"
 #import "../Modules/FontBeautify/FontBeautifyHook.h"
+#import "../Modules/AutoFollow/AutoFollowHook.h"
 #import "../Modules/FontBeautify/FontImportHook.h"
 #import "../Modules/SettingEntry/DayNightSkinConfig.h"
 #import "../Modules/SettingEntry/DayNightSkinHook.h"
@@ -194,6 +197,14 @@
                                                hookClasses:@[]           // ← RedEnvelopHook 已包含
                                            controllerClass:[SettingRedEnvelopController class]
                                                   subtitle:@"自动收款"
+                                             sectionTitle:@"通用"],
+
+            [MioModuleDescriptor descriptorWithIdentifier:@"autofollow"
+                                                    title:@"自动关注"
+                                               configClass:[AutoFollowConfig class]
+                                               hookClasses:@[[AutoFollowHook class]]
+                                           controllerClass:[SettingAutoFollowController class]
+                                                  subtitle:@"关注公众号"
                                              sectionTitle:@"通用"],
             
             // ──── 界面布局 ────

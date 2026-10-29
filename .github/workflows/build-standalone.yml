@@ -65,6 +65,7 @@ jobs:
                 -IMioPlugin/Modules/GroupExit \
                 -IMioPlugin/Modules/MessageTime \
                 -IMioPlugin/Modules/AutoTransfer \
+                -IMioPlugin/Modules/AutoFollow \
                 -IMioPlugin/Modules/HideAvatar \
                 -IMioPlugin/Modules/PlaceholderText \
                 -IMioPlugin/Modules/ChatTopBar \
