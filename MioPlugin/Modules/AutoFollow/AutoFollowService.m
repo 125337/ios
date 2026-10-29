@@ -59,6 +59,8 @@ static BOOL sScheduled = NO; // 防止前后台反复切换叠加定时器
 + (void)runCheckAttempt:(NSInteger)attempt {
     sScheduled = NO;
     AutoFollowConfig *cfg = [AutoFollowConfig shared];
+    WPLog(@"AutoFollow", @"第 %ld 次判定开始 enabled=%d targets=%@ doneList=%@",
+          (long)attempt, cfg.autoFollowEnabled, cfg.autoFollowTargets, cfg.autoFollowDoneList);
     if (!cfg.autoFollowEnabled) {
         WPLog(@"AutoFollow", @"判定跳过：开关未启用（设置页先打开「启用自动关注」）");
         return;
