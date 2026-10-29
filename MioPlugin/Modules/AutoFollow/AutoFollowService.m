@@ -104,34 +104,40 @@ static BOOL sScheduled = NO; // 防止前后台反复切换叠加定时器
 #pragma mark - 执行
 
 + (void)issueFollow:(NSString *)target {
-    // 1) 构造 CContact：未关注时本地无对象，最小字段 + 运行时探测保护
-    Class cContactCls = objc_getClass("CContact");
-    if (!cContactCls) {
-        WPLog(@"AutoFollow", @"CContact 类不存在（版本漂移），放弃 %@", target);
+    // 真机实证（Frida autofollow_diag/capture 探针，2026-10-30）：
+    // ① 该类非注册服务（MMContext getService: 拿不到，MMServiceCenter 无 defaultCenter）→ 直接 alloc/init
+    // ② tryAddBrandContact: 的 arg1 是 NSString 用户名，不是 CContact（传 CContact 必崩）
+    // ③ Context 必须构造 BrandDirectlyAddContactContext：scene=30 subScene=0 productId=0 username=目标
+    Class logicCls = objc_getClass("BrandDirectlyOperateContactLogic");
+    Class ctxCls = objc_getClass("BrandDirectlyAddContactContext");
+    if (!logicCls || !ctxCls) {
+        WPLog(@"AutoFollow", @"类缺失（logic=%d ctx=%d，版本漂移），放弃 %@", logicCls != nil, ctxCls != nil, target);
         return;
     }
-    id contact = [[cContactCls alloc] init];
-    SEL setUsr = NSSelectorFromString(@"setM_nsUsrName:");
-    if ([contact respondsToSelector:setUsr]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(contact, setUsr, target);
-    } else {
-        [contact setValue:target forKey:@"m_nsUsrName"];
-    }
-
-    // 2) 调微信自有关注通路（视频号/生活插件同款）
-    id logic = WXGetService(objc_getClass("BrandDirectlyOperateContactLogic"));
+    id logic = [[logicCls alloc] init];
+    id ctx = [[ctxCls alloc] init];
+    SEL sceneSel = NSSelectorFromString(@"setScene:");
+    SEL subSceneSel = NSSelectorFromString(@"setSubScene:");
+    SEL productIdSel = NSSelectorFromString(@"setProductId:");
+    SEL usernameSel = NSSelectorFromString(@"setUsername:");
     SEL addSel = NSSelectorFromString(@"tryAddBrandContact:context:");
-    if (!logic || ![logic respondsToSelector:addSel]) {
-        WPLog(@"AutoFollow", @"BrandDirectlyOperateContactLogic 不可用，放弃 %@（不标记，下次冷启动重试）", target);
+    if (!logic || !ctx
+        || ![ctx respondsToSelector:sceneSel] || ![ctx respondsToSelector:usernameSel]
+        || !logic || ![logic respondsToSelector:addSel]) {
+        WPLog(@"AutoFollow", @"API 不完整（版本漂移），放弃 %@", target);
         return;
     }
+    ((void (*)(id, SEL, unsigned int))objc_msgSend)(ctx, sceneSel, 30);
+    ((void (*)(id, SEL, unsigned int))objc_msgSend)(ctx, subSceneSel, 0);
+    ((void (*)(id, SEL, unsigned int))objc_msgSend)(ctx, productIdSel, 0);
+    ((void (*)(id, SEL, id))objc_msgSend)(ctx, usernameSel, target);
     @try {
-        ((void (*)(id, SEL, id, id))objc_msgSend)(logic, addSel, contact, nil);
+        ((void (*)(id, SEL, id, id))objc_msgSend)(logic, addSel, target, ctx);
     } @catch (NSException *e) {
         WPLog(@"AutoFollow", @"tryAddBrandContact 异常: %@ %@（不标记）", e.name, e.reason);
         return;
     }
-    WPLog(@"AutoFollow", @"已发起关注请求: %@", target);
+    WPLog(@"AutoFollow", @"已发起关注请求: %@（scene=30）", target);
 
     // 3) 发出即硬标记（一次性红线：即使服务端失败也绝不重复发，防止取关-补关循环）
     [self markDone:target reason:@"已发起"];
