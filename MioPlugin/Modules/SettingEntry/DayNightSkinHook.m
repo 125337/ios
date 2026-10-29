@@ -65,23 +65,30 @@ static void DayNightSkinHook_installed(id self, SEL _cmd) {
     }
 
     if (skin) {
-        // 已换肤（cell 复用等重复上屏）：同步一次状态即可，不再叠加
+        // 已换肤（cell 复用等重复上屏）：跟随开关搬到新宿主 + 同步状态，不再新建
         if (skin.on != sw.on) skin.on = sw.on;
-        return;
+    } else {
+        skin = [[DayNightSwitch alloc] initWithFrame:CGRectZero];
+        skin.on = sw.on;
+        skin.changeAction = ^(BOOL on) {
+            // 写回原生开关并派发值变化事件；setOn 同值不会重复派发，无回环风险
+            sw.on = on;
+            [sw sendActionsForControlEvents:UIControlEventValueChanged];
+        };
+        // 隐藏原生开关。注意不能把皮肤 addSubview 进 UISwitch——CALayer opacity
+        // 对子树乘法继承，皮肤会跟着隐身（log 34 实锤），必须挂到父视图上
+        sw.layer.opacity = 0.0;
+        sw.layer.shadowOpacity = 0.0;
+        objc_setAssociatedObject(sw, &kDayNightSkinKey, skin, OBJC_ASSOCIATION_RETAIN);
     }
 
-    skin = [[DayNightSwitch alloc] initWithFrame:CGRectMake(0, 0, sw.frame.size.width, sw.frame.size.height)];
-    skin.on = sw.on;
-    skin.changeAction = ^(BOOL on) {
-        // 写回原生开关并派发值变化事件；setOn 同值不会重复派发，无回环风险
-        sw.on = on;
-        [sw sendActionsForControlEvents:UIControlEventValueChanged];
-    };
-
-    sw.layer.opacity = 0.0;
-    sw.layer.shadowOpacity = 0.0;
-    [sw addSubview:skin];
-    objc_setAssociatedObject(sw, &kDayNightSkinKey, skin, OBJC_ASSOCIATION_RETAIN);
+    // 皮肤挂在开关的父视图（cell contentView）上，跟随开关布局/搬迁
+    CGRect frameInSuper = [sw convertRect:sw.bounds toView:sw.superview];
+    if (skin.superview != sw.superview) {
+        [skin removeFromSuperview];
+        [sw.superview addSubview:skin];
+    }
+    skin.frame = frameInSuper;
 }
 
 // 程序化 setOn:（含 .on 属性赋值）——微信 cell 配置开关的主要通路
