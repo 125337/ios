@@ -76,6 +76,7 @@
 #import "../Modules/FontBeautify/FontBeautifyHook.h"
 #import "../Modules/FontBeautify/FontImportHook.h"
 #import "../Modules/SettingEntry/DayNightSkinHook.h"
+#import "../Modules/SettingEntry/DayNightSkinConfig.h"
 #import "../Settings/Controllers/FontBeautifyVC.h"
 
 // ────── 设置页 Controller 的 import ──────
@@ -373,7 +374,7 @@
             // ──── 日月开关（开关换肤；入口在 界面定制-开关UI 卡片） ────
             [MioModuleDescriptor descriptorWithIdentifier:@"daynightskin"
                                                     title:@"日月开关"
-                                               configClass:nil
+                                               configClass:[DayNightSkinConfig class]
                                                hookClasses:@[[DayNightSkinHook class]]
                                            controllerClass:nil
                                                   subtitle:@"微信内开关换成太阳/月亮切换样式"
