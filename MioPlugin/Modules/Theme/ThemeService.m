@@ -16,6 +16,7 @@
 - (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir;
 - (void)miNotifyThemeChanged;
 - (nullable UIColor *)miThemeColorForName:(NSString *)name;
+- (nullable NSDictionary<NSString *, NSString *> *)miParseThemeColors:(NSString *)themeDir;
 @end
 
 // weui_color_new.xml 解析器：<color name="X">#light,#dark</color>（亮/暗逗号对，
