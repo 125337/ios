@@ -30,6 +30,21 @@
 // 原实现
 static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
+static void (*g_orig_WCColorMgr_loadColorFromXML)(id, SEL);
+
+// 微信自己加载完颜色表的瞬间重放主题色（时机对齐：早于微信则被覆盖、晚于主界面创建则首屏陈旧；
+// 我们自己用 loadColorFromXMLByPath: 应用，不走此方法，无递归）
+static void mio_WCColorMgr_loadColorFromXML(id self, SEL _cmd) {
+    g_orig_WCColorMgr_loadColorFromXML(self, _cmd);
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
+        if ([[ThemeService shared] miApplyColorsForThemeDir:dir]) {
+            [[ThemeService shared] miNotifyThemeChanged];
+        }
+    });
+}
 
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
     NSString *path = [[ThemeService shared] miCachedThemeImagePathForName:name];
@@ -96,6 +111,19 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCSVGImage 类不存在");
+        }
+
+        Class colorMgrCls = objc_getClass("WCColorMgr");
+        if (colorMgrCls) {
+            SEL s3 = NSSelectorFromString(@"loadColorFromXML");
+            if (class_getInstanceMethod(colorMgrCls, s3)) {
+                MSHookMessageEx(colorMgrCls, s3, (IMP)mio_WCColorMgr_loadColorFromXML, (IMP *)&g_orig_WCColorMgr_loadColorFromXML);
+                WPLog(@"Theme", @"[HOOK] ✓ -[WCColorMgr loadColorFromXML]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr loadColorFromXML 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
         }
     });
 }
@@ -278,6 +306,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     NSString *path = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
     BOOL ok = [self miApplyColorsForThemeDir:path];
     WPLog(@"Theme", @"[REPLAY] 颜色层重放 %@ → %@", cfg.activeThemeName, ok ? @"OK" : @"SKIP/FAIL");
+    if (ok) [self miNotifyThemeChanged]; // 刷新首屏陈旧视图
 }
 
 #pragma mark - 显示名
