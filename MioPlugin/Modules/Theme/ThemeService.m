@@ -5,7 +5,6 @@
 
 #import "ThemeService.h"
 #import "ThemeConfig.h"
-#import "MioZipReader.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
@@ -42,148 +41,27 @@
     return [names sortedArrayUsingSelector:@selector(compare:)];
 }
 
-#pragma mark - 导入（zip → themes/<名称>/）
+#pragma mark - theme.inf 自动补写
 
-- (BOOL)importThemeFromZip:(NSString *)zipPath
-                   outName:(NSString **)outName
-                   errText:(NSString **)errText {
-    if (errText) *errText = nil;
-    if (outName) *outName = nil;
-    if (zipPath.pathExtension.lowercaseString.length == 0) {
-        // 无扩展名不直接拒绝（部分来源 zip 不带后缀），仅记日志
-        WPLog(@"Theme", @"[IMPORT] 无扩展名 zip，继续尝试: %@", zipPath.lastPathComponent);
-    }
-
-    // 主题名 = zip 文件名去扩展名；清洗非法路径字符
-    NSString *base = zipPath.lastPathComponent;
-    if ([base.pathExtension.lowercaseString isEqualToString:@"zip"]) base = [base stringByDeletingPathExtension];
-    NSCharacterSet *illegal = [[NSCharacterSet characterSetWithCharactersInString:@"/\\:?<>|*\""] invertedSet];
-    base = [[base componentsSeparatedByCharactersInSet:illegal] componentsJoinedByString:@"_"];
-    base = [base stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    if (base.length == 0) base = @"imported_theme";
-
-    NSString *themesDir = [ThemeConfig mioThemesDir];
-    NSString *tmpDir = [themesDir stringByAppendingPathComponent:@".import_tmp"];
+// MMTheme themeFromPath: 对无元数据目录返回 nil（D519 实测），最大嫌疑缺 theme.inf
+// （微信助手导入时大概率自行补写）。应用前缺文件就生成 plist 格式兜底：
+// 字段名取自 MMTheme.h（tid/name/icon/version/author/discription/website），填最小集。
+// 引擎不需要则忽略，无害；格式不对仍 nil 时走 Frida 实锤。
+- (void)miEnsureThemeInf:(NSString *)themeDir {
+    NSString *infPath = [themeDir stringByAppendingPathComponent:@"theme.inf"];
     NSFileManager *fm = [NSFileManager defaultManager];
-    [fm removeItemAtPath:tmpDir error:nil]; // 上次残留清理
-    [fm createDirectoryAtPath:tmpDir withIntermediateDirectories:YES attributes:nil error:nil];
-
-    // 解压：优先探测微信自带 zip 类（8.0.54 实测 SSZipArchive 未注册，类名带前缀未实锤）；
-    // 全部候选落空时走自研 MioZipReader（libz raw inflate，dlsym 加载，零外部依赖）
-    BOOL unzipped = NO;
-    NSString *unzipErr = nil;
-    Class zipCls = nil;
-    for (NSString *candidate in @[@"SSZipArchive", @"QSSZipArchive", @"ZipArchive", @"MMZipArchive"]) {
-        Class cls = objc_getClass(candidate.UTF8String);
-        WPLog(@"Theme", @"[IMPORT] zip 类探测 %@ → %@", candidate, cls ?: @"nil");
-        if (cls && [cls respondsToSelector:NSSelectorFromString(@"unzipFileAtPath:toDestination:")]) {
-            zipCls = cls;
-            break;
-        }
+    if ([fm fileExistsAtPath:infPath]) return;
+    NSString *name = themeDir.lastPathComponent;
+    NSDictionary *meta = @{
+        @"tid"     : name,
+        @"name"    : name,
+        @"version" : @"1",
+    };
+    if ([meta writeToFile:infPath atomically:YES]) {
+        WPLog(@"Theme", @"[INF] theme.inf 已生成（目录缺元数据）: %@", name);
+    } else {
+        WPLog(@"Theme", @"[INF] theme.inf 写入失败: %@", infPath);
     }
-    if (zipCls) {
-        @try {
-            ((BOOL (*)(id, SEL, NSString *, NSString *))objc_msgSend)
-                (zipCls, NSSelectorFromString(@"unzipFileAtPath:toDestination:"), zipPath, tmpDir);
-            unzipped = YES;
-            WPLog(@"Theme", @"[IMPORT] 走微信 %@ 解压", zipCls);
-        } @catch (NSException *e) {
-            unzipErr = [NSString stringWithFormat:@"微信解压器异常：%@", e.reason ?: @"未知异常"];
-        }
-    }
-    if (!unzipped) {
-        unzipped = [MioZipReader unzipFileAtPath:zipPath toDestination:tmpDir errText:&unzipErr];
-        WPLog(@"Theme", @"[IMPORT] 走自研 MioZipReader 解压 → %@", unzipped ? @"OK" : @"FAIL");
-    }
-    if (!unzipped) {
-        if (errText) *errText = unzipErr ?: @"解压失败";
-        [fm removeItemAtPath:tmpDir error:nil];
-        return NO;
-    }
-
-    // 归一化：zip 常带单层根目录（或 __MACOSX 垃圾）；定位真实主题根
-    NSString *root = [self miThemeRootInDir:tmpDir];
-    if (!root) {
-        if (errText) *errText = @"不是有效的微信主题包（缺少 PNG/颜色表/CSS 特征文件）";
-        [fm removeItemAtPath:tmpDir error:nil];
-        return NO;
-    }
-
-    // 落盘：同名覆盖
-    NSString *dest = [themesDir stringByAppendingPathComponent:base];
-    if ([dest.lowercaseString isEqualToString:tmpDir.lowercaseString]) {
-        if (errText) *errText = @"主题名非法";
-        [fm removeItemAtPath:tmpDir error:nil];
-        return NO;
-    }
-    [fm removeItemAtPath:dest error:nil];
-    NSError *mvErr = nil;
-    if (![fm moveItemAtPath:root toPath:dest error:&mvErr]) {
-        if (errText) *errText = [NSString stringWithFormat:@"落盘失败：%@", mvErr.localizedDescription ?: @"未知错误"];
-        [fm removeItemAtPath:tmpDir error:nil];
-        return NO;
-    }
-    [fm removeItemAtPath:tmpDir error:nil];
-
-    WPLog(@"Theme", @"[IMPORT] 主题导入成功: %@ (%@)", base, zipPath.lastPathComponent);
-    if (outName) *outName = base;
-    return YES;
-}
-
-// 在解压结果里定位主题根：单层根目录则剥壳；特征校验（≥1 个 png 或 weui_color*.xml 或 *.css）
-- (nullable NSString *)miThemeRootInDir:(NSString *)dir {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSArray *items = [fm contentsOfDirectoryAtPath:dir error:nil];
-    NSMutableArray *subdirs = [NSMutableArray array];
-    for (NSString *item in items) {
-        if ([item hasPrefix:@"."]) continue; // __MACOSX / 隐藏目录直接忽略
-        BOOL isDir = NO;
-        if ([fm fileExistsAtPath:[dir stringByAppendingPathComponent:item] isDirectory:&isDir] && isDir) {
-            [subdirs addObject:item];
-        }
-    }
-    NSString *root = dir;
-    // 所有可见内容都在唯一子目录里 → 剥壳
-    if (subdirs.count == 1 && [self miVisibleFileCountInDir:dir] == 1) {
-        root = [dir stringByAppendingPathComponent:subdirs[0]];
-    }
-    if (![self miLooksLikeThemeDir:root]) {
-        // 允许再剥一层（zip 里套两层目录的打包习惯）
-        NSArray *inner = subdirs;
-        if (inner.count == 1) {
-            NSString *root2 = [dir stringByAppendingPathComponent:inner[0]];
-            for (NSString *sub in [fm contentsOfDirectoryAtPath:root2 error:nil]) {
-                BOOL isDir = NO;
-                NSString *full = [root2 stringByAppendingPathComponent:sub];
-                if ([sub hasPrefix:@"."] || ![fm fileExistsAtPath:full isDirectory:&isDir] || !isDir) continue;
-                if ([self miLooksLikeThemeDir:full]) return full;
-            }
-        }
-        return nil;
-    }
-    return root;
-}
-
-- (NSInteger)miVisibleFileCountInDir:(NSString *)dir {
-    NSInteger n = 0;
-    for (NSString *item in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil]) {
-        if ([item hasPrefix:@"."]) continue;
-        n++;
-    }
-    return n;
-}
-
-// 特征校验：≥1 个 .png / weui_color*.xml / *.css 即认为有效主题包（D519 实测格式）
-- (BOOL)miLooksLikeThemeDir:(NSString *)dir {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    BOOL isDir = NO;
-    if (![fm fileExistsAtPath:dir isDirectory:&isDir] || !isDir) return NO;
-    for (NSString *item in [fm contentsOfDirectoryAtPath:dir error:nil]) {
-        NSString *ext = item.pathExtension.lowercaseString;
-        if ([ext isEqualToString:@"png"] || [ext isEqualToString:@"css"]) return YES;
-        if ([ext isEqualToString:@"xml"] && [item.lowercaseString hasPrefix:@"weui_color"]) return YES;
-    }
-    return NO;
 }
 
 #pragma mark - 应用 / 恢复默认
@@ -246,6 +124,7 @@
         return NO;
     }
     @try {
+        [self miEnsureThemeInf:path]; // 缺元数据的目录先补 theme.inf
         SEL fromPathSel = NSSelectorFromString(@"themeFromPath:");
         if (![themeCls respondsToSelector:fromPathSel]) {
             WPLog(@"Theme", @"[APPLY] MMTheme themeFromPath: 不可用");

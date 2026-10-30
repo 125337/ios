@@ -11,14 +11,12 @@
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioRestartHelper.h"
 #import "../../Modules/SettingEntry/WPCommonUI.h"
-#import <objc/message.h>
-#import <objc/runtime.h>
 
-// 主题美化设置页：
-//   卡片1 主题美化：启用开关 + 导入主题包(zip) + 说明
+// 主题美化设置页（手动放置模式：用户用文件管理器把主题文件夹放入主题目录，本页负责应用）：
+//   卡片1 主题美化：启用开关 + 主题目录（点击复制路径）+ 说明
 //   卡片2 已导入主题：动态行（点行 → 菜单：应用 / 删除）
 //   卡片3 维护：恢复默认主题 + 重启微信
-@interface ThemeVC () <UIDocumentPickerDelegate>
+@interface ThemeVC ()
 @end
 
 // 主题行动 key 前缀（buttonClicked 按 key 分流）
@@ -29,12 +27,11 @@ static NSString * const kThemeRowPrefix = @"theme::";
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"主题美化";
-    // 不在此处构建：viewWillAppear 统一 wpReloadUI（同 FontBeautifyVC 模式）
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self wpReloadUI]; // 导入/删除/应用后刷新列表
+    [self wpReloadUI]; // 放入主题后返回本页自动出现
 }
 
 // ── 页面构建（SettingCategoryController 同款） ──
@@ -61,14 +58,14 @@ static NSString * const kThemeRowPrefix = @"theme::";
                                 width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addButtonRowInGroup:group
-                             title:@"导入主题包"
+                             title:@"主题目录"
                               hint:[NSString stringWithFormat:@"当前主题: %@", [[ThemeService shared] currentThemeDisplayName]]
-                               key:@"importTheme"
+                               key:@"copyThemesDir"
                                 cy:cy
                              width:w];
     cy = [self addSeparatorInGroup:group cy:cy width:w];
     cy = [self addHintRowInGroup:group
-                            text:@"支持微信主题包格式（zip）：图标 PNG + weui_color 颜色表 + 可选 CSS\n导入后自动应用，未刷新的部分重启微信生效"
+                            text:@"用文件管理器（Filza 等）把主题文件夹放入上述目录，返回本页即可出现。\nzip 主题包可就地解压；应用前会自动补写 theme.inf 元数据"
                               cy:cy
                            width:w];
     y = [self finishGroup:group atY:y height:cy];
@@ -76,12 +73,12 @@ static NSString * const kThemeRowPrefix = @"theme::";
     // ── 卡片2 已导入主题（动态行） ──
     NSArray<NSString *> *names = [[ThemeService shared] importedThemeNames];
     y += 8;
-    y = [self addSectionHeader:@"已导入主题" y:y width:w];
+    y = [self addSectionHeader:@"已放置主题" y:y width:w];
     UIView *tGroup = [self addTableGroupAtY:y width:w];
     CGFloat tcy = 0;
     if (names.count == 0) {
         tcy = [self addHintRowInGroup:tGroup
-                                  text:@"暂无已导入主题，点击上方「导入主题包」添加"
+                                  text:@"暂无主题。点上方「主题目录」复制路径，用文件管理器把主题文件夹放进去"
                                     cy:tcy
                                  width:w];
     } else {
@@ -126,8 +123,11 @@ static NSString * const kThemeRowPrefix = @"theme::";
 // ── 按钮行回调（基类统一入口） ──
 - (void)buttonClicked:(NSString *)key {
     WPLog(@"Theme", @"[BUTTON] key=%@", key);
-    if ([key isEqualToString:@"importTheme"]) {
-        [self presentThemePicker];
+    if ([key isEqualToString:@"copyThemesDir"]) {
+        NSString *dir = [ThemeConfig mioThemesDir];
+        [UIPasteboard generalPasteboard].string = dir;
+        WPLog(@"Theme", @"[DIR] 已复制主题目录: %@", dir);
+        WPShowToast(@"路径已复制，用文件管理器把主题文件夹放进去");
     } else if ([key isEqualToString:@"restoreDefault"]) {
         [MioAlertHelper showConfirmAlertWithTitle:@"恢复默认主题"
                                          message:@"将卸载当前主题并恢复微信原生外观"
@@ -182,57 +182,6 @@ static NSString * const kThemeRowPrefix = @"theme::";
             }];
         }
     }];
-}
-
-#pragma mark - 文件选择器（FontPickerVC 同款 legacy init）
-
-- (void)presentThemePicker {
-    @try {
-        SEL sel = NSSelectorFromString(@"initWithDocumentTypes:inMode:");
-        if (![UIDocumentPickerViewController instancesRespondToSelector:sel]) {
-            WPLog(@"Theme", @"[PICKER] initWithDocumentTypes:inMode: 不可用");
-            WPShowToast(@"当前系统不支持文件选择器");
-            return;
-        }
-        id (*initFn)(id, SEL, NSArray *, long) = (id (*)(id, SEL, NSArray *, long))objc_msgSend;
-        id picker = initFn([UIDocumentPickerViewController alloc], sel,
-                           @[@"public.zip-archive", @"com.pkware.zip-archive",
-                             @"public.data", @"public.item"],
-                           0 /* UIDocumentPickerModeImport */);
-        WPLog(@"Theme", @"[PICKER] legacy inMode: init → %@", picker ?: @"nil");
-        if (!picker) {
-            WPShowToast(@"文件选择器创建失败");
-            return;
-        }
-        ((void (*)(id, SEL, id))objc_msgSend)(picker, NSSelectorFromString(@"setDelegate:"), self);
-        [self presentViewController:picker animated:YES completion:nil];
-    } @catch (NSException *e) {
-        WPLog(@"Theme", @"[PICKER] exception: %@", e);
-        WPShowToast([NSString stringWithFormat:@"无法打开文件选择器：%@", e.reason ?: @"未知错误"]);
-    }
-}
-
-- (void)documentPicker:(UIDocumentPickerViewController *)controller
-didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
-    if (urls.count == 0) return;
-    NSURL *src = urls[0];
-    WPLog(@"Theme", @"[PICKER] picked: %@", src.lastPathComponent);
-
-    NSString *name = nil, *err = nil;
-    BOOL ok = [[ThemeService shared] importThemeFromZip:src.path
-                                                outName:&name
-                                                errText:&err];
-    if (!ok) {
-        WPShowToast(err ?: @"导入失败");
-        return;
-    }
-    WPShowToast([NSString stringWithFormat:@"导入成功：%@", name]);
-    // 导入即应用（导入的主要意图就是换肤）；失败不阻断，可在列表手动再试
-    BOOL applied = [[ThemeService shared] applyThemeNamed:name];
-    if (applied) {
-        WPShowToast(@"已应用，未刷新的部分重启微信生效");
-    }
-    [self wpReloadUI];
 }
 
 @end
