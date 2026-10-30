@@ -15,33 +15,6 @@
 - (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name;
 @end
 
-// weui_color_new.xml 解析器：<color name="X">#light,#dark</color>（亮/暗逗号对，与微信
-// WCColorMgr.loadNormalColorFromXML 同款格式，值原样存储由引擎按 _currentType 取用）
-@interface _MioColorXmlParser : NSObject <NSXMLParserDelegate>
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *result;
-@property (nonatomic, copy) NSString *curName;
-@property (nonatomic, strong) NSMutableString *buf;
-@end
-@implementation _MioColorXmlParser
-- (void)parser:(NSXMLParser *)parser didStartElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qualifiedName attributes:(NSDictionary<NSString *, NSString *> *)attributeDict {
-    if ([elementName isEqualToString:@"color"]) {
-        self.curName = attributeDict[@"name"];
-        self.buf = [NSMutableString string];
-    }
-}
-- (void)parser:(NSXMLParser *)parser foundCharacters:(NSString *)string {
-    [self.buf appendString:string];
-}
-- (void)parser:(NSXMLParser *)parser didEndElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qualifiedName {
-    if ([elementName isEqualToString:@"color"] && self.curName.length) {
-        NSString *v = [self.buf stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (v.length) self.result[self.curName] = v;
-    }
-    self.curName = nil;
-    self.buf = nil;
-}
-@end
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 取图拦截架构（WXHelper 3.9-5 逆向实锤：它不用 themeFromPath/theme.inf/setCurrentTheme，
 // 引擎注册路线对元数据/CSS 有隐藏要求且 D519 实测走不通，全部废弃）。
@@ -79,7 +52,6 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
 @implementation ThemeService {
     NSCache *_pathCache; // key = 主题名|请求名，value = 路径或 NSNull（未命中也缓存，挡高频磁盘读）
     NSInteger _hitCount;
-    NSDictionary *_savedColorDic; // 首次替换颜色表前的原生色表快照（恢复时放回）
 }
 
 + (instancetype)shared {
@@ -175,7 +147,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     WPLog(@"Theme", @"[CACHE] 主题图路径缓存已清");
 }
 
-#pragma mark - 颜色层（weui_color_new.xml → WCColorMgr，换 colorDic 不用 hook）
+#pragma mark - 颜色层（weui_color_new.xml → WCColorMgr 引擎自带加载器）
 
 - (nullable id)miColorMgr {
     Class cls = objc_getClass("WCColorMgr");
@@ -185,55 +157,33 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     return ((id (*)(id, SEL))objc_msgSend)(cls, s);
 }
 
-// 解析主题目录下 weui_color_new.xml → name → "#light,#dark"（无该文件/解析为空返回 nil）
-- (nullable NSDictionary<NSString *, NSString *> *)miParseThemeColors:(NSString *)themeDir {
-    NSString *xmlPath = [themeDir stringByAppendingPathComponent:@"weui_color_new.xml"];
-    NSData *data = [NSData dataWithContentsOfFile:xmlPath];
-    if (!data.length) return nil;
-    _MioColorXmlParser *del = [_MioColorXmlParser new];
-    del.result = [NSMutableDictionary dictionary];
-    NSXMLParser *parser = [[NSXMLParser alloc] initWithData:data];
-    parser.delegate = del;
-    [parser parse];
-    return del.result.count ? [del.result copy] : nil;
-}
-
-// 合并替换 WCColorMgr 色表：原生为底、主题覆盖（主题包只含子集时不丢其余颜色名）。
-// WCColor 几百个类方法经 resolveClassMethod: 转发到 getColorValueForName:，全部走 colorDic，
-// 换字典即全量换色。WCColorMgr 内部 hex 缓存按内容寻址（同 hex 同色），无失效问题。
+// 用引擎自己的 loadColorFromXMLByPath: 加载主题色表（引擎自行解析亮/暗 _currentType、
+// 维护内部缓存）。自写解析器塞 colorDic 的路线已废弃——引擎解析时按类型拆分存储，
+// 原样塞 "#light,#dark" 串会渲染错乱（D519 实测）。
 - (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir {
     id mgr = [self miColorMgr];
-    SEL dicSel = NSSelectorFromString(@"colorDic");
-    SEL setDicSel = NSSelectorFromString(@"setColorDic:");
-    if (!mgr || ![mgr respondsToSelector:dicSel] || ![mgr respondsToSelector:setDicSel]) {
-        WPLog(@"Theme", @"[COLOR] WCColorMgr/colorDic 存取器不可用，跳过颜色层");
+    SEL loadSel = NSSelectorFromString(@"loadColorFromXMLByPath:");
+    if (!mgr || ![mgr respondsToSelector:loadSel]) {
+        WPLog(@"Theme", @"[COLOR] WCColorMgr/loadColorFromXMLByPath: 不可用，跳过颜色层");
         return NO;
     }
-    NSDictionary *themeColors = [self miParseThemeColors:themeDir];
-    if (!themeColors) {
+    NSString *xmlPath = [themeDir stringByAppendingPathComponent:@"weui_color_new.xml"];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:xmlPath]) {
         WPLog(@"Theme", @"[COLOR] 主题无 weui_color_new.xml（纯图标包），跳过颜色层");
         return NO;
     }
-    NSDictionary *orig = ((id (*)(id, SEL))objc_msgSend)(mgr, dicSel);
-    if (!_savedColorDic) _savedColorDic = orig; // 首次替换前快照
-    NSMutableDictionary *merged = [NSMutableDictionary dictionaryWithDictionary:orig ?: @{}];
-    [merged addEntriesFromDictionary:themeColors];
-    ((void (*)(id, SEL, id))objc_msgSend)(mgr, setDicSel, merged);
-    WPLog(@"Theme", @"[COLOR] 颜色表已替换: 主题 %ld 项，合并后 %ld 项", (long)themeColors.count, (long)merged.count);
-    return YES;
+    BOOL ok = ((BOOL (*)(id, SEL, NSString *))objc_msgSend)(mgr, loadSel, xmlPath);
+    WPLog(@"Theme", @"[COLOR] 引擎加载主题色表 %@ → %@", xmlPath.lastPathComponent, ok ? @"OK" : @"FAIL");
+    return ok;
 }
 
+// 还原原生色表：重载 app 原包（引擎内部处理解析/缓存/类型，快照方案废弃）
 - (void)miRestoreColors {
     id mgr = [self miColorMgr];
-    if (!mgr) return;
-    if (_savedColorDic) {
-        ((void (*)(id, SEL, id))objc_msgSend)(mgr, NSSelectorFromString(@"setColorDic:"), _savedColorDic);
-        _savedColorDic = nil;
-        WPLog(@"Theme", @"[COLOR] 原生颜色表已还原");
-    } else {
-        // 没快照（本会话未替换过）时重载 app 原包色表兜底
-        SEL l = NSSelectorFromString(@"loadColorFromXML");
-        if ([mgr respondsToSelector:l]) ((void (*)(id, SEL))objc_msgSend)(mgr, l);
+    SEL l = NSSelectorFromString(@"loadColorFromXML");
+    if (mgr && [mgr respondsToSelector:l]) {
+        ((void (*)(id, SEL))objc_msgSend)(mgr, l);
+        WPLog(@"Theme", @"[COLOR] 原生颜色表已还原（loadColorFromXML）");
     }
 }
 
