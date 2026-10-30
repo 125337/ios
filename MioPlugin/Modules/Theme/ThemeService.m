@@ -120,7 +120,9 @@ static NSInteger g_darkAskLogCount = 0;
 static id (*g_orig_DM_registerPair)(id, SEL, UIImage *, UIImage *);
 static UIImage *(*g_orig_DM_darkImageFor)(id, SEL, UIImage *);
 
-static void mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) {
+// 注意：registerPairWithLightImage:darkImage: 返回 id（头文件实锤），必须透传原实现返回值——
+// 写成 void 会让微信拿到 X0 残留垃圾对象调 size → unrecognized selector 闪退（8.0.79 实测）
+static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) {
     NSDictionary<NSString *, NSString *> *reg = nil;
     if (light) {
         @synchronized(g_servedImagePaths) {
@@ -140,7 +142,7 @@ static void mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark
               dark ? [NSString stringWithFormat:@"%p", dark] : @"(nil)",
               darkFinal != dark ? @"主题暗图" : @"否");
     }
-    g_orig_DM_registerPair(self, _cmd, light, darkFinal);
+    return g_orig_DM_registerPair(self, _cmd, light, darkFinal);
 }
 
 static UIImage *mio_DM_darkImageFor(id self, SEL _cmd, UIImage *img) {
