@@ -169,6 +169,19 @@ static void MioLogBannerState(NSString *when, UIButton *b) {
         v = v.superview;
         WPLog(@"Theme", @"[BANNER] ↑%d %@ bg=%@", i, NSStringFromClass([v class]), MioDescribeColor(v.backgroundColor));
     }
+    // 盲区补查：UITableViewCell.backgroundView 是 contentView 的兄弟，不在 superview 链上，
+    // 却垫在 2% 透明横幅正下方——单值浅灰就藏在这
+    UIView *cellView = b.superview.superview ?: b.superview;
+    if ([cellView isKindOfClass:[UITableViewCell class]]) {
+        UITableViewCell *cell = (UITableViewCell *)cellView;
+        WPLog(@"Theme", @"[BANNER] cell.backgroundView=%@ bg=%@ cell.selectedBG=%@",
+              cell.backgroundView ? NSStringFromClass([cell.backgroundView class]) : @"nil",
+              MioDescribeColor(cell.backgroundView.backgroundColor),
+              MioDescribeColor(cell.selectedBackgroundView.backgroundColor));
+        WPLog(@"Theme", @"[BANNER] contentView bg=%@ cell bg=%@",
+              MioDescribeColor(cell.contentView.backgroundColor),
+              MioDescribeColor(cell.backgroundColor));
+    }
     // 首次 layout 打印整个 cell 的视图树（浅灰若来自兄弟视图/背景图，这里现形）
     static dispatch_once_t treeOnce;
     dispatch_once(&treeOnce, ^{
