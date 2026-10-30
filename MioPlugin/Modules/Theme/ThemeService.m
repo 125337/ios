@@ -74,7 +74,7 @@
     NSString *unzipErr = nil;
     Class zipCls = nil;
     for (NSString *candidate in @[@"SSZipArchive", @"QSSZipArchive", @"ZipArchive", @"MMZipArchive"]) {
-        Class cls = MIO_CLS(candidate);
+        Class cls = objc_getClass(candidate.UTF8String);
         WPLog(@"Theme", @"[IMPORT] zip 类探测 %@ → %@", candidate, cls ?: @"nil");
         if (cls && [cls respondsToSelector:NSSelectorFromString(@"unzipFileAtPath:toDestination:")]) {
             zipCls = cls;
