@@ -277,10 +277,26 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     }
 }
 
-#pragma mark - 取色时点拦截（getColorValueForName: hook 的查询侧）
+#pragma mark - 取色时点拦截（getColor:/getColorValueForName: hook 的查询侧）
+
+// 解析主题色表：weui_color_new.xml → name → "#light,#dark"（_MioColorXmlParser 旁路解析，
+// 不碰引擎状态；结果由调用方按路径缓存，每个主题只解析一次）
+- (nullable NSDictionary<NSString *, NSString *> *)miParseThemeColors:(NSString *)themeDir {
+    NSString *xmlPath = [themeDir stringByAppendingPathComponent:@"weui_color_new.xml"];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:xmlPath]) return nil;
+    NSXMLParser *parser = [[NSXMLParser alloc] initWithContentsOfURL:[NSURL fileURLWithPath:xmlPath]];
+    if (!parser) return nil;
+    _MioColorXmlParser *delegate = [[_MioColorXmlParser alloc] init];
+    delegate.result = [NSMutableDictionary dictionary];
+    parser.delegate = delegate;
+    [parser parse];
+    NSDictionary<NSString *, NSString *> *result = [delegate.result copy];
+    WPLog(@"Theme", @"[COLOR] 主题色表解析完成：%lu 项", (unsigned long)result.count);
+    return result;
+}
 
 // 查询主题色：主题定义了该名字 → 返回主题 UIColor；否则 nil 走原实现。
-// 亮/暗按系统外观拆分逗号对，转换用引擎自己的 hexStringToColor:（类型/缓存与原生一致）。
+// 亮/暗按系统外观拆分逗号对，hex 纯解析（#RRGGBB[AA]）——全路径零回调引擎。
 - (nullable UIColor *)miThemeColorForName:(NSString *)name {
     if (name.length == 0 || [name containsString:@"/"]) return nil;
     ThemeConfig *cfg = [ThemeConfig shared];
