@@ -16,7 +16,6 @@
 - (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir;
 - (void)miNotifyThemeChanged;
 - (nullable UIColor *)miThemeColorForName:(NSString *)name;
-- (nullable NSString *)miThemeColorPairForName:(NSString *)name;
 - (nullable NSDictionary<NSString *, NSString *> *)miParseThemeColors:(NSString *)themeDir;
 // 取图子步骤（编排层调用；registerPair hook 也用 miLoadImageAtPath）
 - (NSArray<NSString *> *)miLightCandidatesForStem:(NSString *)stem ext:(NSString *)ext threeX:(BOOL)threeX;
@@ -86,167 +85,16 @@ static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
 // （亮/暗双份，colorWithDynamicProvider 按当前 trait 出色，系统切换自动重解析）。
 // getColor: 是 +[WCColor xxx] 全部动态类方法（resolveClassMethod:）的真实入口；
 // getColorValueForName: 是另一条对外查询 API。两个查询面都拦。
-// ── 一次性诊断（定位「已登录 Windows 电脑」横幅不跟暗色）──
-// 动态色的 description 不含解析值，用 resolvedColorWithTraitCollection: 把亮/暗两个分支都摊开
-static NSString *MioDescribeColor(UIColor *c) {
-    if (!c) return @"nil";
-    UITraitCollection *lt = [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight];
-    UITraitCollection *dk = [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark];
-    return [NSString stringWithFormat:@"<%@ %@> L=%@ D=%@", c, [c class],
-            [c resolvedColorWithTraitCollection:lt], [c resolvedColorWithTraitCollection:dk]];
-}
-
-// 命中：每个 name 只打一次（值不随调用变化，去重防爆量）
-static void MioLogColorHit(NSString *name, NSString *pair, UIColor *ret) {
-    static NSMutableSet<NSString *> *seen = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
-    if (seen.count > 800 || [seen containsObject:name]) return;
-    [seen addObject:name];
-    WPLog(@"Theme", @"[COLOR-HIT] name=%@ pair=%@ → %@", name, pair, MioDescribeColor(ret));
-}
-
-// 未命中（回落原实现）：每个 name 只打一次
-static void MioLogColorMiss(NSString *api, NSString *name, UIColor *orig) {
-    static NSMutableSet<NSString *> *seen = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
-    if (seen.count > 800 || [seen containsObject:name] || !name) return;
-    [seen addObject:name];
-    WPLog(@"Theme", @"[COLOR-MISS] %@ name=%@ 原实现 → %@", api, name, MioDescribeColor(orig));
-}
-
 static id mio_WCColorMgr_getColor(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
-    if (!themed) {
-        UIColor *orig = g_orig_WCColorMgr_getColor(self, _cmd, name);
-        MioLogColorMiss(@"getColor", name, orig);
-        return orig;
-    }
-    MioLogColorHit(name, [[ThemeService shared] miThemeColorPairForName:name], themed);
-    return themed;
+    if (themed) return themed;
+    return g_orig_WCColorMgr_getColor(self, _cmd, name);
 }
 
 static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
-    if (!themed) {
-        UIColor *orig = g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
-        MioLogColorMiss(@"getColorValueForName", name, orig);
-        return orig;
-    }
-    MioLogColorHit(name, [[ThemeService shared] miThemeColorPairForName:name], themed);
-    return themed;
-}
-
-// ── 横幅本体诊断：MFWebMMBtn（「已登录 Windows 电脑」条，纯日志不改行为）──
-static id (*g_orig_MFWebMMBtn_initWithFrame)(id, SEL, CGRect);
-static void (*g_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
-static void (*g_orig_MFWebMMBtn_updateWithOnlineStatus)(id, SEL);
-
-static id mio_MFWebMMBtn_initWithFrame(id self, SEL _cmd, CGRect frame) {
-    id r = g_orig_MFWebMMBtn_initWithFrame(self, _cmd, frame);
-    UIButton *b = (UIButton *)r;
-    WPLog(@"Theme", @"[BANNER] init %@ bg=%@ titleColor=%@ labelColor=%@",
-          r, MioDescribeColor(b.backgroundColor),
-          MioDescribeColor([b titleColorForState:UIControlStateNormal]),
-          MioDescribeColor(b.titleLabel.textColor));
-    return r;
-}
-
-static void MioLogBannerState(NSString *when, UIButton *b) {
-    BOOL scrDark = [UIScreen mainScreen].traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    WPLog(@"Theme", @"[BANNER] %@ dark=%d bg=%@ titleColor=%@ labelColor=%@ icon=%@",
-          when, scrDark, MioDescribeColor(b.backgroundColor),
-          MioDescribeColor([b titleColorForState:UIControlStateNormal]),
-          MioDescribeColor(b.titleLabel.textColor),
-          b.imageView ? [b.imageView image] : nil);
-    WPLog(@"Theme", @"[BANNER] %@ bgImage=%@ img=%@", when,
-          [b backgroundImageForState:UIControlStateNormal],
-          [b imageForState:UIControlStateNormal]);
-    // 沿 superview 链向上 4 层：垫在横幅下面的视图背景（横幅暗分支≈2% alpha，透出的就是它们）
-    UIView *v = b;
-    for (int i = 1; i <= 4 && v.superview; i++) {
-        v = v.superview;
-        WPLog(@"Theme", @"[BANNER] ↑%d %@ bg=%@", i, NSStringFromClass([v class]), MioDescribeColor(v.backgroundColor));
-    }
-    // 盲区补查：UITableViewCell.backgroundView 是 contentView 的兄弟，不在 superview 链上，
-    // 却垫在 2% 透明横幅正下方——单值浅灰就藏在这
-    UIView *cellView = b.superview.superview ?: b.superview;
-    if ([cellView isKindOfClass:[UITableViewCell class]]) {
-        UITableViewCell *cell = (UITableViewCell *)cellView;
-        WPLog(@"Theme", @"[BANNER] cell.backgroundView=%@ bg=%@ cell.selectedBG=%@",
-              cell.backgroundView ? NSStringFromClass([cell.backgroundView class]) : @"nil",
-              MioDescribeColor(cell.backgroundView.backgroundColor),
-              MioDescribeColor(cell.selectedBackgroundView.backgroundColor));
-        WPLog(@"Theme", @"[BANNER] contentView bg=%@ cell bg=%@",
-              MioDescribeColor(cell.contentView.backgroundColor),
-              MioDescribeColor(cell.backgroundColor));
-    }
-    // 首次 layout 打印整个 cell 的视图树（浅灰若来自兄弟视图/背景图，这里现形）
-    static dispatch_once_t treeOnce;
-    dispatch_once(&treeOnce, ^{
-        UIView *cell = b.superview.superview ?: b.superview ?: b;
-        WPLog(@"Theme", @"[BANNER] cell tree:\n%@", [cell performSelector:@selector(recursiveDescription)]);
-    });
-}
-
-static void mio_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
-    g_orig_MFWebMMBtn_layoutSubviews(self, _cmd);
-    static NSInteger budget = 60; // 首次布局阶段够用，防爆量
-    if (budget-- <= 0) return;
-    MioLogBannerState(@"layout", (UIButton *)self);
-}
-
-static void mio_MFWebMMBtn_updateWithOnlineStatus(id self, SEL _cmd) {
-    g_orig_MFWebMMBtn_updateWithOnlineStatus(self, _cmd);
-    static NSInteger budget = 20;
-    if (budget-- <= 0) return;
-    MioLogBannerState(@"update", (UIButton *)self);
-}
-
-// ── 诊断：MMColor 取色口（横幅 backgroundView 的 #EFEFF4 没走 WCColorMgr 两个口，探第三个口）──
-static id (*g_orig_MMColor_getColorByName)(id, SEL, NSString *);
-static id (*g_orig_MMColor_getColorByName_alpha)(id, SEL, NSString *, double);
-
-static void MioLogMCColor(NSString *api, NSString *name, id ret, double alpha) {
-    static NSMutableSet<NSString *> *seen = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
-    if (!name || seen.count > 800 || [seen containsObject:name]) return;
-    [seen addObject:name];
-    WPLog(@"Theme", @"[MC-COLOR] %@ name=%@ alpha=%.2f → %@", api, name, alpha, MioDescribeColor(ret));
-}
-
-static id mio_MMColor_getColorByName(id self, SEL _cmd, NSString *name) {
-    id r = g_orig_MMColor_getColorByName(self, _cmd, name);
-    MioLogMCColor(@"getColorByName", name, r, 1.0);
-    return r;
-}
-
-static id mio_MMColor_getColorByName_alpha(id self, SEL _cmd, NSString *name, double a) {
-    id r = g_orig_MMColor_getColorByName_alpha(self, _cmd, name, a);
-    MioLogMCColor(@"getColorByName:withAlpha:", name, r, a);
-    return r;
-}
-
-// 诊断：谁把 #EFEFF4(0.937255,0.937255,0.956863) 刷上视图 —— 值精确过滤 + 调用栈（量小）
-static void (*g_orig_UIView_setBackgroundColor)(id, SEL, UIColor *);
-static void mio_UIView_setBackgroundColor(id self, SEL _cmd, UIColor *c) {
-    if (c) {
-        CGFloat r = 0, g = 0, b = 0, a = 0;
-        if ([c getRed:&r green:&g blue:&b alpha:&a]
-            && r > 0.936 && r < 0.938 && g > 0.936 && g < 0.938 && b > 0.955 && b < 0.958 && a > 0.99) {
-            static NSInteger budget = 10;
-            if (budget-- > 0) {
-                NSArray *stack = [NSThread callStackSymbols];
-                NSUInteger n = MIN((NSUInteger)7, stack.count);
-                WPLog(@"Theme", @"[EFEFF4] set on %@\n%@",
-                      NSStringFromClass([self class]),
-                      n > 1 ? [[stack subarrayWithRange:NSMakeRange(1, n - 1)] componentsJoinedByString:@"\n"] : @"?");
-            }
-        }
-    }
-    g_orig_UIView_setBackgroundColor(self, _cmd, c);
+    if (themed) return themed;
+    return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
 }
 
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
@@ -369,53 +217,6 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
-        }
-
-        // 诊断：横幅本体（「已登录 Windows 电脑」条，纯日志）
-        Class bannerCls = objc_getClass("MFWebMMBtn");
-        if (bannerCls) {
-            SEL bi = NSSelectorFromString(@"initWithFrame:");
-            if (class_getInstanceMethod(bannerCls, bi)) {
-                MSHookMessageEx(bannerCls, bi, (IMP)mio_MFWebMMBtn_initWithFrame, (IMP *)&g_orig_MFWebMMBtn_initWithFrame);
-                WPLog(@"Theme", @"[HOOK] ✓ -[MFWebMMBtn initWithFrame:]（诊断）");
-            }
-            SEL bl = NSSelectorFromString(@"layoutSubviews");
-            if (class_getInstanceMethod(bannerCls, bl)) {
-                MSHookMessageEx(bannerCls, bl, (IMP)mio_MFWebMMBtn_layoutSubviews, (IMP *)&g_orig_MFWebMMBtn_layoutSubviews);
-                WPLog(@"Theme", @"[HOOK] ✓ -[MFWebMMBtn layoutSubviews]（诊断）");
-            }
-            SEL bu = NSSelectorFromString(@"updateWithOnlineStatus");
-            if (class_getInstanceMethod(bannerCls, bu)) {
-                MSHookMessageEx(bannerCls, bu, (IMP)mio_MFWebMMBtn_updateWithOnlineStatus, (IMP *)&g_orig_MFWebMMBtn_updateWithOnlineStatus);
-                WPLog(@"Theme", @"[HOOK] ✓ -[MFWebMMBtn updateWithOnlineStatus]（诊断）");
-            }
-        } else {
-            WPLog(@"Theme", @"[HOOK] ✗ MFWebMMBtn 类不存在");
-        }
-
-        // 诊断：MMColor 取色口 + #EFEFF4 setter 抓源（纯日志）
-        Class mmColorCls = objc_getClass("MMColor");
-        if (mmColorCls) {
-            SEL mn = NSSelectorFromString(@"getColorByName:");
-            if (class_getInstanceMethod(mmColorCls, mn)) {
-                MSHookMessageEx(mmColorCls, mn, (IMP)mio_MMColor_getColorByName, (IMP *)&g_orig_MMColor_getColorByName);
-                WPLog(@"Theme", @"[HOOK] ✓ -[MMColor getColorByName:]（诊断）");
-            }
-            SEL ma = NSSelectorFromString(@"getColorByName:withAlpha:");
-            if (class_getInstanceMethod(mmColorCls, ma)) {
-                MSHookMessageEx(mmColorCls, ma, (IMP)mio_MMColor_getColorByName_alpha, (IMP *)&g_orig_MMColor_getColorByName_alpha);
-                WPLog(@"Theme", @"[HOOK] ✓ -[MMColor getColorByName:withAlpha:]（诊断）");
-            }
-        } else {
-            WPLog(@"Theme", @"[HOOK] ✗ MMColor 类不存在");
-        }
-        Class uiViewCls = objc_getClass("UIView");
-        if (uiViewCls) {
-            SEL sb = NSSelectorFromString(@"setBackgroundColor:");
-            if (class_getInstanceMethod(uiViewCls, sb)) {
-                MSHookMessageEx(uiViewCls, sb, (IMP)mio_UIView_setBackgroundColor, (IMP *)&g_orig_UIView_setBackgroundColor);
-                WPLog(@"Theme", @"[HOOK] ✓ -[UIView setBackgroundColor:]（诊断，仅 #EFEFF4 过滤）");
-            }
         }
 
         // 亮暗配对枢纽：配对侧换暗图（顺风车落点）
@@ -621,12 +422,6 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     return result;
 }
 
-// 诊断用：色名 → 主题表原始值（"#light,#dark"）
-- (nullable NSString *)miThemeColorPairForName:(NSString *)name {
-    if (name.length == 0 || !_themeColorDict) return nil;
-    return _themeColorDict[name];
-}
-
 // 查询主题色：主题定义了该名字 → 返回主题 UIColor；否则 nil 走原实现。
 // 亮/暗按系统外观拆分逗号对，hex 纯解析（#RRGGBB[AA]）——全路径零回调引擎。
 - (nullable UIColor *)miThemeColorForName:(NSString *)name {
@@ -639,10 +434,6 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     if (!_themeColorDict || ![_themeColorDictPath isEqualToString:xmlPath]) {
         _themeColorDict = [self miParseThemeColors:themeDir] ?: @{};
         _themeColorDictPath = xmlPath;
-        WPLog(@"Theme", @"[COLORTBL] 解析 %@ → %u 项", xmlPath, (unsigned)_themeColorDict.count);
-        for (NSString *k in _themeColorDict) {
-            WPLog(@"Theme", @"[COLORTBL] %@ = %@", k, _themeColorDict[k]);
-        }
     }
     NSString *pair = _themeColorDict[name];
     if (pair.length == 0) return nil;

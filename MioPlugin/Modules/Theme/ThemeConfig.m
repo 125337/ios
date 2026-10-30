@@ -29,14 +29,20 @@
 }
 
 + (NSString *)mioThemesDir {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        // 每次调用都 createDirectoryAtPath 是热路径浪费，进程内建一次就够
+        NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)
+                         firstObject];
+        dir = [dir stringByAppendingPathComponent:@"Preferences/Mio/themes"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                                  withIntermediateDirectories:YES
+                                                   attributes:nil
+                                                        error:nil];
+    });
     NSString *dir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)
                      firstObject];
-    dir = [dir stringByAppendingPathComponent:@"Preferences/Mio/themes"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:nil];
-    return dir;
+    return [dir stringByAppendingPathComponent:@"Preferences/Mio/themes"];
 }
 
 - (nullable NSString *)resolvedActiveThemePath {
