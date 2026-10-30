@@ -213,15 +213,15 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     NSString *theme = cfg.activeThemeName;
     if (theme.length == 0 || name.length == 0 || [name containsString:@"/"]) return nil;
 
-    // 缓存键带亮暗前缀：暗模式下"无暗变体回落原生"的结论与亮模式不同，不能共用
-    NSString *key = [theme stringByAppendingFormat:@"|%@|%@", dark ? @"D" : @"L", name];
-    id cached = [_imageCache objectForKey:key];
-    if (cached) return cached == [NSNull null] ? nil : cached;
-
     NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:theme];
     NSFileManager *fm = [NSFileManager defaultManager];
     UITraitCollection *screenTrait = [UIScreen mainScreen].traitCollection;
     BOOL dark = screenTrait.userInterfaceStyle == UIUserInterfaceStyleDark;
+
+    // 同一名恒一个缓存项：双文件命中时是动态 UIImage（亮暗通吃），单文件时按请求名
+    NSString *key = [theme stringByAppendingFormat:@"|%@", name];
+    id cached = [_imageCache objectForKey:key];
+    if (cached) return cached == [NSNull null] ? nil : cached;
 
     // 候选：去扩展名 → @3x（按屏）→ @2x → .png；带非 png 扩展名时原样兜底
     NSString *stem = name;
