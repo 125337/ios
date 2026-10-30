@@ -17,6 +17,12 @@
 - (void)miNotifyThemeChanged;
 - (nullable UIColor *)miThemeColorForName:(NSString *)name;
 - (nullable NSDictionary<NSString *, NSString *> *)miParseThemeColors:(NSString *)themeDir;
+// 取图子步骤（编排层调用；registerPair hook 也用 miLoadImageAtPath）
+- (NSArray<NSString *> *)miLightCandidatesForStem:(NSString *)stem ext:(NSString *)ext threeX:(BOOL)threeX;
+- (nullable NSArray<NSString *> *)miDarkCandidateNamesForStem:(NSString *)stem;
+- (NSArray<NSString *> *)miDarkFileCandidatesForNames:(NSArray<NSString *> *)names threeX:(BOOL)threeX;
+- (nullable UIImage *)miLoadImageAtPath:(nullable NSString *)path;
+- (void)miRegisterServedImage:(nullable UIImage *)img lightPath:(nullable NSString *)lightPath darkPath:(nullable NSString *)darkPath;
 @end
 
 // weui_color_new.xml 解析器：<color name="X">#light,#dark</color>（亮/暗逗号对，
@@ -49,21 +55,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // 主题拦截架构（微信助手 3.9-5 实证路线：取点拦截，不碰引擎注册/CSS）。
 //
-// 图标层：hook 微信取图层，启用主题时按请求名查 themes/<当前主题>/：
+// 图标层（按请求名查 themes/<当前主题>/，按当前屏幕亮暗取亮/暗文件，静态返回）：
 //   ① -[MMThemeManager imageNamed:]                 位图（D519 的 PNG 走这里）
 //   ② -[MMThemeManager imageNamed:warnIfNotFound:]  内部入口变体（微信代码可能直呼它绕过①）
 //   ③ +[WCSVGImage imageNamed:fromConfig:]          SVG 图标位（icons_filled_*/icons_outlined_*）
-//   命中 → 主题图；未命中 → 原实现（引擎缓存零污染）。搭微信暗色机器顺风车：
-//   我们零检测，微信自己的暗色系统翻转状态后重新请求，请求流过 hook 即得主题暗图。
+//   缓存键带亮暗位（微信原生切亮暗时会重新取图，键不含模式会把旧模式的图原样还回去）；
+//   暗色下无暗变体 → 回落原实现（微信原生自有正确暗图）；文件按 @3x/@2x 后缀设 scale。
 // 颜色层：hook 取色查询两个入口（微信助手符号表实锤同款路线）：
-//   ③ -[WCColorMgr getColor:]             +[WCColor xxx] 动态类方法真实入口
-//   ④ -[WCColorMgr getColorValueForName:] 对外查询 API
+//   ④ -[WCColorMgr getColor:]             +[WCColor xxx] 动态类方法真实入口
+//   ⑤ -[WCColorMgr getColorValueForName:] 对外查询 API
 //   → 主题色表（weui_color_new.xml 旁路解析，按主题缓存）返回动态 UIColor
 //   （colorWithDynamicProvider，微信 colorInLightMode:DarkMode: 同款机制），
 //   系统切亮暗 UIKit 自动重解析，视图无需重建即当场换色。
-// 图标暗色（搭微信暗色机器顺风车——微信请求暗资源是直接换名的：_Dark/_darkmode/DM）：
-//   亮暗双文件 → UIImageAsset 动态图；请求名自带 _Dark → 直接给暗文件；
-//   暗色模式下主题无暗变体 → 回落原实现（微信原生自有正确暗图，亮图进暗色界面会刺眼）。
+// 图标暗色切换（搭微信暗色机器顺风车——实测微信切亮暗不重新取图，靠配对表原地换图）：
+//   ⑥ -[DarkModeImageMgr registerPairWithLightImage:darkImage:] 配对侧换暗图：
+//   亮图是我们发出的主题图时，暗边直接换成主题包 _Dark 文件，微信自己的亮暗机器
+//   切换时经 darkModeImageForImage: 取暗边即得主题暗图（零检测、零重建）。
 // 应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -110,59 +117,32 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
 
 // ── 亮暗配对枢纽（DarkModeImageMgr）──
 // 顺风车落点：微信原生把"亮图+暗图"注册成对（registerPairWithLightImage:darkImage:），
-// 切暗时经 darkModeImageForImage: 取对的暗边。微信助手实测在查询侧换图；
-// 我们在配对侧换图更彻底——亮图若是我们发出的主题图，暗边直接换成主题包 _Dark 文件，
-// 微信自己的亮暗机器从此替我们发暗图（零检测、零重建）。
-static NSMutableDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *g_servedImagePaths = nil; // UIImage指针 → {light,dark}主题文件路径
-static NSInteger g_pairLogCount = 0;
-static NSInteger g_darkAskLogCount = 0;
+// 切暗时经 darkModeImageForImage: 取对的暗边。我们在配对侧换图——亮图若是我们发出的
+// 主题图，暗边直接换成主题包 _Dark 文件，微信自己的亮暗机器从此替我们发暗图（零检测、零重建）。
+// 发出的主题图身份表：UIImage(弱键) → {light,dark}主题文件路径。
+// NSMapTable 弱键：图释放条目自动消失（无增长、无地址复用误判；NSMutableDictionary 会残留）
+static NSMapTable<UIImage *, NSDictionary<NSString *, NSString *> *> *g_servedImagePaths = nil;
 
 static id (*g_orig_DM_registerPair)(id, SEL, UIImage *, UIImage *);
-static UIImage *(*g_orig_DM_darkImageFor)(id, SEL, UIImage *);
 
 // 注意：registerPairWithLightImage:darkImage: 返回 id（头文件实锤），必须透传原实现返回值——
 // 写成 void 会让微信拿到 X0 残留垃圾对象调 size → unrecognized selector 闪退（8.0.79 实测）
 static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) {
-    NSDictionary<NSString *, NSString *> *reg = nil;
+    UIImage *darkFinal = dark;
     if (light) {
         @synchronized(g_servedImagePaths) {
-            reg = g_servedImagePaths[[NSString stringWithFormat:@"%p", light]];
+            NSDictionary<NSString *, NSString *> *reg = [g_servedImagePaths objectForKey:light];
+            if (reg[@"dark"].length) {
+                UIImage *ours = [[ThemeService shared] miLoadImageAtPath:reg[@"dark"]];
+                if (ours) darkFinal = ours; // 亮图是我们发的 → 暗边换成主题包暗图
+            }
         }
-    }
-    UIImage *darkFinal = dark;
-    if (reg && reg[@"dark"].length) {
-        UIImage *ours = [UIImage imageWithContentsOfFile:reg[@"dark"]];
-        if (ours) darkFinal = ours;   // 亮图是我们发的 → 暗边换成主题包暗图
-    }
-    if (g_pairLogCount < 60) {
-        g_pairLogCount++;
-        WPLog(@"Theme", @"[PAIR] #%ld 亮=%@ 暗=%@ 替换=%@",
-              (long)g_pairLogCount,
-              reg ? reg[@"light"].lastPathComponent : [NSString stringWithFormat:@"(原生 %p)", light],
-              dark ? [NSString stringWithFormat:@"%p", dark] : @"(nil)",
-              darkFinal != dark ? @"主题暗图" : @"否");
     }
     return g_orig_DM_registerPair(self, _cmd, light, darkFinal);
 }
 
-static UIImage *mio_DM_darkImageFor(id self, SEL _cmd, UIImage *img) {
-    if (g_darkAskLogCount < 40) {
-        g_darkAskLogCount++;
-        NSDictionary<NSString *, NSString *> *reg = nil;
-        if (img) {
-            @synchronized(g_servedImagePaths) {
-                reg = g_servedImagePaths[[NSString stringWithFormat:@"%p", img]];
-            }
-        }
-        WPLog(@"Theme", @"[DMIMG] 查暗图 %p（%@）", img, reg ? [NSString stringWithFormat:@"主题亮图 %@", reg[@"light"].lastPathComponent] : @"非主题图");
-    }
-    return g_orig_DM_darkImageFor(self, _cmd, img);
-}
-
 @implementation ThemeService {
-    NSCache *_imageCache; // key = 主题名|请求名，value = UIImage（动态/静态）或 NSNull（未命中也缓存，挡高频磁盘读）
-    NSInteger _hitCount;
-    NSMutableSet<NSString *> *_missLogged; // 未命中请求名去重（诊断日志封顶用）
+    NSCache *_imageCache; // key = 主题名|L/D|请求名，value = UIImage 或 NSNull（未命中也缓存，挡高频磁盘读）
     NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
     NSString *_themeColorDictPath;                          // 色表来源路径（变更时重载）
 }
@@ -174,8 +154,7 @@ static UIImage *mio_DM_darkImageFor(id self, SEL _cmd, UIImage *img) {
         instance = [[ThemeService alloc] init];
         instance->_imageCache = [NSCache new];
         instance->_imageCache.countLimit = 2048;
-        instance->_missLogged = [NSMutableSet set];
-        g_servedImagePaths = [NSMutableDictionary new];
+        g_servedImagePaths = [NSMapTable weakToStrongObjectsMapTable];
     });
     return instance;
 }
@@ -240,7 +219,7 @@ static UIImage *mio_DM_darkImageFor(id self, SEL _cmd, UIImage *img) {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
         }
 
-        // 亮暗配对枢纽：配对侧换暗图（顺风车落点）+ 暗图查询诊断
+        // 亮暗配对枢纽：配对侧换暗图（顺风车落点）
         Class dmCls = objc_getClass("DarkModeImageMgr");
         if (dmCls) {
             SEL sPair = NSSelectorFromString(@"registerPairWithLightImage:darkImage:");
@@ -249,13 +228,6 @@ static UIImage *mio_DM_darkImageFor(id self, SEL _cmd, UIImage *img) {
                 WPLog(@"Theme", @"[HOOK] ✓ -[DarkModeImageMgr registerPairWithLightImage:darkImage:]");
             } else {
                 WPLog(@"Theme", @"[HOOK] ✗ registerPairWithLightImage:darkImage: 不存在");
-            }
-            SEL sDarkAsk = NSSelectorFromString(@"darkModeImageForImage:");
-            if (class_getInstanceMethod(dmCls, sDarkAsk)) {
-                MSHookMessageEx(dmCls, sDarkAsk, (IMP)mio_DM_darkImageFor, (IMP *)&g_orig_DM_darkImageFor);
-                WPLog(@"Theme", @"[HOOK] ✓ -[DarkModeImageMgr darkModeImageForImage:]");
-            } else {
-                WPLog(@"Theme", @"[HOOK] ✗ darkModeImageForImage: 不存在");
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ DarkModeImageMgr 类不存在");
@@ -275,11 +247,11 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 }
 
 // 返回主题命中图片；未启用/未命中返回 nil。
-// 亮图（stem 系）+ 暗图（stem_Dark 系，引擎暗色变体约定，D519 实锤）双文件都命中时
-// 注册进 UIImageAsset 返回动态 UIImage，且按"屏幕级 trait"解析初始变体——
-// 不能用 UITraitCollection.currentTraitCollection：它只在 UIKit 回调上下文可靠，
-// 微信启动期/后台线程的取图请求拿到的是默认亮色（D519 暗色冷启动出亮图实锤）。
-// 屏幕级 trait 任何线程都反映真实系统亮暗。同一名恒返回同一 UIImage 对象（指针稳定）。
+// 编排：判亮暗 → 查缓存 → 找文件（亮候选 + 暗变体推导）→ 按 scale 加载 → 登记身份。
+// 缓存键带亮暗位：微信原生切亮暗时会重新取图，键不含模式会把旧模式的图原样还回去
+// （切暗图标不刷新、杀后台才好的根因）。
+// 亮暗判定用屏幕级 trait——不能用 UITraitCollection.currentTraitCollection：它只在
+// UIKit 回调上下文可靠，微信启动期/后台线程的取图请求拿到的是默认亮色（暗色冷启动出亮图实锤）。
 - (nullable UIImage *)miThemeImageForName:(NSString *)name {
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme) return nil;
@@ -288,94 +260,100 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
     NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:theme];
     NSFileManager *fm = [NSFileManager defaultManager];
-    UITraitCollection *screenTrait = [UIScreen mainScreen].traitCollection;
-    BOOL dark = screenTrait.userInterfaceStyle == UIUserInterfaceStyleDark;
+    BOOL dark = [UIScreen mainScreen].traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    BOOL threeX = [UIScreen mainScreen].scale >= 3;
 
-    // 缓存键必须带亮暗位：微信原生切亮暗时会重新取图，键不含模式会把旧模式的图
-    // 原样还回去（切暗图标不刷新、杀后台才好的根因；微信助手 images/pairs 同理按模式区分）
     NSString *key = [theme stringByAppendingFormat:@"|%@|%@", dark ? @"D" : @"L", name];
     id cached = [_imageCache objectForKey:key];
     if (cached) return cached == [NSNull null] ? nil : cached;
 
-    // 候选：去扩展名 → @3x（按屏）→ @2x → .png；带非 png 扩展名时原样兜底
     NSString *stem = name;
     NSString *ext = name.pathExtension.lowercaseString;
     if (ext.length) stem = [name stringByDeletingPathExtension];
 
-    NSMutableArray<NSString *> *lightCands = [NSMutableArray array];
-    if ([UIScreen mainScreen].scale >= 3) [lightCands addObject:[stem stringByAppendingString:@"@3x.png"]];
-    [lightCands addObject:[stem stringByAppendingString:@"@2x.png"]];
-    [lightCands addObject:[stem stringByAppendingString:@".png"]];
-    if (ext.length && ![ext isEqualToString:@"png"]) [lightCands addObject:name];
-
-    NSString *lightPath = MioFirstExistingFile(fm, dir, lightCands);
-
-    // 暗色变体名推导（D519 实锤五种形态，微信按自家暗色状态直接点名请求）：
-    //   ① 成对替换：XXX_White → XXX_Dark（接收气泡 White ↔ Dark 成对，最关键）
-    //   ② 追加：    XXX → XXX_Dark（HB 气泡/Voice/Action_Moments/colorful 图标）
-    //   ③ 小写追加：XXX → XXX_dark（dt_icon/fileicon_* 系）
-    //   ④ 插入：    XXX_HL → XXX_Dark_HL（高亮气泡）
-    //   ⑤ darkmode：XXX → XXX_darkmode（weapp_more 等）
-    NSString *darkPath = nil;
-    if (lightPath && ![stem hasSuffix:@"_Dark"] && ![stem hasSuffix:@"_dark"] && ![stem hasSuffix:@"_darkmode"]) {
-        NSMutableArray<NSString *> *darkNames = [NSMutableArray array];
-        NSRange white = [stem rangeOfString:@"_White" options:NSBackwardsSearch];
-        if (white.location != NSNotFound) {
-            [darkNames addObject:[stem stringByReplacingCharactersInRange:white withString:@"_Dark"]];
-        }
-        NSRange hl = [stem rangeOfString:@"_HL" options:NSBackwardsSearch];
-        if (hl.location != NSNotFound) {
-            [darkNames addObject:[stem stringByReplacingCharactersInRange:hl withString:@"_Dark_HL"]];
-        }
-        [darkNames addObject:[stem stringByAppendingString:@"_Dark"]];
-        [darkNames addObject:[stem stringByAppendingString:@"_dark"]];
-        [darkNames addObject:[stem stringByAppendingString:@"_darkmode"]];
-        NSMutableArray<NSString *> *darkCands = [NSMutableArray array];
-        BOOL threeX = [UIScreen mainScreen].scale >= 3;
-        for (NSString *dn in darkNames) {
-            if (threeX) [darkCands addObject:[dn stringByAppendingString:@"@3x.png"]];
-            [darkCands addObject:[dn stringByAppendingString:@"@2x.png"]];
-            [darkCands addObject:[dn stringByAppendingString:@".png"]];
-        }
-        darkPath = MioFirstExistingFile(fm, dir, darkCands);
-    }
+    NSString *lightPath = MioFirstExistingFile(fm, dir, [self miLightCandidatesForStem:stem ext:ext threeX:threeX]);
+    NSArray<NSString *> *darkNames = [self miDarkCandidateNamesForStem:stem];
+    NSString *darkPath = darkNames.count ? MioFirstExistingFile(fm, dir, [self miDarkFileCandidatesForNames:darkNames threeX:threeX]) : nil;
 
     UIImage *result = nil;
-    UIImage *lightImg = lightPath ? [UIImage imageWithContentsOfFile:lightPath] : nil;
-    UIImage *darkImg = darkPath ? [UIImage imageWithContentsOfFile:darkPath] : nil;
-    // 按当前屏幕亮暗静态返回（不再用 UIImageAsset 打包动态图：
-    // 8.0.79 实测 registerImage:withConfiguration: 启动期崩溃；
-    // 亮暗切换由 DarkModeImageMgr 配对侧 hook 换暗图，微信原生机器自己驱动）
-    if (dark && darkImg) result = darkImg;
-    else result = lightImg ?: darkImg;
+    if (lightPath || darkPath) {
+        UIImage *lightImg = [self miLoadImageAtPath:lightPath];
+        UIImage *darkImg = [self miLoadImageAtPath:darkPath];
+        if (dark) {
+            result = darkImg; // 暗色无暗变体 → nil 回落原实现（微信原生自有正确暗图）
+        } else {
+            result = lightImg ?: darkImg; // 亮色：亮图优先（个别包对亮名只提供暗名资源时兜底）
+        }
+        if (result) [self miRegisterServedImage:result lightPath:lightPath darkPath:darkPath];
+    }
 
     [_imageCache setObject:(result ?: [NSNull null]) forKey:key cost:1];
-
-    // 身份登记：我们发出的 UIImage 指针 → 亮暗主题文件路径（DarkModeImageMgr 配对时反查换暗图）
-    if (result && (lightPath || darkPath)) {
-        @synchronized(g_servedImagePaths) {
-            g_servedImagePaths[[NSString stringWithFormat:@"%p", result]] =
-                @{@"light": lightPath ?: @"", @"dark": darkPath ?: @""};
-        }
-    }
-
-    if ([name hasPrefix:@"ChatRoom_Bubble"]) {
-        // 气泡全量日志（不受命中/未命中封顶限制）：暗色排查期间的定向观测点
-        WPLog(@"Theme", @"[BUBBLE] 暗=%@ %@ → 亮:%@ 暗:%@", dark ? @"YES" : @"NO ", name,
-              lightPath.lastPathComponent ?: @"(无)", darkPath.lastPathComponent ?: @"(无)");
-    }
-    if (result) {
-        _hitCount++;
-        if (_hitCount <= 5 || _hitCount % 100 == 0) {
-            WPLog(@"Theme", @"[IMG] 命中(%ld): %@ → %@%@", (long)_hitCount, name,
-                  lightPath.lastPathComponent ?: @"", darkImg ? [NSString stringWithFormat:@" + %@", darkPath.lastPathComponent] : @"");
-        }
-    } else if (_missLogged.count < 40 && ![_missLogged containsObject:name]) {
-        // 诊断：主题未覆盖的请求名（微信引擎自己会处理原生资源）。去重、封顶，防日志洪水
-        [_missLogged addObject:name];
-        WPLog(@"Theme", @"[IMG] 未命中: %@（亮模式=%@）", name, dark ? @"NO" : @"YES");
-    }
     return result;
+}
+
+#pragma mark - 取图子步骤（候选名 / 加载 / 登记）
+
+// 亮图候选：@3x（按屏）→ @2x → .png；带非 png 扩展名时原样兜底
+- (NSArray<NSString *> *)miLightCandidatesForStem:(NSString *)stem ext:(NSString *)ext threeX:(BOOL)threeX {
+    NSMutableArray<NSString *> *cands = [NSMutableArray array];
+    if (threeX) [cands addObject:[stem stringByAppendingString:@"@3x.png"]];
+    [cands addObject:[stem stringByAppendingString:@"@2x.png"]];
+    [cands addObject:[stem stringByAppendingString:@".png"]];
+    if (ext.length && ![ext isEqualToString:@"png"]) [cands addObject:[stem stringByAppendingPathExtension:ext]];
+    return cands;
+}
+
+// 暗色变体名推导（D519 实锤五种形态，微信按自家暗色状态直接点名请求）：
+//   ① 成对替换：XXX_White → XXX_Dark（接收气泡 White ↔ Dark 成对，最关键）
+//   ② 追加：    XXX → XXX_Dark
+//   ③ 小写追加：XXX → XXX_dark（dt_icon/fileicon_* 系）
+//   ④ 插入：    XXX_HL → XXX_Dark_HL（高亮气泡）
+//   ⑤ darkmode：XXX → XXX_darkmode（weapp_more 等）
+// 请求名本身已带暗后缀 → 无需推导
+- (nullable NSArray<NSString *> *)miDarkCandidateNamesForStem:(NSString *)stem {
+    if ([stem hasSuffix:@"_Dark"] || [stem hasSuffix:@"_dark"] || [stem hasSuffix:@"_darkmode"]) return nil;
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    NSRange white = [stem rangeOfString:@"_White" options:NSBackwardsSearch];
+    if (white.location != NSNotFound) [names addObject:[stem stringByReplacingCharactersInRange:white withString:@"_Dark"]];
+    NSRange hl = [stem rangeOfString:@"_HL" options:NSBackwardsSearch];
+    if (hl.location != NSNotFound) [names addObject:[stem stringByReplacingCharactersInRange:hl withString:@"_Dark_HL"]];
+    [names addObject:[stem stringByAppendingString:@"_Dark"]];
+    [names addObject:[stem stringByAppendingString:@"_dark"]];
+    [names addObject:[stem stringByAppendingString:@"_darkmode"]];
+    return names;
+}
+
+// 变体名 → 文件名候选（@3x 按屏 → @2x → .png）
+- (NSArray<NSString *> *)miDarkFileCandidatesForNames:(NSArray<NSString *> *)names threeX:(BOOL)threeX {
+    NSMutableArray<NSString *> *cands = [NSMutableArray array];
+    for (NSString *dn in names) {
+        if (threeX) [cands addObject:[dn stringByAppendingString:@"@3x.png"]];
+        [cands addObject:[dn stringByAppendingString:@"@2x.png"]];
+        [cands addObject:[dn stringByAppendingString:@".png"]];
+    }
+    return cands;
+}
+
+// 文件 → UIImage：按文件名 @3x/@2x 后缀设 scale（imageWithContentsOfFile 不认后缀，
+// scale 恒 1 会让 image.size 是逻辑点尺寸的 3 倍，按 size 布局的页面会炸）
+- (nullable UIImage *)miLoadImageAtPath:(nullable NSString *)path {
+    if (path.length == 0) return nil;
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (!data) return nil;
+    CGFloat scale = 1.0;
+    NSString *stem = path.lastPathComponent.stringByDeletingPathExtension;
+    if ([stem hasSuffix:@"@3x"]) scale = 3.0;
+    else if ([stem hasSuffix:@"@2x"]) scale = 2.0;
+    return [UIImage imageWithData:data scale:scale];
+}
+
+// 身份登记：发出的主题图（弱键，图释放条目自清）→ 亮暗路径；DarkModeImageMgr 配对时反查换暗图
+- (void)miRegisterServedImage:(nullable UIImage *)img lightPath:(nullable NSString *)lightPath darkPath:(nullable NSString *)darkPath {
+    if (!img || (!lightPath.length && !darkPath.length)) return;
+    @synchronized(g_servedImagePaths) {
+        [g_servedImagePaths setObject:@{@"light": lightPath ?: @"", @"dark": darkPath ?: @""}
+                               forKey:img];
+    }
 }
 
 - (void)miClearImageCache {
