@@ -204,6 +204,51 @@ static void mio_MFWebMMBtn_updateWithOnlineStatus(id self, SEL _cmd) {
     MioLogBannerState(@"update", (UIButton *)self);
 }
 
+// ── 诊断：MMColor 取色口（横幅 backgroundView 的 #EFEFF4 没走 WCColorMgr 两个口，探第三个口）──
+static id (*g_orig_MMColor_getColorByName)(id, SEL, NSString *);
+static id (*g_orig_MMColor_getColorByName_alpha)(id, SEL, NSString *, double);
+
+static void MioLogMCColor(NSString *api, NSString *name, id ret, double alpha) {
+    static NSMutableSet<NSString *> *seen = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    if (!name || seen.count > 800 || [seen containsObject:name]) return;
+    [seen addObject:name];
+    WPLog(@"Theme", @"[MC-COLOR] %@ name=%@ alpha=%.2f → %@", api, name, alpha, MioDescribeColor(ret));
+}
+
+static id mio_MMColor_getColorByName(id self, SEL _cmd, NSString *name) {
+    id r = g_orig_MMColor_getColorByName(self, _cmd, name);
+    MioLogMCColor(@"getColorByName", name, r, 1.0);
+    return r;
+}
+
+static id mio_MMColor_getColorByName_alpha(id self, SEL _cmd, NSString *name, double a) {
+    id r = g_orig_MMColor_getColorByName_alpha(self, _cmd, name, a);
+    MioLogMCColor(@"getColorByName:withAlpha:", name, r, a);
+    return r;
+}
+
+// 诊断：谁把 #EFEFF4(0.937255,0.937255,0.956863) 刷上视图 —— 值精确过滤 + 调用栈（量小）
+static void (*g_orig_UIView_setBackgroundColor)(id, SEL, UIColor *);
+static void mio_UIView_setBackgroundColor(id self, SEL _cmd, UIColor *c) {
+    if (c) {
+        CGFloat r = 0, g = 0, b = 0, a = 0;
+        if ([c getRed:&r green:&g blue:&b alpha:&a]
+            && r > 0.936 && r < 0.938 && g > 0.936 && g < 0.938 && b > 0.955 && b < 0.958 && a > 0.99) {
+            static NSInteger budget = 10;
+            if (budget-- > 0) {
+                NSArray *stack = [NSThread callStackSymbols];
+                NSUInteger n = MIN((NSUInteger)7, stack.count);
+                WPLog(@"Theme", @"[EFEFF4] set on %@\n%@",
+                      NSStringFromClass([self class]),
+                      n > 1 ? [[stack subarrayWithRange:NSMakeRange(1, n - 1)] componentsJoinedByString:@"\n"] : @"?");
+            }
+        }
+    }
+    g_orig_UIView_setBackgroundColor(self, _cmd, c);
+}
+
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
     if (themed) return themed;
@@ -346,6 +391,31 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ MFWebMMBtn 类不存在");
+        }
+
+        // 诊断：MMColor 取色口 + #EFEFF4 setter 抓源（纯日志）
+        Class mmColorCls = objc_getClass("MMColor");
+        if (mmColorCls) {
+            SEL mn = NSSelectorFromString(@"getColorByName:");
+            if (class_getInstanceMethod(mmColorCls, mn)) {
+                MSHookMessageEx(mmColorCls, mn, (IMP)mio_MMColor_getColorByName, (IMP *)&g_orig_MMColor_getColorByName);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MMColor getColorByName:]（诊断）");
+            }
+            SEL ma = NSSelectorFromString(@"getColorByName:withAlpha:");
+            if (class_getInstanceMethod(mmColorCls, ma)) {
+                MSHookMessageEx(mmColorCls, ma, (IMP)mio_MMColor_getColorByName_alpha, (IMP *)&g_orig_MMColor_getColorByName_alpha);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MMColor getColorByName:withAlpha:]（诊断）");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MMColor 类不存在");
+        }
+        Class uiViewCls = objc_getClass("UIView");
+        if (uiViewCls) {
+            SEL sb = NSSelectorFromString(@"setBackgroundColor:");
+            if (class_getInstanceMethod(uiViewCls, sb)) {
+                MSHookMessageEx(uiViewCls, sb, (IMP)mio_UIView_setBackgroundColor, (IMP *)&g_orig_UIView_setBackgroundColor);
+                WPLog(@"Theme", @"[HOOK] ✓ -[UIView setBackgroundColor:]（诊断，仅 #EFEFF4 过滤）");
+            }
         }
 
         // 亮暗配对枢纽：配对侧换暗图（顺风车落点）
