@@ -12,7 +12,7 @@
 #import <substrate.h>
 
 @interface ThemeService ()
-- (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name;
+- (nullable UIImage *)miThemeImageForName:(NSString *)name;
 - (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir;
 - (void)miNotifyThemeChanged;
 - (nullable UIColor *)miThemeColorForName:(NSString *)name;
@@ -59,9 +59,9 @@
 //   → 主题色表（weui_color_new.xml 旁路解析，按主题缓存）返回动态 UIColor
 //   （colorWithDynamicProvider，微信 colorInLightMode:DarkMode: 同款机制），
 //   系统切亮暗 UIKit 自动重解析，视图无需重建即当场换色。
-// 图标暗色：暗色模式下候选顺序先 <名>_Dark 再原名（引擎暗色变体约定）。
-// 亮暗切换：hook -[UIWindow traitCollectionDidChange:]，系统切亮暗当场发微信
-//   主题切换通知驱动在屏 UI 重建取图（UIImage 无动态文件机制，图标切换需重建）。
+// 图标暗色：亮暗双文件都注册进 UIImageAsset 返回动态 UIImage——系统切亮暗
+//   UIKit 自动重解析，气泡等持有图片引用的视图无需重建即当场换图（与颜色层
+//   colorWithDynamicProvider 同一机制；UIImage 无"动态文件"原生机制，这是等价物）。
 // 应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -70,10 +70,9 @@ static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
 static id (*g_orig_WCColorMgr_getColor)(id, SEL, NSString *);
 static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
-static void (*g_orig_UIWindow_traitCollectionDidChange)(id, SEL, UITraitCollection *);
 
-// 取色时点拦截：任何视图任何时刻查色，主题定义的名字直接返回主题色（亮/暗按系统外观拆分，
-// hex 纯解析）。与视图创建时机无关——顶栏/底栏/搜索栏等组件首屏即主题色。
+// 取色时点拦截：任何视图任何时刻查色，主题定义的名字直接返回主题动态 UIColor
+// （亮/暗双份，colorWithDynamicProvider 按当前 trait 出色，系统切换自动重解析）。
 // getColor: 是 +[WCColor xxx] 全部动态类方法（resolveClassMethod:）的真实入口；
 // getColorValueForName: 是另一条对外查询 API。两个查询面都拦。
 static id mio_WCColorMgr_getColor(id self, SEL _cmd, NSString *name) {
@@ -88,37 +87,20 @@ static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name)
     return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
 }
 
-// 系统亮暗切换：UIWindow trait 变化 → 当场发微信主题切换通知，在屏 UI 重建并
-// 经取色拦截拿到新亮暗分支的主题色（无需杀进程重进）
-static void mio_UIWindow_traitCollectionDidChange(id self, SEL _cmd, UITraitCollection *previous) {
-    g_orig_UIWindow_traitCollectionDidChange(self, _cmd, previous);
-    ThemeConfig *cfg = [ThemeConfig shared];
-    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return;
-    UITraitCollection *cur = [(UIView *)self traitCollection];
-    if (!previous || !cur || previous.userInterfaceStyle == cur.userInterfaceStyle) return;
-    [[ThemeService shared] miNotifyThemeChanged];
-}
-
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
-    NSString *path = [[ThemeService shared] miCachedThemeImagePathForName:name];
-    if (path) {
-        UIImage *img = [UIImage imageWithContentsOfFile:path];
-        if (img) return img;
-    }
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    if (themed) return themed;
     return g_orig_MMImageNamed(self, _cmd, name);
 }
 
 static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString *name, id config) {
-    NSString *path = [[ThemeService shared] miCachedThemeImagePathForName:name];
-    if (path) {
-        UIImage *img = [UIImage imageWithContentsOfFile:path];
-        if (img) return img;
-    }
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    if (themed) return themed;
     return g_orig_SVGImageNamedFromConfig(self, _cmd, name, config);
 }
 
 @implementation ThemeService {
-    NSCache *_pathCache; // key = 主题名|请求名，value = 路径或 NSNull（未命中也缓存，挡高频磁盘读）
+    NSCache *_imageCache; // key = 主题名|请求名，value = UIImage（动态/静态）或 NSNull（未命中也缓存，挡高频磁盘读）
     NSInteger _hitCount;
     NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
     NSString *_themeColorDictPath;                          // 色表来源路径（变更时重载）
@@ -129,8 +111,8 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         instance = [[ThemeService alloc] init];
-        instance->_pathCache = [NSCache new];
-        instance->_pathCache.countLimit = 2048;
+        instance->_imageCache = [NSCache new];
+        instance->_imageCache.countLimit = 2048;
     });
     return instance;
 }
@@ -187,75 +169,87 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
         }
-
-        // 系统亮暗切换 → 当场重刷主题色（UIWindow trait 变化是系统切外观的必经时点）
-        Class winCls = objc_getClass("UIWindow");
-        SEL s6 = NSSelectorFromString(@"traitCollectionDidChange:");
-        if (winCls && class_getInstanceMethod(winCls, s6)) {
-            MSHookMessageEx(winCls, s6, (IMP)mio_UIWindow_traitCollectionDidChange, (IMP *)&g_orig_UIWindow_traitCollectionDidChange);
-            WPLog(@"Theme", @"[HOOK] ✓ -[UIWindow traitCollectionDidChange:]");
-        } else {
-            WPLog(@"Theme", @"[HOOK] ✗ UIWindow traitCollectionDidChange: 不存在");
-        }
     });
 }
 
 #pragma mark - 主题目录查找（hook 热路径）
 
-// 返回主题目录内命中的图片路径；未启用/未命中返回 nil
-- (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name {
+// 候选目录内第一个存在的文件；无则 nil
+static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<NSString *> *cands) {
+    for (NSString *c in cands) {
+        NSString *full = [dir stringByAppendingPathComponent:c];
+        if ([fm fileExistsAtPath:full]) return full;
+    }
+    return nil;
+}
+
+// 返回主题命中图片；未启用/未命中返回 nil。
+// 亮图（stem 系）+ 暗图（stem_Dark 系，引擎暗色变体约定，D519 实锤）双文件都命中时
+// 注册进 UIImageAsset 返回动态 UIImage：系统切亮暗 UIKit 自动重解析，气泡等持有
+// 图片引用的视图无需重建即当场换图。同一名恒返回同一 UIImage 对象（指针稳定）。
+- (nullable UIImage *)miThemeImageForName:(NSString *)name {
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme) return nil;
     NSString *theme = cfg.activeThemeName;
     if (theme.length == 0 || name.length == 0 || [name containsString:@"/"]) return nil;
 
-    // 引擎暗色变体约定（D519 暗图命名 + 暗色冷启动仍请求亮色名实锤）：暗色模式下
-    // imageNamed:@"xxx" 引擎内部会去找 xxx_Dark——我们的 hook 在引擎之前返回，
-    // 这一步必须自己做：候选顺序 <名>_Dark@3x → <名>_Dark@2x → <名>@3x → <名>@2x → <名>.png
-    BOOL dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-
-    // 缓存键带亮暗前缀：同一名亮/暗各缓存一份（miClearPathCache 一起清）
-    NSString *key = [theme stringByAppendingFormat:@"|%@|%@", dark ? @"D" : @"L", name];
-    id cached = [_pathCache objectForKey:key];
+    NSString *key = [theme stringByAppendingFormat:@"|%@", name];
+    id cached = [_imageCache objectForKey:key];
     if (cached) return cached == [NSNull null] ? nil : cached;
+
+    NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:theme];
+    NSFileManager *fm = [NSFileManager defaultManager];
 
     // 候选：去扩展名 → @3x（按屏）→ @2x → .png；带非 png 扩展名时原样兜底
     NSString *stem = name;
     NSString *ext = name.pathExtension.lowercaseString;
     if (ext.length) stem = [name stringByDeletingPathExtension];
 
-    NSMutableArray<NSString *> *cands = [NSMutableArray array];
-    NSString *darkStem = [stem stringByAppendingString:@"_Dark"];
-    if (dark) {
-        if ([UIScreen mainScreen].scale >= 3) [cands addObject:[darkStem stringByAppendingString:@"@3x.png"]];
-        [cands addObject:[darkStem stringByAppendingString:@"@2x.png"]];
-    }
-    if ([UIScreen mainScreen].scale >= 3) [cands addObject:[stem stringByAppendingString:@"@3x.png"]];
-    [cands addObject:[stem stringByAppendingString:@"@2x.png"]];
-    [cands addObject:[stem stringByAppendingString:@".png"]];
-    if (ext.length && ![ext isEqualToString:@"png"]) [cands addObject:name];
+    NSMutableArray<NSString *> *lightCands = [NSMutableArray array];
+    if ([UIScreen mainScreen].scale >= 3) [lightCands addObject:[stem stringByAppendingString:@"@3x.png"]];
+    [lightCands addObject:[stem stringByAppendingString:@"@2x.png"]];
+    [lightCands addObject:[stem stringByAppendingString:@".png"]];
+    if (ext.length && ![ext isEqualToString:@"png"]) [lightCands addObject:name];
 
-    NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:theme];
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *found = nil;
-    for (NSString *c in cands) {
-        NSString *full = [dir stringByAppendingPathComponent:c];
-        if ([fm fileExistsAtPath:full]) { found = full; break; }
+    NSString *lightPath = MioFirstExistingFile(fm, dir, lightCands);
+    NSString *darkPath = nil;
+    if (lightPath && ![stem hasSuffix:@"_Dark"]) {   // 请求名自带 _Dark 时无暗变体可言
+        NSString *darkStem = [stem stringByAppendingString:@"_Dark"];
+        NSMutableArray<NSString *> *darkCands = [NSMutableArray array];
+        if ([UIScreen mainScreen].scale >= 3) [darkCands addObject:[darkStem stringByAppendingString:@"@3x.png"]];
+        [darkCands addObject:[darkStem stringByAppendingString:@"@2x.png"]];
+        darkPath = MioFirstExistingFile(fm, dir, darkCands);
     }
-    [_pathCache setObject:(found ?: [NSNull null]) forKey:key cost:1];
 
-    if (found) {
+    UIImage *result = nil;
+    UIImage *lightImg = lightPath ? [UIImage imageWithContentsOfFile:lightPath] : nil;
+    UIImage *darkImg = darkPath ? [UIImage imageWithContentsOfFile:darkPath] : nil;
+    if (lightImg && darkImg) {
+        UIImageAsset *asset = [[UIImageAsset alloc] init];
+        [asset registerImage:lightImg
+          withConfiguration:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight]];
+        [asset registerImage:darkImg
+          withConfiguration:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark]];
+        result = [asset imageWithConfiguration:[UITraitCollection currentTraitCollection]];
+    } else {
+        result = lightImg ?: darkImg;   // 只有单份时按请求名静态返回
+    }
+
+    [_imageCache setObject:(result ?: [NSNull null]) forKey:key cost:1];
+
+    if (result) {
         _hitCount++;
         if (_hitCount <= 5 || _hitCount % 100 == 0) {
-            WPLog(@"Theme", @"[IMG] 命中(%ld): %@ → %@", (long)_hitCount, name, found.lastPathComponent);
+            WPLog(@"Theme", @"[IMG] 命中(%ld): %@ → %@%@", (long)_hitCount, name,
+                  lightPath.lastPathComponent ?: @"", darkImg ? [NSString stringWithFormat:@" + %@", darkPath.lastPathComponent] : @"");
         }
     }
-    return found;
+    return result;
 }
 
-- (void)miClearPathCache {
-    [_pathCache removeAllObjects];
-    WPLog(@"Theme", @"[CACHE] 主题图路径缓存已清");
+- (void)miClearImageCache {
+    [_imageCache removeAllObjects];
+    WPLog(@"Theme", @"[CACHE] 主题图缓存已清");
 }
 
 #pragma mark - 颜色层（weui_color_new.xml → WCColorMgr 引擎自带加载器）
@@ -400,7 +394,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     cfg.activeThemeName = name;
     [ConfigManager saveAll];
     [self miApplyColorsForThemeDir:path]; // 颜色层（无 xml 的纯图标包自动跳过）
-    [self miClearPathCache];
+    [self miClearImageCache];
     [self miNotifyThemeChanged];
     WPLog(@"Theme", @"[APPLY] 主题已应用: %@", name);
     return YES;
@@ -411,7 +405,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     cfg.activeThemeName = @"";
     [ConfigManager saveAll];
     [self miRestoreColors];
-    [self miClearPathCache];
+    [self miClearImageCache];
     [self miNotifyThemeChanged];
     WPLog(@"Theme", @"[RESTORE] 已恢复微信默认主题");
     return YES;
@@ -441,7 +435,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
             [ConfigManager saveAll];
             [self miRestoreColors];
         }
-        [self miClearPathCache];
+        [self miClearImageCache];
         if (wasActive) [self miNotifyThemeChanged]; // 新请求回落原生资源
     }
     return ok;
