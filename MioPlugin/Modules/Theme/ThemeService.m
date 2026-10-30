@@ -102,6 +102,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
 @implementation ThemeService {
     NSCache *_imageCache; // key = 主题名|请求名，value = UIImage（动态/静态）或 NSNull（未命中也缓存，挡高频磁盘读）
     NSInteger _hitCount;
+    NSMutableSet<NSString *> *_missLogged; // 未命中请求名去重（诊断日志封顶用）
     NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
     NSString *_themeColorDictPath;                          // 色表来源路径（变更时重载）
 }
@@ -113,6 +114,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
         instance = [[ThemeService alloc] init];
         instance->_imageCache = [NSCache new];
         instance->_imageCache.countLimit = 2048;
+        instance->_missLogged = [NSMutableSet set];
     });
     return instance;
 }
@@ -185,8 +187,10 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
 // 返回主题命中图片；未启用/未命中返回 nil。
 // 亮图（stem 系）+ 暗图（stem_Dark 系，引擎暗色变体约定，D519 实锤）双文件都命中时
-// 注册进 UIImageAsset 返回动态 UIImage：系统切亮暗 UIKit 自动重解析，气泡等持有
-// 图片引用的视图无需重建即当场换图。同一名恒返回同一 UIImage 对象（指针稳定）。
+// 注册进 UIImageAsset 返回动态 UIImage，且按"屏幕级 trait"解析初始变体——
+// 不能用 UITraitCollection.currentTraitCollection：它只在 UIKit 回调上下文可靠，
+// 微信启动期/后台线程的取图请求拿到的是默认亮色（D519 暗色冷启动出亮图实锤）。
+// 屏幕级 trait 任何线程都反映真实系统亮暗。同一名恒返回同一 UIImage 对象（指针稳定）。
 - (nullable UIImage *)miThemeImageForName:(NSString *)name {
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme) return nil;
@@ -199,6 +203,8 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
     NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:theme];
     NSFileManager *fm = [NSFileManager defaultManager];
+    UITraitCollection *screenTrait = [UIScreen mainScreen].traitCollection;
+    BOOL dark = screenTrait.userInterfaceStyle == UIUserInterfaceStyleDark;
 
     // 候选：去扩展名 → @3x（按屏）→ @2x → .png；带非 png 扩展名时原样兜底
     NSString *stem = name;
@@ -230,7 +236,7 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
           withConfiguration:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight]];
         [asset registerImage:darkImg
           withConfiguration:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark]];
-        result = [asset imageWithConfiguration:[UITraitCollection currentTraitCollection]];
+        result = [asset imageWithConfiguration:screenTrait];
     } else {
         result = lightImg ?: darkImg;   // 只有单份时按请求名静态返回
     }
@@ -243,6 +249,10 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
             WPLog(@"Theme", @"[IMG] 命中(%ld): %@ → %@%@", (long)_hitCount, name,
                   lightPath.lastPathComponent ?: @"", darkImg ? [NSString stringWithFormat:@" + %@", darkPath.lastPathComponent] : @"");
         }
+    } else if (_missLogged.count < 40 && ![_missLogged containsObject:name]) {
+        // 诊断：主题未覆盖的请求名（微信引擎自己会处理原生资源）。去重、封顶，防日志洪水
+        [_missLogged addObject:name];
+        WPLog(@"Theme", @"[IMG] 未命中: %@（亮模式=%@）", name, dark ? @"NO" : @"YES");
     }
     return result;
 }
