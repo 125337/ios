@@ -13,6 +13,8 @@
 
 @interface ThemeService ()
 - (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name;
+- (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir;
+- (void)miNotifyThemeChanged;
 @end
 
 // ─────────────────────────────────────────────────────────────────────────────
