@@ -47,27 +47,30 @@
 @end
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 取图拦截架构（WXHelper 3.9-5 逆向实锤：它不用 themeFromPath/theme.inf/setCurrentTheme，
-// 引擎注册路线对元数据/CSS 有隐藏要求且 D519 实测走不通，全部废弃）。
+// 主题拦截架构（微信助手 3.9-5 实证路线：取点拦截，不碰引擎注册/CSS）。
 //
-// 机制：hook 微信取图层两个入口，启用主题时按请求名查 themes/<当前主题>/：
+// 图标层：hook 微信取图层，启用主题时按请求名查 themes/<当前主题>/：
 //   ① -[MMThemeManager imageNamed:]        位图（D519 的 PNG 走这里）
 //   ② +[WCSVGImage imageNamed:fromConfig:] SVG 图标位（icons_filled_*/icons_outlined_*）
 //   命中 → [UIImage imageWithContentsOfFile:]；未命中 → 原实现（引擎缓存零污染）。
-//   _dark/_Dark 变体天然支持（请求名自带后缀，按名查找自动覆盖）。
-//   应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
+// 颜色层：hook 取色查询两个入口（微信助手符号表实锤同款路线）：
+//   ③ -[WCColorMgr getColor:]             +[WCColor xxx] 动态类方法真实入口
+//   ④ -[WCColorMgr getColorValueForName:] 对外查询 API
+//   → 主题色表（weui_color_new.xml 旁路解析，按主题缓存）亮暗按 trait 拆分，纯 hex 解析。
+// 亮暗切换：hook -[UIWindow traitCollectionDidChange:]，系统切亮暗当场发微信
+//   主题切换通知驱动在屏 UI 重建取色（无定时器无轮询）。
+// 应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 原实现
 static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
-static void (*g_orig_WCColorMgr_loadColorFromXML)(id, SEL);
 static id (*g_orig_WCColorMgr_getColor)(id, SEL, NSString *);
 static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
+static void (*g_orig_UIWindow_traitCollectionDidChange)(id, SEL, UITraitCollection *);
 
 // 取色时点拦截：任何视图任何时刻查色，主题定义的名字直接返回主题色（亮/暗按系统外观拆分，
-// 用引擎自己的 hexStringToColor: 转换保证类型一致）。与视图创建时机无关——顶栏/底栏/
-// 搜索栏等组件首屏即主题色。
+// hex 纯解析）。与视图创建时机无关——顶栏/底栏/搜索栏等组件首屏即主题色。
 // getColor: 是 +[WCColor xxx] 全部动态类方法（resolveClassMethod:）的真实入口；
 // getColorValueForName: 是另一条对外查询 API。两个查询面都拦。
 static id mio_WCColorMgr_getColor(id self, SEL _cmd, NSString *name) {
@@ -82,14 +85,15 @@ static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name)
     return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
 }
 
-// 微信自己加载完颜色表的瞬间同步重放主题色（保持 colorDic 底层状态一致；
-// 我们自己的应用走 loadColorFromXMLByPath:，不走此方法，无递归）
-static void mio_WCColorMgr_loadColorFromXML(id self, SEL _cmd) {
-    g_orig_WCColorMgr_loadColorFromXML(self, _cmd);
+// 系统亮暗切换：UIWindow trait 变化 → 当场发微信主题切换通知，在屏 UI 重建并
+// 经取色拦截拿到新亮暗分支的主题色（无需杀进程重进）
+static void mio_UIWindow_traitCollectionDidChange(id self, SEL _cmd, UITraitCollection *previous) {
+    g_orig_UIWindow_traitCollectionDidChange(self, _cmd, previous);
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return;
-    NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
-    [[ThemeService shared] miApplyColorsForThemeDir:dir];
+    UITraitCollection *cur = [(UIView *)self traitCollection];
+    if (!previous || !cur || previous.userInterfaceStyle == cur.userInterfaceStyle) return;
+    [[ThemeService shared] miNotifyThemeChanged];
 }
 
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
@@ -163,13 +167,6 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
 
         Class colorMgrCls = objc_getClass("WCColorMgr");
         if (colorMgrCls) {
-            SEL s3 = NSSelectorFromString(@"loadColorFromXML");
-            if (class_getInstanceMethod(colorMgrCls, s3)) {
-                MSHookMessageEx(colorMgrCls, s3, (IMP)mio_WCColorMgr_loadColorFromXML, (IMP *)&g_orig_WCColorMgr_loadColorFromXML);
-                WPLog(@"Theme", @"[HOOK] ✓ -[WCColorMgr loadColorFromXML]");
-            } else {
-                WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr loadColorFromXML 不存在");
-            }
             SEL s4 = NSSelectorFromString(@"getColorValueForName:");
             if (class_getInstanceMethod(colorMgrCls, s4)) {
                 MSHookMessageEx(colorMgrCls, s4, (IMP)mio_WCColorMgr_getColorValueForName, (IMP *)&g_orig_WCColorMgr_getColorValueForName);
@@ -186,6 +183,16 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
+        }
+
+        // 系统亮暗切换 → 当场重刷主题色（UIWindow trait 变化是系统切外观的必经时点）
+        Class winCls = objc_getClass("UIWindow");
+        SEL s6 = NSSelectorFromString(@"traitCollectionDidChange:");
+        if (winCls && class_getInstanceMethod(winCls, s6)) {
+            MSHookMessageEx(winCls, s6, (IMP)mio_UIWindow_traitCollectionDidChange, (IMP *)&g_orig_UIWindow_traitCollectionDidChange);
+            WPLog(@"Theme", @"[HOOK] ✓ -[UIWindow traitCollectionDidChange:]");
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ UIWindow traitCollectionDidChange: 不存在");
         }
     });
 }
