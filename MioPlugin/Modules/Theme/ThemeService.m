@@ -62,27 +62,34 @@
 static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
 static void (*g_orig_WCColorMgr_loadColorFromXML)(id, SEL);
+static id (*g_orig_WCColorMgr_getColor)(id, SEL, NSString *);
 static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
 
 // 取色时点拦截：任何视图任何时刻查色，主题定义的名字直接返回主题色（亮/暗按系统外观拆分，
 // 用引擎自己的 hexStringToColor: 转换保证类型一致）。与视图创建时机无关——顶栏/底栏/
-// 搜索栏等"创建时解析一次就不再查"的组件首屏即主题色。colorDic 级替换作为底层状态保持一致。
+// 搜索栏等组件首屏即主题色。
+// getColor: 是 +[WCColor xxx] 全部动态类方法（resolveClassMethod:）的真实入口；
+// getColorValueForName: 是另一条对外查询 API。两个查询面都拦。
+static id mio_WCColorMgr_getColor(id self, SEL _cmd, NSString *name) {
+    UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
+    if (themed) return themed;
+    return g_orig_WCColorMgr_getColor(self, _cmd, name);
+}
+
 static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
     if (themed) return themed;
     return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
 }
 
-// 微信自己加载完颜色表的瞬间**同步**重放主题色（dispatch_async 排队会晚于首屏取色——
-// async 重排队是"首屏先原生"的根因；我们自己的应用走 loadColorFromXMLByPath:，无递归）
+// 微信自己加载完颜色表的瞬间同步重放主题色（保持 colorDic 底层状态一致；
+// 我们自己的应用走 loadColorFromXMLByPath:，不走此方法，无递归）
 static void mio_WCColorMgr_loadColorFromXML(id self, SEL _cmd) {
     g_orig_WCColorMgr_loadColorFromXML(self, _cmd);
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return;
     NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
-    if ([[ThemeService shared] miApplyColorsForThemeDir:dir]) {
-        [[ThemeService shared] miNotifyThemeChanged];
-    }
+    [[ThemeService shared] miApplyColorsForThemeDir:dir];
 }
 
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
@@ -170,31 +177,17 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
             } else {
                 WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr getColorValueForName: 不存在");
             }
-            // 抢先应用：插件安装瞬间（早于主界面渲染）就加载主题色表，
-            // 微信稍后自己的 loadColorFromXML 覆盖后由上面 hook 立即重放。
-            // 首屏首次取色即为主题色（此前依赖 loadColorFromXML 后重放，慢一拍）
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [[ThemeService shared] miApplyColorsEarlyWithRetries:6];
-            });
+            SEL s5 = NSSelectorFromString(@"getColor:");
+            if (class_getInstanceMethod(colorMgrCls, s5)) {
+                MSHookMessageEx(colorMgrCls, s5, (IMP)mio_WCColorMgr_getColor, (IMP *)&g_orig_WCColorMgr_getColor);
+                WPLog(@"Theme", @"[HOOK] ✓ -[WCColorMgr getColor:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr getColor: 不存在");
+            }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
         }
     });
-}
-
-// 启动抢跑：立即应用，WCColorMgr 未就绪则 0.5s 间隔重试（共 3s），不发通知（首屏未建，无需刷新）
-- (void)miApplyColorsEarlyWithRetries:(NSInteger)remaining {
-    ThemeConfig *cfg = [ThemeConfig shared];
-    if (cfg.enableTheme && cfg.activeThemeName.length > 0) {
-        NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
-        if ([self miApplyColorsForThemeDir:dir]) return;
-    }
-    if (remaining > 0) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [self miApplyColorsEarlyWithRetries:remaining - 1];
-        });
-    }
 }
 
 #pragma mark - 主题目录查找（hook 热路径）
@@ -407,22 +400,6 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
         if (wasActive) [self miNotifyThemeChanged]; // 新请求回落原生资源
     }
     return ok;
-}
-
-#pragma mark - 冷启动重放（仅颜色层；图标层 hook 常驻直读配置，无需重放）
-
-// ThemeHook.install 延迟调用：配置里有主题时重新替换 WCColorMgr 色表（colorDic 是内存态，
-// 微信启动 loadColorFromXML 会用原生表覆盖，必须在其后重放）
-- (void)reapplyColorsOnLaunch {
-    ThemeConfig *cfg = [ThemeConfig shared];
-    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) {
-        WPLog(@"Theme", @"[REPLAY] 无启用主题，颜色层跳过");
-        return;
-    }
-    NSString *path = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
-    BOOL ok = [self miApplyColorsForThemeDir:path];
-    WPLog(@"Theme", @"[REPLAY] 颜色层重放 %@ → %@", cfg.activeThemeName, ok ? @"OK" : @"SKIP/FAIL");
-    if (ok) [self miNotifyThemeChanged]; // 刷新首屏陈旧视图
 }
 
 #pragma mark - 显示名

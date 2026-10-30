@@ -10,15 +10,10 @@
 @implementation ThemeHook
 
 + (void)install {
-    // 取图拦截模式：进程加载即装 hook（类已注册），hook 直读配置，图标层无需冷启动重放；
-    // 颜色层（WCColorMgr colorDic 内存态）在微信 loadColorFromXML 之后重放
-    WPLog(@"Theme", @"[HOOK] install: 取图拦截模式（MMThemeManager imageNamed + WCSVGImage imageNamed:fromConfig）");
+    // 取图拦截 + 取色时点拦截：进程加载即装 hook（类已注册），hook 直读配置，
+    // 无需任何冷启动重放——首屏任何取图/取色请求在时点拦截层即时命中
+    WPLog(@"Theme", @"[HOOK] install: 取图拦截（MMThemeManager/WCSVGImage）+ 取色拦截（WCColorMgr）");
     [[ThemeService shared] installHooks];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        WPLog(@"Theme", @"[HOOK] 冷启动，重放颜色层");
-        [[ThemeService shared] reapplyColorsOnLaunch];
-    });
 }
 
 @end
