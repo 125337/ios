@@ -60,7 +60,7 @@
 //   ② -[MMThemeManager imageNamed:warnIfNotFound:]  内部入口变体（微信代码可能直呼它绕过①）
 //   ③ +[WCSVGImage imageNamed:fromConfig:]          SVG 图标位（icons_filled_*/icons_outlined_*）
 //   缓存键带亮暗位（微信原生切亮暗时会重新取图，键不含模式会把旧模式的图原样还回去）；
-//   暗色下无暗变体 → 回落原实现（微信原生自有正确暗图）；文件按 @3x/@2x 后缀设 scale。
+//   暗色下无暗变体 → 用主题亮图（保持整屏同源配色）；文件按 @3x/@2x 后缀设 scale。
 // 颜色层：hook 取色查询两个入口（微信助手符号表实锤同款路线）：
 //   ④ -[WCColorMgr getColor:]             +[WCColor xxx] 动态类方法真实入口
 //   ⑤ -[WCColorMgr getColorValueForName:] 对外查询 API
@@ -280,7 +280,7 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
         UIImage *lightImg = [self miLoadImageAtPath:lightPath];
         UIImage *darkImg = [self miLoadImageAtPath:darkPath];
         if (dark) {
-            result = darkImg; // 暗色无暗变体 → nil 回落原实现（微信原生自有正确暗图）
+            result = darkImg ?: lightImg; // 无暗变体 → 用主题亮图（主题包覆盖不全时保持整屏同源配色）
         } else {
             result = lightImg ?: darkImg; // 亮色：亮图优先（个别包对亮名只提供暗名资源时兜底）
         }
