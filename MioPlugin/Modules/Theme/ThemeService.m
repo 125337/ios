@@ -56,9 +56,8 @@
     // 主题名 = zip 文件名去扩展名；清洗非法路径字符
     NSString *base = zipPath.lastPathComponent;
     if ([base.pathExtension.lowercaseString isEqualToString:@"zip"]) base = [base stringByDeletingPathExtension];
-    base = [[base componentsSeparatedByCharactersInSet:
-             [[NSCharacterSet characterSetWithCharactersInString:@"/\\:?<>|*\""] invertedSet]
-             componentsJoinedByString:@"_"];
+    NSCharacterSet *illegal = [[NSCharacterSet characterSetWithCharactersInString:@"/\\:?<>|*\""] invertedSet];
+    base = [[base componentsSeparatedByCharactersInSet:illegal] componentsJoinedByString:@"_"];
     base = [base stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if (base.length == 0) base = @"imported_theme";
 
@@ -336,7 +335,7 @@
             SEL baseSel = NSSelectorFromString(@"basePath");
             if (theme && [theme respondsToSelector:baseSel]) {
                 NSString *bp = ((NSString *(*)(id, SEL))objc_msgSend)(theme, baseSel);
-                if (bp.length && ![bp.path.lowercaseString hasSuffix:@".app"]) return bp.lastPathComponent;
+                if (bp.length && ![bp.lowercaseString hasSuffix:@".app"]) return bp.lastPathComponent;
             }
         }
     } @catch (NSException *e) { /* 引擎异常时按默认处理 */ }
