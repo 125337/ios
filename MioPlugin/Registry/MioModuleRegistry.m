@@ -49,6 +49,7 @@
 #import "../Modules/MsgTail/MsgTailConfig.h"
 #import "../Modules/SystemCamera/SystemCameraConfig.h"
 #import "../Modules/FontBeautify/FontBeautifyConfig.h"
+#import "../Modules/Theme/ThemeConfig.h"
 
 // ────── 所有 Hook 类的 import ──────
 #import "../Modules/Revoke/RevokeHook.h"
@@ -74,11 +75,13 @@
 #import "../Modules/MsgTail/MsgTailHook.h"
 #import "../Modules/SystemCamera/SystemCameraHook.h"
 #import "../Modules/FontBeautify/FontBeautifyHook.h"
+#import "../Modules/Theme/ThemeHook.h"
 #import "../Modules/AutoFollow/AutoFollowHook.h"
 #import "../Modules/FontBeautify/FontImportHook.h"
 #import "../Modules/SettingEntry/DayNightSkinConfig.h"
 #import "../Modules/SettingEntry/DayNightSkinHook.h"
 #import "../Settings/Controllers/FontBeautifyVC.h"
+#import "../Settings/Controllers/ThemeVC.h"
 
 // ────── 设置页 Controller 的 import ──────
 #import "../Settings/Controllers/SettingListCornerRadiusController.h"
@@ -379,6 +382,15 @@
                                                hookClasses:@[[FontBeautifyHook class], [FontImportHook class]]
                                            controllerClass:[FontBeautifyVC class]
                                                   subtitle:@"全局字体替换（导入 ttf/otf）"
+                                             sectionTitle:@"通用"],
+
+            // ──── 主题美化（入口在 功能列表 字体美化下方；MMThemeManager 原生引擎应用主题包，零 UI hook） ────
+            [MioModuleDescriptor descriptorWithIdentifier:@"theme"
+                                                    title:@"主题美化"
+                                               configClass:[ThemeConfig class]
+                                               hookClasses:@[[ThemeHook class]]
+                                           controllerClass:[ThemeVC class]
+                                                  subtitle:@"导入 zip 主题包换图标/配色（微信原生引擎渲染）"
                                              sectionTitle:@"通用"],
 
             // ──── 日月开关（开关换肤；入口在 界面定制-开关UI 卡片） ────

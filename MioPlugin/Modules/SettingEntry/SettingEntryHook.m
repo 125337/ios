@@ -13,6 +13,7 @@
 #import "../../Settings/Controllers/SettingRedEnvelopController.h"
 #import "../../Settings/Controllers/SettingMomentsController.h"
 #import "../../Settings/Controllers/FontBeautifyVC.h"
+#import "../../Settings/Controllers/ThemeVC.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import "../../Core/LogManager.h"
@@ -84,6 +85,7 @@ static NSArray<NSDictionary *> *WPEntrySearchItems(void) {
             @{ @"title": @"界面定制", @"action": @"openUI:", @"kw": @"界面 定制 主题 ui" },
             @{ @"title": @"圆角美化", @"action": @"openCorner:", @"kw": @"圆角 美化 corner" },
             @{ @"title": @"字体美化", @"action": @"openFontBeautify:", @"kw": @"字体 美化 全局字体 换字体 font" },
+            @{ @"title": @"主题美化", @"action": @"openTheme:", @"kw": @"主题 美化 换肤 图标 theme" },
             @{ @"title": @"红包设置", @"action": @"openRedEnvelop:", @"kw": @"红包 抢红包 收款 转账 拉群" },
             @{ @"title": @"朋友圈", @"action": @"openMoments:", @"kw": @"朋友圈 pyq 时刻 moments 集赞" },
             @{ @"title": @"其他功能", @"action": @"openOther:", @"kw": @"其他 other" },
@@ -109,7 +111,7 @@ static void wpEntryBuildRows(WPWeChatTable *wc, NSString *keyword) {
 
     if (kw.length == 0) {
         [g wpSetHeader:@"功能列表" footer:nil];
-        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"字体美化", @"openFontBeautify:"], @[@"红包设置", @"openRedEnvelop:"], @[@"朋友圈", @"openMoments:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"]];
+        NSArray *navItems = @[@[@"账户信息", @"openAccount:"], @[@"语音包", @"openVoice:"], @[@"常用功能", @"openCommon:"], @[@"界面定制", @"openUI:"], @[@"圆角美化", @"openCorner:"], @[@"字体美化", @"openFontBeautify:"], @[@"主题美化", @"openTheme:"], @[@"红包设置", @"openRedEnvelop:"], @[@"朋友圈", @"openMoments:"], @[@"其他功能", @"openOther:"], @[@"备份", @"openBackup:"]];
         for (NSUInteger i = 0; i < navItems.count; i++) {
             id cell = WPWCNavCell(NSSelectorFromString(@"wpEntryNavTap:"),
                                   handler,
@@ -422,6 +424,15 @@ static void pluginEntryViewWillAppear(id self, SEL _cmd, BOOL animated) {
     subVC.categoryName = @"字体美化";
     [vc.navigationController pushViewController:subVC animated:YES];
     WPLog(@"Setting", @"[Nav] pushed FontBeautifyVC");
+}
+
+- (void)openTheme:(id)sender {
+    UIViewController *vc = [self currentVCFrom:sender];
+    if (!vc) { WPLog(@"Setting", @"[Nav] openTheme: currentVC nil"); return; }
+    ThemeVC *subVC = [[ThemeVC alloc] init];
+    subVC.categoryName = @"主题美化";
+    [vc.navigationController pushViewController:subVC animated:YES];
+    WPLog(@"Setting", @"[Nav] pushed ThemeVC");
 }
 
 - (void)openRedEnvelop:(id)sender {
