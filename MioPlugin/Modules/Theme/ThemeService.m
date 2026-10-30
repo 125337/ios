@@ -56,9 +56,12 @@
 // 颜色层：hook 取色查询两个入口（微信助手符号表实锤同款路线）：
 //   ③ -[WCColorMgr getColor:]             +[WCColor xxx] 动态类方法真实入口
 //   ④ -[WCColorMgr getColorValueForName:] 对外查询 API
-//   → 主题色表（weui_color_new.xml 旁路解析，按主题缓存）亮暗按 trait 拆分，纯 hex 解析。
+//   → 主题色表（weui_color_new.xml 旁路解析，按主题缓存）返回动态 UIColor
+//   （colorWithDynamicProvider，微信 colorInLightMode:DarkMode: 同款机制），
+//   系统切亮暗 UIKit 自动重解析，视图无需重建即当场换色。
+// 图标暗色：暗色模式下候选顺序先 <名>_Dark 再原名（引擎暗色变体约定）。
 // 亮暗切换：hook -[UIWindow traitCollectionDidChange:]，系统切亮暗当场发微信
-//   主题切换通知驱动在屏 UI 重建取色（无定时器无轮询）。
+//   主题切换通知驱动在屏 UI 重建取图（UIImage 无动态文件机制，图标切换需重建）。
 // 应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -206,7 +209,13 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     NSString *theme = cfg.activeThemeName;
     if (theme.length == 0 || name.length == 0 || [name containsString:@"/"]) return nil;
 
-    NSString *key = [theme stringByAppendingFormat:@"|%@", name];
+    // 引擎暗色变体约定（D519 暗图命名 + 暗色冷启动仍请求亮色名实锤）：暗色模式下
+    // imageNamed:@"xxx" 引擎内部会去找 xxx_Dark——我们的 hook 在引擎之前返回，
+    // 这一步必须自己做：候选顺序 <名>_Dark@3x → <名>_Dark@2x → <名>@3x → <名>@2x → <名>.png
+    BOOL dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+
+    // 缓存键带亮暗前缀：同一名亮/暗各缓存一份（miClearPathCache 一起清）
+    NSString *key = [theme stringByAppendingFormat:@"|%@|%@", dark ? @"D" : @"L", name];
     id cached = [_pathCache objectForKey:key];
     if (cached) return cached == [NSNull null] ? nil : cached;
 
@@ -216,6 +225,11 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     if (ext.length) stem = [name stringByDeletingPathExtension];
 
     NSMutableArray<NSString *> *cands = [NSMutableArray array];
+    NSString *darkStem = [stem stringByAppendingString:@"_Dark"];
+    if (dark) {
+        if ([UIScreen mainScreen].scale >= 3) [cands addObject:[darkStem stringByAppendingString:@"@3x.png"]];
+        [cands addObject:[darkStem stringByAppendingString:@"@2x.png"]];
+    }
     if ([UIScreen mainScreen].scale >= 3) [cands addObject:[stem stringByAppendingString:@"@3x.png"]];
     [cands addObject:[stem stringByAppendingString:@"@2x.png"]];
     [cands addObject:[stem stringByAppendingString:@".png"]];
@@ -318,20 +332,27 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     NSString *pair = _themeColorDict[name];
     if (pair.length == 0) return nil;
 
-    // "#light,#dark" → 按系统外观取一
-    NSString *hex = pair;
+    // "#light,#dark" → 动态 UIColor（微信 colorInLightMode:DarkMode: 同款机制）：
+    // 亮/暗两份都解析，由 colorWithDynamicProvider 按当前 trait 出色——系统切亮暗时
+    // UIKit 自动重新解析，持有颜色引用的视图（置顶会话/底栏等）无需重建即当场换色
+    NSString *lightHex = pair, *darkHex = nil;
     NSRange comma = [pair rangeOfString:@","];
     if (comma.location != NSNotFound) {
-        BOOL dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-        hex = dark ? [pair substringFromIndex:comma.location + 1] : [pair substringToIndex:comma.location];
-        hex = [hex stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        lightHex = [[pair substringToIndex:comma.location] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        darkHex = [[pair substringFromIndex:comma.location + 1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     }
-    if (hex.length == 0) return nil;
+    if (lightHex.length == 0) return nil;
 
     // 纯解析：hex 为 #RRGGBB[AA]（D519 实测 8 位 = RRGGBBAA，如 #000000E5 = alpha 0.9）。
     // 不能回调引擎 hexStringToColor:——getColor: 是微信内部热路径（锁内调用链），
     // 从 hook 里再进引擎（m_lock 为 os_unfair_lock，不可重入）会死锁闪退。
-    return [self miColorFromHex:hex];
+    UIColor *lightColor = [self miColorFromHex:lightHex];
+    if (!lightColor) return nil;
+    UIColor *darkColor = darkHex.length ? [self miColorFromHex:darkHex] : nil;
+    if (!darkColor) return lightColor;   // 主题未给暗色分支 → 亮暗同色
+    return [UIColor colorWithDynamicProvider:^UIColor * (UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark ? darkColor : lightColor;
+    }];
 }
 
 - (nullable UIColor *)miColorFromHex:(NSString *)hexStr {
