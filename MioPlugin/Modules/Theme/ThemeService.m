@@ -160,12 +160,21 @@ static void MioLogBannerState(NSString *when, UIButton *b) {
           MioDescribeColor([b titleColorForState:UIControlStateNormal]),
           MioDescribeColor(b.titleLabel.textColor),
           b.imageView ? [b.imageView image] : nil);
+    WPLog(@"Theme", @"[BANNER] %@ bgImage=%@ img=%@", when,
+          [b backgroundImageForState:UIControlStateNormal],
+          [b imageForState:UIControlStateNormal]);
     // 沿 superview 链向上 4 层：垫在横幅下面的视图背景（横幅暗分支≈2% alpha，透出的就是它们）
     UIView *v = b;
     for (int i = 1; i <= 4 && v.superview; i++) {
         v = v.superview;
         WPLog(@"Theme", @"[BANNER] ↑%d %@ bg=%@", i, NSStringFromClass([v class]), MioDescribeColor(v.backgroundColor));
     }
+    // 首次 layout 打印整个 cell 的视图树（浅灰若来自兄弟视图/背景图，这里现形）
+    static dispatch_once_t treeOnce;
+    dispatch_once(&treeOnce, ^{
+        UIView *cell = b.superview.superview ?: b.superview ?: b;
+        WPLog(@"Theme", @"[BANNER] cell tree:\n%@", [cell performSelector:@selector(recursiveDescription)]);
+    });
 }
 
 static void mio_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
