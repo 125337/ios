@@ -342,16 +342,11 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     UIImage *result = nil;
     UIImage *lightImg = lightPath ? [UIImage imageWithContentsOfFile:lightPath] : nil;
     UIImage *darkImg = darkPath ? [UIImage imageWithContentsOfFile:darkPath] : nil;
-    if (lightImg && darkImg) {
-        UIImageAsset *asset = [[UIImageAsset alloc] init];
-        [asset registerImage:lightImg
-          withConfiguration:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight]];
-        [asset registerImage:darkImg
-          withConfiguration:[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark]];
-        result = [asset imageWithConfiguration:screenTrait];
-    } else {
-        result = lightImg ?: darkImg;   // 只有单份时按请求名静态返回
-    }
+    // 按当前屏幕亮暗静态返回（不再用 UIImageAsset 打包动态图：
+    // 8.0.79 实测 registerImage:withConfiguration: 启动期崩溃；
+    // 亮暗切换由 DarkModeImageMgr 配对侧 hook 换暗图，微信原生机器自己驱动）
+    if (dark && darkImg) result = darkImg;
+    else result = lightImg ?: darkImg;
 
     [_imageCache setObject:(result ?: [NSNull null]) forKey:key cost:1];
 
