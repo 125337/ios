@@ -305,12 +305,9 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     }
     if (hex.length == 0) return nil;
 
-    id mgr = [self miColorMgr];
-    SEL convSel = NSSelectorFromString(@"hexStringToColor:");
-    if (mgr && [mgr respondsToSelector:convSel]) {
-        return ((UIColor *(*)(id, SEL, NSString *))objc_msgSend)(mgr, convSel, hex);
-    }
-    // 极端兜底：引擎转换器不可用时自己解析 #RRGGBB[AA]
+    // 纯解析：hex 为 #RRGGBB[AA]（D519 实测 8 位 = RRGGBBAA，如 #000000E5 = alpha 0.9）。
+    // 不能回调引擎 hexStringToColor:——getColor: 是微信内部热路径（锁内调用链），
+    // 从 hook 里再进引擎（m_lock 为 os_unfair_lock，不可重入）会死锁闪退。
     return [self miColorFromHex:hex];
 }
 
