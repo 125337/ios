@@ -291,8 +291,9 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     UITraitCollection *screenTrait = [UIScreen mainScreen].traitCollection;
     BOOL dark = screenTrait.userInterfaceStyle == UIUserInterfaceStyleDark;
 
-    // 同一名恒一个缓存项：双文件命中时是动态 UIImage（亮暗通吃），单文件时按请求名
-    NSString *key = [theme stringByAppendingFormat:@"|%@", name];
+    // 缓存键必须带亮暗位：微信原生切亮暗时会重新取图，键不含模式会把旧模式的图
+    // 原样还回去（切暗图标不刷新、杀后台才好的根因；微信助手 images/pairs 同理按模式区分）
+    NSString *key = [theme stringByAppendingFormat:@"|%@|%@", dark ? @"D" : @"L", name];
     id cached = [_imageCache objectForKey:key];
     if (cached) return cached == [NSNull null] ? nil : cached;
 
