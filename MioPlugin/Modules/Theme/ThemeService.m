@@ -11,6 +11,10 @@
 #import <UIKit/UIKit.h>
 #import <substrate.h>
 
+@interface ThemeService ()
+- (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name;
+@end
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 取图拦截架构（WXHelper 3.9-5 逆向实锤：它不用 themeFromPath/theme.inf/setCurrentTheme，
 // 引擎注册路线对元数据/CSS 有隐藏要求且 D519 实测走不通，全部废弃）。
