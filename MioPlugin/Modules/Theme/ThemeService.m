@@ -160,6 +160,12 @@ static void MioLogBannerState(NSString *when, UIButton *b) {
           MioDescribeColor([b titleColorForState:UIControlStateNormal]),
           MioDescribeColor(b.titleLabel.textColor),
           b.imageView ? [b.imageView image] : nil);
+    // 沿 superview 链向上 4 层：垫在横幅下面的视图背景（横幅暗分支≈2% alpha，透出的就是它们）
+    UIView *v = b;
+    for (int i = 1; i <= 4 && v.superview; i++) {
+        v = v.superview;
+        WPLog(@"Theme", @"[BANNER] ↑%d %@ bg=%@", i, NSStringFromClass([v class]), MioDescribeColor(v.backgroundColor));
+    }
 }
 
 static void mio_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
