@@ -5,6 +5,7 @@
 
 #import "ThemeService.h"
 #import "ThemeConfig.h"
+#import "MioZipReader.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import "../../Core/ServiceHelper.h"
@@ -67,23 +68,35 @@
     [fm removeItemAtPath:tmpDir error:nil]; // 上次残留清理
     [fm createDirectoryAtPath:tmpDir withIntermediateDirectories:YES attributes:nil error:nil];
 
-    // 解压：微信自带 SSZipArchive（二进制实锤 unzipFileAtPath:toDestination:）
-    Class zipCls = MIO_CLS("SSZipArchive");
-    if (!zipCls) {
-        if (errText) *errText = @"微信未提供 SSZipArchive（版本不兼容）";
-        [fm removeItemAtPath:tmpDir error:nil];
-        return NO;
-    }
-    @try {
-        SEL unzipSel = NSSelectorFromString(@"unzipFileAtPath:toDestination:");
-        if (![zipCls respondsToSelector:unzipSel]) {
-            if (errText) *errText = @"SSZipArchive 接口不兼容";
-            [fm removeItemAtPath:tmpDir error:nil];
-            return NO;
+    // 解压：优先探测微信自带 zip 类（8.0.54 实测 SSZipArchive 未注册，类名带前缀未实锤）；
+    // 全部候选落空时走自研 MioZipReader（libz raw inflate，dlsym 加载，零外部依赖）
+    BOOL unzipped = NO;
+    NSString *unzipErr = nil;
+    Class zipCls = nil;
+    for (NSString *candidate in @[@"SSZipArchive", @"QSSZipArchive", @"ZipArchive", @"MMZipArchive"]) {
+        Class cls = MIO_CLS(candidate);
+        WPLog(@"Theme", @"[IMPORT] zip 类探测 %@ → %@", candidate, cls ?: @"nil");
+        if (cls && [cls respondsToSelector:NSSelectorFromString(@"unzipFileAtPath:toDestination:")]) {
+            zipCls = cls;
+            break;
         }
-        ((BOOL (*)(id, SEL, NSString *, NSString *))objc_msgSend)(zipCls, unzipSel, zipPath, tmpDir);
-    } @catch (NSException *e) {
-        if (errText) *errText = [NSString stringWithFormat:@"解压失败：%@", e.reason ?: @"未知异常"];
+    }
+    if (zipCls) {
+        @try {
+            ((BOOL (*)(id, SEL, NSString *, NSString *))objc_msgSend)
+                (zipCls, NSSelectorFromString(@"unzipFileAtPath:toDestination:"), zipPath, tmpDir);
+            unzipped = YES;
+            WPLog(@"Theme", @"[IMPORT] 走微信 %@ 解压", zipCls);
+        } @catch (NSException *e) {
+            unzipErr = [NSString stringWithFormat:@"微信解压器异常：%@", e.reason ?: @"未知异常"];
+        }
+    }
+    if (!unzipped) {
+        unzipped = [MioZipReader unzipFileAtPath:zipPath toDestination:tmpDir errText:&unzipErr];
+        WPLog(@"Theme", @"[IMPORT] 走自研 MioZipReader 解压 → %@", unzipped ? @"OK" : @"FAIL");
+    }
+    if (!unzipped) {
+        if (errText) *errText = unzipErr ?: @"解压失败";
         [fm removeItemAtPath:tmpDir error:nil];
         return NO;
     }
