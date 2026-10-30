@@ -8,11 +8,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// 主题美化配置：微信原生 MMThemeManager 主题包应用（CSS 引擎渲染，零 UI hook）
-// 主题包 = zip 解压后的目录（D519 实测格式：平铺 PNG + weui_color_new.xml，theme.inf 可选）
+// 主题美化配置：取图拦截模式（hook -[MMThemeManager imageNamed:] 等按名覆盖，WXHelper 同款）
+// 主题包 = 主题目录下的文件夹（平铺 PNG，D519 实测格式，无需元数据）
 @interface ThemeConfig : NSObject <ConfigModule>
 
-// 总开关：控制冷启动是否重放已应用主题（页内手动应用不受此开关限制）
+// 总开关：取图拦截生效开关（hook 实时读取，切换后新请求即生效）
 @property (nonatomic, assign) BOOL enableTheme;
 // 当前应用的主题名（= 主题目录名，只存名字不存路径：容器迁移不失效）
 @property (nonatomic, copy) NSString *activeThemeName;

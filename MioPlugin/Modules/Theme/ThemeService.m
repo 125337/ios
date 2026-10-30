@@ -7,22 +7,140 @@
 #import "ThemeConfig.h"
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
-#import "../../Core/ServiceHelper.h"
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
+#import <substrate.h>
 
-// 微信原生主题引擎类名（8.0.80 头文件实锤；运行时 objc_getClass 防硬链接符号）
-#define MIO_CLS(name) objc_getClass(name)
+// ─────────────────────────────────────────────────────────────────────────────
+// 取图拦截架构（WXHelper 3.9-5 逆向实锤：它不用 themeFromPath/theme.inf/setCurrentTheme，
+// 引擎注册路线对元数据/CSS 有隐藏要求且 D519 实测走不通，全部废弃）。
+//
+// 机制：hook 微信取图层两个入口，启用主题时按请求名查 themes/<当前主题>/：
+//   ① -[MMThemeManager imageNamed:]        位图（D519 的 PNG 走这里）
+//   ② +[WCSVGImage imageNamed:fromConfig:] SVG 图标位（icons_filled_*/icons_outlined_*）
+//   命中 → [UIImage imageWithContentsOfFile:]；未命中 → 原实现（引擎缓存零污染）。
+//   _dark/_Dark 变体天然支持（请求名自带后缀，按名查找自动覆盖）。
+//   应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
+// ─────────────────────────────────────────────────────────────────────────────
 
-@implementation ThemeService
+// 原实现
+static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
+static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
+
+static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
+    NSString *path = [[ThemeService shared] miCachedThemeImagePathForName:name];
+    if (path) {
+        UIImage *img = [UIImage imageWithContentsOfFile:path];
+        if (img) return img;
+    }
+    return g_orig_MMImageNamed(self, _cmd, name);
+}
+
+static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString *name, id config) {
+    NSString *path = [[ThemeService shared] miCachedThemeImagePathForName:name];
+    if (path) {
+        UIImage *img = [UIImage imageWithContentsOfFile:path];
+        if (img) return img;
+    }
+    return g_orig_SVGImageNamedFromConfig(self, _cmd, name, config);
+}
+
+@implementation ThemeService {
+    NSCache *_pathCache; // key = 主题名|请求名，value = 路径或 NSNull（未命中也缓存，挡高频磁盘读）
+    NSInteger _hitCount;
+}
 
 + (instancetype)shared {
     static ThemeService *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         instance = [[ThemeService alloc] init];
+        instance->_pathCache = [NSCache new];
+        instance->_pathCache.countLimit = 2048;
     });
     return instance;
+}
+
+#pragma mark - hook 安装（ThemeHook.install 调用，进程加载即生效）
+
+- (void)installHooks {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class mgrCls = objc_getClass("MMThemeManager");
+        if (mgrCls) {
+            SEL s = NSSelectorFromString(@"imageNamed:");
+            if (class_getInstanceMethod(mgrCls, s)) {
+                MSHookMessageEx(mgrCls, s, (IMP)mio_MMThemeManager_imageNamed, (IMP *)&g_orig_MMImageNamed);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MMThemeManager imageNamed:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ MMThemeManager imageNamed: 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MMThemeManager 类不存在");
+        }
+
+        Class svgCls = objc_getClass("WCSVGImage");
+        if (svgCls) {
+            SEL s2 = NSSelectorFromString(@"imageNamed:fromConfig:");
+            if (class_getClassMethod(svgCls, s2)) {
+                // 类方法 → hook 元类
+                MSHookMessageEx(object_getClass(svgCls), s2,
+                                (IMP)mio_WCSVGImage_imageNamed_fromConfig, (IMP *)&g_orig_SVGImageNamedFromConfig);
+                WPLog(@"Theme", @"[HOOK] ✓ +[WCSVGImage imageNamed:fromConfig:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ WCSVGImage imageNamed:fromConfig: 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ WCSVGImage 类不存在");
+        }
+    });
+}
+
+#pragma mark - 主题目录查找（hook 热路径）
+
+// 返回主题目录内命中的图片路径；未启用/未命中返回 nil
+- (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name {
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (!cfg.enableTheme) return nil;
+    NSString *theme = cfg.activeThemeName;
+    if (theme.length == 0 || name.length == 0 || [name containsString:@"/"]) return nil;
+
+    NSString *key = [theme stringByAppendingFormat:@"|%@", name];
+    id cached = [_pathCache objectForKey:key];
+    if (cached) return cached == [NSNull null] ? nil : cached;
+
+    // 候选：去扩展名 → @3x（按屏）→ @2x → .png；带非 png 扩展名时原样兜底
+    NSString *stem = name;
+    NSString *ext = name.pathExtension.lowercaseString;
+    if (ext.length) stem = [name stringByDeletingPathExtension];
+
+    NSMutableArray<NSString *> *cands = [NSMutableArray array];
+    if ([UIScreen mainScreen].scale >= 3) [cands addObject:[stem stringByAppendingString:@"@3x.png"]];
+    [cands addObject:[stem stringByAppendingString:@"@2x.png"]];
+    [cands addObject:[stem stringByAppendingString:@".png"]];
+    if (ext.length && ![ext isEqualToString:@"png"]) [cands addObject:name];
+
+    NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:theme];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *found = nil;
+    for (NSString *c in cands) {
+        NSString *full = [dir stringByAppendingPathComponent:c];
+        if ([fm fileExistsAtPath:full]) { found = full; break; }
+    }
+    [_pathCache setObject:(found ?: [NSNull null]) forKey:key cost:1];
+
+    if (found) {
+        _hitCount++;
+        if (_hitCount <= 5 || _hitCount % 100 == 0) {
+            WPLog(@"Theme", @"[IMG] 命中(%ld): %@ → %@", (long)_hitCount, name, found.lastPathComponent);
+        }
+    }
+    return found;
+}
+
+- (void)miClearPathCache {
+    [_pathCache removeAllObjects];
+    WPLog(@"Theme", @"[CACHE] 主题图路径缓存已清");
 }
 
 #pragma mark - 已导入列表
@@ -41,30 +159,7 @@
     return [names sortedArrayUsingSelector:@selector(compare:)];
 }
 
-#pragma mark - theme.inf 自动补写
-
-// MMTheme themeFromPath: 对无元数据目录返回 nil（D519 实测），最大嫌疑缺 theme.inf
-// （微信助手导入时大概率自行补写）。应用前缺文件就生成 plist 格式兜底：
-// 字段名取自 MMTheme.h（tid/name/icon/version/author/discription/website），填最小集。
-// 引擎不需要则忽略，无害；格式不对仍 nil 时走 Frida 实锤。
-- (void)miEnsureThemeInf:(NSString *)themeDir {
-    NSString *infPath = [themeDir stringByAppendingPathComponent:@"theme.inf"];
-    NSFileManager *fm = [NSFileManager defaultManager];
-    if ([fm fileExistsAtPath:infPath]) return;
-    NSString *name = themeDir.lastPathComponent;
-    NSDictionary *meta = @{
-        @"tid"     : name,
-        @"name"    : name,
-        @"version" : @"1",
-    };
-    if ([meta writeToFile:infPath atomically:YES]) {
-        WPLog(@"Theme", @"[INF] theme.inf 已生成（目录缺元数据）: %@", name);
-    } else {
-        WPLog(@"Theme", @"[INF] theme.inf 写入失败: %@", infPath);
-    }
-}
-
-#pragma mark - 应用 / 恢复默认
+#pragma mark - 应用 / 恢复默认（改配置 + 通知，不碰引擎状态）
 
 - (BOOL)applyThemeNamed:(NSString *)name {
     NSString *path = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:name];
@@ -74,104 +169,27 @@
         WPLog(@"Theme", @"[APPLY] 主题目录无效: %@", name);
         return NO;
     }
-    BOOL ok = [self miApplyThemePath:path];
-    if (ok) {
-        ThemeConfig *cfg = [ThemeConfig shared];
-        cfg.activeThemeName = name;
-        [ConfigManager saveAll];
-    }
-    return ok;
+    ThemeConfig *cfg = [ThemeConfig shared];
+    cfg.enableTheme = YES;
+    cfg.activeThemeName = name;
+    [ConfigManager saveAll];
+    [self miClearPathCache];
+    [self miNotifyThemeChanged];
+    WPLog(@"Theme", @"[APPLY] 主题已应用: %@", name);
+    return YES;
 }
 
 - (BOOL)restoreDefaultTheme {
-    Class themeCls = MIO_CLS("MMTheme");
-    BOOL ok = NO;
-    if (themeCls) {
-        SEL defSel = NSSelectorFromString(@"defaultTheme");
-        if ([themeCls respondsToSelector:defSel]) {
-            id defTheme = ((id (*)(id, SEL))objc_msgSend)(themeCls, defSel);
-            if (defTheme) ok = [self miSetCurrentTheme:defTheme];
-        }
-    }
-    // 兜底：引擎拿不到 defaultTheme 时清掉 currentTheme 让微信回落
-    if (!ok) {
-        id mgr = [self miThemeManager];
-        if (mgr) {
-            @try {
-                ((void (*)(id, SEL, id))objc_msgSend)(mgr, NSSelectorFromString(@"setCurrentTheme:"), nil);
-                [self miNotifyThemeChanged];
-                ok = YES;
-            } @catch (NSException *e) {
-                WPLog(@"Theme", @"[RESTORE] 兜底清理异常: %@", e);
-            }
-        }
-    }
-    if (ok) {
-        ThemeConfig *cfg = [ThemeConfig shared];
-        cfg.activeThemeName = @"";
-        [ConfigManager saveAll];
-        WPLog(@"Theme", @"[RESTORE] 已恢复微信默认主题");
-    }
-    return ok;
+    ThemeConfig *cfg = [ThemeConfig shared];
+    cfg.activeThemeName = @"";
+    [ConfigManager saveAll];
+    [self miClearPathCache];
+    [self miNotifyThemeChanged];
+    WPLog(@"Theme", @"[RESTORE] 已恢复微信默认主题");
+    return YES;
 }
 
-// 核心：themeFromPath → setCurrentTheme → reloadThemeResource → 通知（8.0.54/80 实锤流程）
-- (BOOL)miApplyThemePath:(NSString *)path {
-    Class themeCls = MIO_CLS("MMTheme");
-    id mgr = [self miThemeManager];
-    if (!themeCls || !mgr) {
-        WPLog(@"Theme", @"[APPLY] MMTheme 引擎不可用（MMTheme=%@ MMThemeManager=%@）", themeCls, mgr);
-        return NO;
-    }
-    @try {
-        [self miEnsureThemeInf:path]; // 缺元数据的目录先补 theme.inf
-        SEL fromPathSel = NSSelectorFromString(@"themeFromPath:");
-        if (![themeCls respondsToSelector:fromPathSel]) {
-            WPLog(@"Theme", @"[APPLY] MMTheme themeFromPath: 不可用");
-            return NO;
-        }
-        id theme = ((id (*)(id, SEL, NSString *))objc_msgSend)(themeCls, fromPathSel, path);
-        if (!theme) {
-            WPLog(@"Theme", @"[APPLY] themeFromPath 返回 nil: %@", path);
-            return NO;
-        }
-        if (![self miSetCurrentTheme:theme]) return NO;
-        WPLog(@"Theme", @"[APPLY] 主题已应用: %@", path.lastPathComponent);
-        return YES;
-    } @catch (NSException *e) {
-        WPLog(@"Theme", @"[APPLY] 异常: %@", e);
-        return NO;
-    }
-}
-
-- (BOOL)miSetCurrentTheme:(id)theme {
-    id mgr = [self miThemeManager];
-    if (!mgr) return NO;
-    @try {
-        ((void (*)(id, SEL, id))objc_msgSend)(mgr, NSSelectorFromString(@"setCurrentTheme:"), theme);
-        SEL reloadSel = NSSelectorFromString(@"reloadThemeResource");
-        if ([mgr respondsToSelector:reloadSel]) {
-            ((void (*)(id, SEL))objc_msgSend)(mgr, reloadSel);
-        }
-        [self miNotifyThemeChanged];
-        return YES;
-    } @catch (NSException *e) {
-        WPLog(@"Theme", @"[SETTHEME] 异常: %@", e);
-        return NO;
-    }
-}
-
-- (nullable id)miThemeManager {
-    Class cls = MIO_CLS("MMThemeManager");
-    if (!cls) return nil;
-    id mgr = WXGetService(cls);
-    if (!mgr) {
-        WPLog(@"Theme", @"[SVC] MMThemeManager 服务获取失败（未登录早期/版本差异）");
-    }
-    return mgr;
-}
-
-// 切换通知（XOS 1.5.9 dylib 实锤常量名）：主通知 + 皮肤通知，驱动在屏 UI 刷新
+// 切换通知（XOS 1.5.9 dylib 实锤常量名）：驱动在屏 UI 重建取图
 - (void)miNotifyThemeChanged {
     void (^post)(void) = ^{
         [[NSNotificationCenter defaultCenter] postNotificationName:@"MMUIThemeDidChangeNotification" object:nil];
@@ -187,51 +205,24 @@
     NSString *path = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:name];
     BOOL ok = [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
     WPLog(@"Theme", @"[DELETE] %@ → %@", name, ok ? @"OK" : @"FAIL");
-    if (ok && [[ThemeConfig shared].activeThemeName isEqualToString:name]) {
-        // 删的是当前主题：视觉本会话保持（引擎持有已加载资源），清配置后重启回落原生
-        ThemeConfig *cfg = [ThemeConfig shared];
-        cfg.activeThemeName = @"";
-        [ConfigManager saveAll];
+    if (ok) {
+        BOOL wasActive = [[ThemeConfig shared].activeThemeName isEqualToString:name];
+        if (wasActive) {
+            ThemeConfig *cfg = [ThemeConfig shared];
+            cfg.activeThemeName = @"";
+            [ConfigManager saveAll];
+        }
+        [self miClearPathCache];
+        if (wasActive) [self miNotifyThemeChanged]; // 新请求回落原生资源
     }
     return ok;
-}
-
-#pragma mark - 冷启动重放
-
-- (void)replayIfNeeded {
-    ThemeConfig *cfg = [ThemeConfig shared];
-    if (!cfg.enableTheme) {
-        WPLog(@"Theme", @"[REPLAY] 总开关关闭，跳过");
-        return;
-    }
-    NSString *path = [cfg resolvedActiveThemePath];
-    if (!path) {
-        WPLog(@"Theme", @"[REPLAY] 无有效主题目录（name=%@），跳过", cfg.activeThemeName);
-        return;
-    }
-    BOOL ok = [self miApplyThemePath:path];
-    WPLog(@"Theme", @"[REPLAY] 重放主题 %@ → %@", cfg.activeThemeName, ok ? @"OK" : @"FAIL");
 }
 
 #pragma mark - 显示名
 
 - (NSString *)currentThemeDisplayName {
     NSString *configured = [ThemeConfig shared].activeThemeName;
-    if (configured.length) return configured;
-    // 未配置时读引擎当前主题（微信自己可能设置了主题，如微信助手遗留）
-    @try {
-        id mgr = [self miThemeManager];
-        SEL curSel = NSSelectorFromString(@"currentTheme");
-        if (mgr && [mgr respondsToSelector:curSel]) {
-            id theme = ((id (*)(id, SEL))objc_msgSend)(mgr, curSel);
-            SEL baseSel = NSSelectorFromString(@"basePath");
-            if (theme && [theme respondsToSelector:baseSel]) {
-                NSString *bp = ((NSString *(*)(id, SEL))objc_msgSend)(theme, baseSel);
-                if (bp.length && ![bp.lowercaseString hasSuffix:@".app"]) return bp.lastPathComponent;
-            }
-        }
-    } @catch (NSException *e) { /* 引擎异常时按默认处理 */ }
-    return @"默认";
+    return configured.length ? configured : @"默认";
 }
 
 @end
