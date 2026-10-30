@@ -5,6 +5,7 @@
 
 #import "ThemeHook.h"
 #import "ThemeService.h"
+#import "ThemeConfig.h"
 #import "../../Core/LogManager.h"
 
 // 探针模式入口（ThemeProbe.m）：纯观测，替代正常主题 hook
