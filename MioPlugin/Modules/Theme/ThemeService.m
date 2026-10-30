@@ -50,9 +50,11 @@
 // 主题拦截架构（微信助手 3.9-5 实证路线：取点拦截，不碰引擎注册/CSS）。
 //
 // 图标层：hook 微信取图层，启用主题时按请求名查 themes/<当前主题>/：
-//   ① -[MMThemeManager imageNamed:]        位图（D519 的 PNG 走这里）
-//   ② +[WCSVGImage imageNamed:fromConfig:] SVG 图标位（icons_filled_*/icons_outlined_*）
-//   命中 → [UIImage imageWithContentsOfFile:]；未命中 → 原实现（引擎缓存零污染）。
+//   ① -[MMThemeManager imageNamed:]                 位图（D519 的 PNG 走这里）
+//   ② -[MMThemeManager imageNamed:warnIfNotFound:]  内部入口变体（微信代码可能直呼它绕过①）
+//   ③ +[WCSVGImage imageNamed:fromConfig:]          SVG 图标位（icons_filled_*/icons_outlined_*）
+//   命中 → 主题图；未命中 → 原实现（引擎缓存零污染）。搭微信暗色机器顺风车：
+//   我们零检测，微信自己的暗色系统翻转状态后重新请求，请求流过 hook 即得主题暗图。
 // 颜色层：hook 取色查询两个入口（微信助手符号表实锤同款路线）：
 //   ③ -[WCColorMgr getColor:]             +[WCColor xxx] 动态类方法真实入口
 //   ④ -[WCColorMgr getColorValueForName:] 对外查询 API
@@ -67,6 +69,7 @@
 
 // 原实现
 static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
+static UIImage *(*g_orig_MMImageNamedWarn)(id, SEL, NSString *, BOOL);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
 static id (*g_orig_WCColorMgr_getColor)(id, SEL, NSString *);
 static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
@@ -91,6 +94,12 @@ static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name)
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
     if (themed) return themed;
     return g_orig_MMImageNamed(self, _cmd, name);
+}
+
+static UIImage *mio_MMThemeManager_imageNamed_warnIfNotFound(id self, SEL _cmd, NSString *name, BOOL warn) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    if (themed) return themed;
+    return g_orig_MMImageNamedWarn(self, _cmd, name, warn);
 }
 
 static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString *name, id config) {
@@ -132,6 +141,13 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
                 WPLog(@"Theme", @"[HOOK] ✓ -[MMThemeManager imageNamed:]");
             } else {
                 WPLog(@"Theme", @"[HOOK] ✗ MMThemeManager imageNamed: 不存在");
+            }
+            SEL sWarn = NSSelectorFromString(@"imageNamed:warnIfNotFound:");
+            if (class_getInstanceMethod(mgrCls, sWarn)) {
+                MSHookMessageEx(mgrCls, sWarn, (IMP)mio_MMThemeManager_imageNamed_warnIfNotFound, (IMP *)&g_orig_MMImageNamedWarn);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MMThemeManager imageNamed:warnIfNotFound:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ MMThemeManager imageNamed:warnIfNotFound: 不存在");
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ MMThemeManager 类不存在");
