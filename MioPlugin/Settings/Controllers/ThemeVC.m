@@ -10,6 +10,7 @@
 #import "../../Core/LogManager.h"
 #import "../../Core/MioAlertHelper.h"
 #import "../../Core/MioRestartHelper.h"
+#import "../../Modules/SettingEntry/WPCommonUI.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
 
