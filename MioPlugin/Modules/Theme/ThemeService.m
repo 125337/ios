@@ -61,9 +61,9 @@
 //   → 主题色表（weui_color_new.xml 旁路解析，按主题缓存）返回动态 UIColor
 //   （colorWithDynamicProvider，微信 colorInLightMode:DarkMode: 同款机制），
 //   系统切亮暗 UIKit 自动重解析，视图无需重建即当场换色。
-// 图标暗色：亮暗双文件都注册进 UIImageAsset 返回动态 UIImage——系统切亮暗
-//   UIKit 自动重解析，气泡等持有图片引用的视图无需重建即当场换图（与颜色层
-//   colorWithDynamicProvider 同一机制；UIImage 无"动态文件"原生机制，这是等价物）。
+// 图标暗色（搭微信暗色机器顺风车——微信请求暗资源是直接换名的：_Dark/_darkmode/DM）：
+//   亮暗双文件 → UIImageAsset 动态图；请求名自带 _Dark → 直接给暗文件；
+//   暗色模式下主题无暗变体 → 回落原实现（微信原生自有正确暗图，亮图进暗色界面会刺眼）。
 // 应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -213,7 +213,8 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     NSString *theme = cfg.activeThemeName;
     if (theme.length == 0 || name.length == 0 || [name containsString:@"/"]) return nil;
 
-    NSString *key = [theme stringByAppendingFormat:@"|%@", name];
+    // 缓存键带亮暗前缀：暗模式下"无暗变体回落原生"的结论与亮模式不同，不能共用
+    NSString *key = [theme stringByAppendingFormat:@"|%@|%@", dark ? @"D" : @"L", name];
     id cached = [_imageCache objectForKey:key];
     if (cached) return cached == [NSNull null] ? nil : cached;
 
@@ -234,12 +235,23 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     if (ext.length && ![ext isEqualToString:@"png"]) [lightCands addObject:name];
 
     NSString *lightPath = MioFirstExistingFile(fm, dir, lightCands);
+
+    // 暗色变体名推导（D519 实锤两种形态）：
+    //   追加：    XXX → XXX_Dark              （ChatRoom_Bubble_HB_Sender → ..._Dark）
+    //   插入：    XXX_HL → XXX_Dark_HL        （ChatRoom_Bubble_Text_Receiver_HL → ..._Dark_HL）
     NSString *darkPath = nil;
-    if (lightPath && ![stem hasSuffix:@"_Dark"]) {   // 请求名自带 _Dark 时无暗变体可言
-        NSString *darkStem = [stem stringByAppendingString:@"_Dark"];
+    if (lightPath && ![stem hasSuffix:@"_Dark"]) {
+        NSMutableArray<NSString *> *darkNames = [NSMutableArray array];
+        [darkNames addObject:[stem stringByAppendingString:@"_Dark"]];
+        NSRange hl = [stem rangeOfString:@"_HL" options:NSBackwardsSearch];
+        if (hl.location != NSNotFound) {
+            [darkNames addObject:[stem stringByReplacingCharactersInRange:hl withString:@"_Dark_HL"]];
+        }
         NSMutableArray<NSString *> *darkCands = [NSMutableArray array];
-        if ([UIScreen mainScreen].scale >= 3) [darkCands addObject:[darkStem stringByAppendingString:@"@3x.png"]];
-        [darkCands addObject:[darkStem stringByAppendingString:@"@2x.png"]];
+        for (NSString *dn in darkNames) {
+            if ([UIScreen mainScreen].scale >= 3) [darkCands addObject:[dn stringByAppendingString:@"@3x.png"]];
+            [darkCands addObject:[dn stringByAppendingString:@"@2x.png"]];
+        }
         darkPath = MioFirstExistingFile(fm, dir, darkCands);
     }
 
@@ -259,6 +271,11 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
     [_imageCache setObject:(result ?: [NSNull null]) forKey:key cost:1];
 
+    if ([name hasPrefix:@"ChatRoom_Bubble"]) {
+        // 气泡全量日志（不受命中/未命中封顶限制）：暗色排查期间的定向观测点
+        WPLog(@"Theme", @"[BUBBLE] 暗=%@ %@ → 亮:%@ 暗:%@", dark ? @"YES" : @"NO ", name,
+              lightPath.lastPathComponent ?: @"(无)", darkPath.lastPathComponent ?: @"(无)");
+    }
     if (result) {
         _hitCount++;
         if (_hitCount <= 5 || _hitCount % 100 == 0) {
