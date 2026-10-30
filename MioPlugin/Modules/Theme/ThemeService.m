@@ -236,21 +236,32 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
     NSString *lightPath = MioFirstExistingFile(fm, dir, lightCands);
 
-    // 暗色变体名推导（D519 实锤两种形态）：
-    //   追加：    XXX → XXX_Dark              （ChatRoom_Bubble_HB_Sender → ..._Dark）
-    //   插入：    XXX_HL → XXX_Dark_HL        （ChatRoom_Bubble_Text_Receiver_HL → ..._Dark_HL）
+    // 暗色变体名推导（D519 实锤五种形态，微信按自家暗色状态直接点名请求）：
+    //   ① 成对替换：XXX_White → XXX_Dark（接收气泡 White ↔ Dark 成对，最关键）
+    //   ② 追加：    XXX → XXX_Dark（HB 气泡/Voice/Action_Moments/colorful 图标）
+    //   ③ 小写追加：XXX → XXX_dark（dt_icon/fileicon_* 系）
+    //   ④ 插入：    XXX_HL → XXX_Dark_HL（高亮气泡）
+    //   ⑤ darkmode：XXX → XXX_darkmode（weapp_more 等）
     NSString *darkPath = nil;
-    if (lightPath && ![stem hasSuffix:@"_Dark"]) {
+    if (lightPath && ![stem hasSuffix:@"_Dark"] && ![stem hasSuffix:@"_dark"] && ![stem hasSuffix:@"_darkmode"]) {
         NSMutableArray<NSString *> *darkNames = [NSMutableArray array];
-        [darkNames addObject:[stem stringByAppendingString:@"_Dark"]];
+        NSRange white = [stem rangeOfString:@"_White" options:NSBackwardsSearch];
+        if (white.location != NSNotFound) {
+            [darkNames addObject:[stem stringByReplacingCharactersInRange:white withString:@"_Dark"]];
+        }
         NSRange hl = [stem rangeOfString:@"_HL" options:NSBackwardsSearch];
         if (hl.location != NSNotFound) {
             [darkNames addObject:[stem stringByReplacingCharactersInRange:hl withString:@"_Dark_HL"]];
         }
+        [darkNames addObject:[stem stringByAppendingString:@"_Dark"]];
+        [darkNames addObject:[stem stringByAppendingString:@"_dark"]];
+        [darkNames addObject:[stem stringByAppendingString:@"_darkmode"]];
         NSMutableArray<NSString *> *darkCands = [NSMutableArray array];
+        BOOL threeX = [UIScreen mainScreen].scale >= 3;
         for (NSString *dn in darkNames) {
-            if ([UIScreen mainScreen].scale >= 3) [darkCands addObject:[dn stringByAppendingString:@"@3x.png"]];
+            if (threeX) [darkCands addObject:[dn stringByAppendingString:@"@3x.png"]];
             [darkCands addObject:[dn stringByAppendingString:@"@2x.png"]];
+            [darkCands addObject:[dn stringByAppendingString:@".png"]];
         }
         darkPath = MioFirstExistingFile(fm, dir, darkCands);
     }
