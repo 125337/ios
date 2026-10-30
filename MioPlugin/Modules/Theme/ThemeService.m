@@ -108,6 +108,55 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
     return g_orig_SVGImageNamedFromConfig(self, _cmd, name, config);
 }
 
+// ── 亮暗配对枢纽（DarkModeImageMgr）──
+// 顺风车落点：微信原生把"亮图+暗图"注册成对（registerPairWithLightImage:darkImage:），
+// 切暗时经 darkModeImageForImage: 取对的暗边。微信助手实测在查询侧换图；
+// 我们在配对侧换图更彻底——亮图若是我们发出的主题图，暗边直接换成主题包 _Dark 文件，
+// 微信自己的亮暗机器从此替我们发暗图（零检测、零重建）。
+static NSMutableDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *g_servedImagePaths = nil; // UIImage指针 → {light,dark}主题文件路径
+static NSInteger g_pairLogCount = 0;
+static NSInteger g_darkAskLogCount = 0;
+
+static id (*g_orig_DM_registerPair)(id, SEL, UIImage *, UIImage *);
+static UIImage *(*g_orig_DM_darkImageFor)(id, SEL, UIImage *);
+
+static void mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) {
+    NSDictionary<NSString *, NSString *> *reg = nil;
+    if (light) {
+        @synchronized(g_servedImagePaths) {
+            reg = g_servedImagePaths[[NSString stringWithFormat:@"%p", light]];
+        }
+    }
+    UIImage *darkFinal = dark;
+    if (reg && reg[@"dark"].length) {
+        UIImage *ours = [UIImage imageWithContentsOfFile:reg[@"dark"]];
+        if (ours) darkFinal = ours;   // 亮图是我们发的 → 暗边换成主题包暗图
+    }
+    if (g_pairLogCount < 60) {
+        g_pairLogCount++;
+        WPLog(@"Theme", @"[PAIR] #%ld 亮=%@ 暗=%@ 替换=%@",
+              (long)g_pairLogCount,
+              reg ? reg[@"light"].lastPathComponent : [NSString stringWithFormat:@"(原生 %p)", light],
+              dark ? [NSString stringWithFormat:@"%p", dark] : @"(nil)",
+              darkFinal != dark ? @"主题暗图" : @"否");
+    }
+    g_orig_DM_registerPair(self, _cmd, light, darkFinal);
+}
+
+static UIImage *mio_DM_darkImageFor(id self, SEL _cmd, UIImage *img) {
+    if (g_darkAskLogCount < 40) {
+        g_darkAskLogCount++;
+        NSDictionary<NSString *, NSString *> *reg = nil;
+        if (img) {
+            @synchronized(g_servedImagePaths) {
+                reg = g_servedImagePaths[[NSString stringWithFormat:@"%p", img]];
+            }
+        }
+        WPLog(@"Theme", @"[DMIMG] 查暗图 %p（%@）", img, reg ? [NSString stringWithFormat:@"主题亮图 %@", reg[@"light"].lastPathComponent] : @"非主题图");
+    }
+    return g_orig_DM_darkImageFor(self, _cmd, img);
+}
+
 @implementation ThemeService {
     NSCache *_imageCache; // key = 主题名|请求名，value = UIImage（动态/静态）或 NSNull（未命中也缓存，挡高频磁盘读）
     NSInteger _hitCount;
@@ -124,6 +173,7 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
         instance->_imageCache = [NSCache new];
         instance->_imageCache.countLimit = 2048;
         instance->_missLogged = [NSMutableSet set];
+        g_servedImagePaths = [NSMutableDictionary new];
     });
     return instance;
 }
@@ -186,6 +236,27 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
+        }
+
+        // 亮暗配对枢纽：配对侧换暗图（顺风车落点）+ 暗图查询诊断
+        Class dmCls = objc_getClass("DarkModeImageMgr");
+        if (dmCls) {
+            SEL sPair = NSSelectorFromString(@"registerPairWithLightImage:darkImage:");
+            if (class_getInstanceMethod(dmCls, sPair)) {
+                MSHookMessageEx(dmCls, sPair, (IMP)mio_DM_registerPair, (IMP *)&g_orig_DM_registerPair);
+                WPLog(@"Theme", @"[HOOK] ✓ -[DarkModeImageMgr registerPairWithLightImage:darkImage:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ registerPairWithLightImage:darkImage: 不存在");
+            }
+            SEL sDarkAsk = NSSelectorFromString(@"darkModeImageForImage:");
+            if (class_getInstanceMethod(dmCls, sDarkAsk)) {
+                MSHookMessageEx(dmCls, sDarkAsk, (IMP)mio_DM_darkImageFor, (IMP *)&g_orig_DM_darkImageFor);
+                WPLog(@"Theme", @"[HOOK] ✓ -[DarkModeImageMgr darkModeImageForImage:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ darkModeImageForImage: 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ DarkModeImageMgr 类不存在");
         }
     });
 }
@@ -282,6 +353,14 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
     [_imageCache setObject:(result ?: [NSNull null]) forKey:key cost:1];
 
+    // 身份登记：我们发出的 UIImage 指针 → 亮暗主题文件路径（DarkModeImageMgr 配对时反查换暗图）
+    if (result && (lightPath || darkPath)) {
+        @synchronized(g_servedImagePaths) {
+            g_servedImagePaths[[NSString stringWithFormat:@"%p", result]] =
+                @{@"light": lightPath ?: @"", @"dark": darkPath ?: @""};
+        }
+    }
+
     if ([name hasPrefix:@"ChatRoom_Bubble"]) {
         // 气泡全量日志（不受命中/未命中封顶限制）：暗色排查期间的定向观测点
         WPLog(@"Theme", @"[BUBBLE] 暗=%@ %@ → 亮:%@ 暗:%@", dark ? @"YES" : @"NO ", name,
@@ -303,6 +382,9 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
 
 - (void)miClearImageCache {
     [_imageCache removeAllObjects];
+    @synchronized(g_servedImagePaths) {
+        [g_servedImagePaths removeAllObjects];
+    }
     WPLog(@"Theme", @"[CACHE] 主题图缓存已清");
 }
 
