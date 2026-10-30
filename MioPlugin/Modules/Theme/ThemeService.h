@@ -22,6 +22,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 安装取图 hook（ThemeHook.install 调用，dispatch_once 幂等，进程加载即生效）
 - (void)installHooks;
 
+/// 冷启动重放颜色层（colorDic 是内存态，微信启动后需重新替换；ThemeHook 延迟调用）
+- (void)reapplyColorsOnLaunch;
+
 /// 已导入主题名列表（themes 目录一级子目录名，按名称排序）
 - (NSArray<NSString *> *)importedThemeNames;
 
