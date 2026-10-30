@@ -15,6 +15,34 @@
 - (nullable NSString *)miCachedThemeImagePathForName:(NSString *)name;
 - (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir;
 - (void)miNotifyThemeChanged;
+- (nullable UIColor *)miThemeColorForName:(NSString *)name;
+@end
+
+// weui_color_new.xml 解析器：<color name="X">#light,#dark</color>（亮/暗逗号对，
+// 与微信原生同款格式；仅用于取色时点拦截的旁路查询表，引擎自己的解析不受影响）
+@interface _MioColorXmlParser : NSObject <NSXMLParserDelegate>
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *result;
+@property (nonatomic, copy) NSString *curName;
+@property (nonatomic, strong) NSMutableString *buf;
+@end
+@implementation _MioColorXmlParser
+- (void)parser:(NSXMLParser *)parser didStartElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qualifiedName attributes:(NSDictionary<NSString *, NSString *> *)attributeDict {
+    if ([elementName isEqualToString:@"color"]) {
+        self.curName = attributeDict[@"name"];
+        self.buf = [NSMutableString string];
+    }
+}
+- (void)parser:(NSXMLParser *)parser foundCharacters:(NSString *)string {
+    [self.buf appendString:string];
+}
+- (void)parser:(NSXMLParser *)parser didEndElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qualifiedName {
+    if ([elementName isEqualToString:@"color"] && self.curName.length) {
+        NSString *v = [self.buf stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (v.length) self.result[self.curName] = v;
+    }
+    self.curName = nil;
+    self.buf = nil;
+}
 @end
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,6 +61,16 @@
 static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
 static void (*g_orig_WCColorMgr_loadColorFromXML)(id, SEL);
+static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
+
+// 取色时点拦截：任何视图任何时刻查色，主题定义的名字直接返回主题色（亮/暗按系统外观拆分，
+// 用引擎自己的 hexStringToColor: 转换保证类型一致）。与视图创建时机无关——顶栏/底栏/
+// 搜索栏等"创建时解析一次就不再查"的组件首屏即主题色。colorDic 级替换作为底层状态保持一致。
+static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name) {
+    UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
+    if (themed) return themed;
+    return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
+}
 
 // 微信自己加载完颜色表的瞬间**同步**重放主题色（dispatch_async 排队会晚于首屏取色——
 // async 重排队是"首屏先原生"的根因；我们自己的应用走 loadColorFromXMLByPath:，无递归）
@@ -67,6 +105,8 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
 @implementation ThemeService {
     NSCache *_pathCache; // key = 主题名|请求名，value = 路径或 NSNull（未命中也缓存，挡高频磁盘读）
     NSInteger _hitCount;
+    NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
+    NSString *_themeColorDictPath;                          // 色表来源路径（变更时重载）
 }
 
 + (instancetype)shared {
@@ -121,6 +161,13 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
                 WPLog(@"Theme", @"[HOOK] ✓ -[WCColorMgr loadColorFromXML]");
             } else {
                 WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr loadColorFromXML 不存在");
+            }
+            SEL s4 = NSSelectorFromString(@"getColorValueForName:");
+            if (class_getInstanceMethod(colorMgrCls, s4)) {
+                MSHookMessageEx(colorMgrCls, s4, (IMP)mio_WCColorMgr_getColorValueForName, (IMP *)&g_orig_WCColorMgr_getColorValueForName);
+                WPLog(@"Theme", @"[HOOK] ✓ -[WCColorMgr getColorValueForName:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr getColorValueForName: 不存在");
             }
             // 抢先应用：插件安装瞬间（早于主界面渲染）就加载主题色表，
             // 微信稍后自己的 loadColorFromXML 覆盖后由上面 hook 立即重放。
@@ -234,6 +281,53 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
         ((void (*)(id, SEL))objc_msgSend)(mgr, l);
         WPLog(@"Theme", @"[COLOR] 原生颜色表已还原（loadColorFromXML）");
     }
+}
+
+#pragma mark - 取色时点拦截（getColorValueForName: hook 的查询侧）
+
+// 查询主题色：主题定义了该名字 → 返回主题 UIColor；否则 nil 走原实现。
+// 亮/暗按系统外观拆分逗号对，转换用引擎自己的 hexStringToColor:（类型/缓存与原生一致）。
+- (nullable UIColor *)miThemeColorForName:(NSString *)name {
+    if (name.length == 0 || [name containsString:@"/"]) return nil;
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return nil;
+
+    NSString *themeDir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
+    NSString *xmlPath = [themeDir stringByAppendingPathComponent:@"weui_color_new.xml"];
+    if (!_themeColorDict || ![_themeColorDictPath isEqualToString:xmlPath]) {
+        _themeColorDict = [self miParseThemeColors:themeDir] ?: @{};
+        _themeColorDictPath = xmlPath;
+    }
+    NSString *pair = _themeColorDict[name];
+    if (pair.length == 0) return nil;
+
+    // "#light,#dark" → 按系统外观取一
+    NSString *hex = pair;
+    NSRange comma = [pair rangeOfString:@","];
+    if (comma.location != NSNotFound) {
+        BOOL dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+        hex = dark ? [pair substringFromIndex:comma.location + 1] : [pair substringToIndex:comma.location];
+        hex = [hex stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    }
+    if (hex.length == 0) return nil;
+
+    id mgr = [self miColorMgr];
+    SEL convSel = NSSelectorFromString(@"hexStringToColor:");
+    if (mgr && [mgr respondsToSelector:convSel]) {
+        return ((UIColor *(*)(id, SEL, NSString *))objc_msgSend)(mgr, convSel, hex);
+    }
+    // 极端兜底：引擎转换器不可用时自己解析 #RRGGBB[AA]
+    return [self miColorFromHex:hex];
+}
+
+- (nullable UIColor *)miColorFromHex:(NSString *)hexStr {
+    NSString *h = [hexStr stringByReplacingOccurrencesOfString:@"#" withString:@""];
+    if (h.length < 6) return nil;
+    NSScanner *scanner = [NSScanner scannerWithString:h];
+    unsigned int r = 0, g = 0, b = 0, a = 255;
+    [scanner scanHexInt:&r]; [scanner scanHexInt:&g]; [scanner scanHexInt:&b];
+    if (h.length >= 8) { [scanner scanHexInt:&a]; }
+    return [UIColor colorWithRed:r / 255.0 green:g / 255.0 blue:b / 255.0 alpha:a / 255.0];
 }
 
 #pragma mark - 已导入列表
