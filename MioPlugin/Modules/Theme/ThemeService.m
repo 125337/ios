@@ -328,12 +328,16 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
 }
 
 - (nullable UIColor *)miColorFromHex:(NSString *)hexStr {
+    // 按 2 位一组切分（scanHexInt 会连续吃掉全部 hex 位，不能用）
     NSString *h = [hexStr stringByReplacingOccurrencesOfString:@"#" withString:@""];
     if (h.length < 6) return nil;
-    NSScanner *scanner = [NSScanner scannerWithString:h];
     unsigned int r = 0, g = 0, b = 0, a = 255;
-    [scanner scanHexInt:&r]; [scanner scanHexInt:&g]; [scanner scanHexInt:&b];
-    if (h.length >= 8) { [scanner scanHexInt:&a]; }
+    [[NSScanner scannerWithString:[h substringWithRange:NSMakeRange(0, 2)]] scanHexInt:&r];
+    [[NSScanner scannerWithString:[h substringWithRange:NSMakeRange(2, 2)]] scanHexInt:&g];
+    [[NSScanner scannerWithString:[h substringWithRange:NSMakeRange(4, 2)]] scanHexInt:&b];
+    if (h.length >= 8) {
+        [[NSScanner scannerWithString:[h substringWithRange:NSMakeRange(6, 2)]] scanHexInt:&a];
+    }
     return [UIColor colorWithRed:r / 255.0 green:g / 255.0 blue:b / 255.0 alpha:a / 255.0];
 }
 
