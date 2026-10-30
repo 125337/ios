@@ -16,6 +16,7 @@
 - (BOOL)miApplyColorsForThemeDir:(NSString *)themeDir;
 - (void)miNotifyThemeChanged;
 - (nullable UIColor *)miThemeColorForName:(NSString *)name;
+- (nullable NSString *)miThemeColorPairForName:(NSString *)name;
 - (nullable NSDictionary<NSString *, NSString *> *)miParseThemeColors:(NSString *)themeDir;
 // 取图子步骤（编排层调用；registerPair hook 也用 miLoadImageAtPath）
 - (NSArray<NSString *> *)miLightCandidatesForStem:(NSString *)stem ext:(NSString *)ext threeX:(BOOL)threeX;
@@ -85,16 +86,94 @@ static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
 // （亮/暗双份，colorWithDynamicProvider 按当前 trait 出色，系统切换自动重解析）。
 // getColor: 是 +[WCColor xxx] 全部动态类方法（resolveClassMethod:）的真实入口；
 // getColorValueForName: 是另一条对外查询 API。两个查询面都拦。
+// ── 一次性诊断（定位「已登录 Windows 电脑」横幅不跟暗色）──
+// 动态色的 description 不含解析值，用 resolvedColorWithTraitCollection: 把亮/暗两个分支都摊开
+static NSString *MioDescribeColor(UIColor *c) {
+    if (!c) return @"nil";
+    UITraitCollection *lt = [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight];
+    UITraitCollection *dk = [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark];
+    return [NSString stringWithFormat:@"<%@ %@> L=%@ D=%@", c, [c class],
+            [c resolvedColorWithTraitCollection:lt], [c resolvedColorWithTraitCollection:dk]];
+}
+
+// 命中：每个 name 只打一次（值不随调用变化，去重防爆量）
+static void MioLogColorHit(NSString *name, NSString *pair, UIColor *ret) {
+    static NSMutableSet<NSString *> *seen = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    if (seen.count > 800 || [seen containsObject:name]) return;
+    [seen addObject:name];
+    WPLog(@"Theme", @"[COLOR-HIT] name=%@ pair=%@ → %@", name, pair, MioDescribeColor(ret));
+}
+
+// 未命中（回落原实现）：每个 name 只打一次
+static void MioLogColorMiss(NSString *api, NSString *name, UIColor *orig) {
+    static NSMutableSet<NSString *> *seen = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    if (seen.count > 800 || [seen containsObject:name] || !name) return;
+    [seen addObject:name];
+    WPLog(@"Theme", @"[COLOR-MISS] %@ name=%@ 原实现 → %@", api, name, MioDescribeColor(orig));
+}
+
 static id mio_WCColorMgr_getColor(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
-    if (themed) return themed;
-    return g_orig_WCColorMgr_getColor(self, _cmd, name);
+    if (!themed) {
+        UIColor *orig = g_orig_WCColorMgr_getColor(self, _cmd, name);
+        MioLogColorMiss(@"getColor", name, orig);
+        return orig;
+    }
+    MioLogColorHit(name, [[ThemeService shared] miThemeColorPairForName:name], themed);
+    return themed;
 }
 
 static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
-    if (themed) return themed;
-    return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
+    if (!themed) {
+        UIColor *orig = g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
+        MioLogColorMiss(@"getColorValueForName", name, orig);
+        return orig;
+    }
+    MioLogColorHit(name, [[ThemeService shared] miThemeColorPairForName:name], themed);
+    return themed;
+}
+
+// ── 横幅本体诊断：MFWebMMBtn（「已登录 Windows 电脑」条，纯日志不改行为）──
+static id (*g_orig_MFWebMMBtn_initWithFrame)(id, SEL, CGRect);
+static void (*g_orig_MFWebMMBtn_layoutSubviews)(id, SEL);
+static void (*g_orig_MFWebMMBtn_updateWithOnlineStatus)(id, SEL);
+
+static id mio_MFWebMMBtn_initWithFrame(id self, SEL _cmd, CGRect frame) {
+    id r = g_orig_MFWebMMBtn_initWithFrame(self, _cmd, frame);
+    UIButton *b = (UIButton *)r;
+    WPLog(@"Theme", @"[BANNER] init %@ bg=%@ titleColor=%@ labelColor=%@",
+          r, MioDescribeColor(b.backgroundColor),
+          MioDescribeColor([b titleColorForState:UIControlStateNormal]),
+          MioDescribeColor(b.titleLabel.textColor));
+    return r;
+}
+
+static void MioLogBannerState(NSString *when, UIButton *b) {
+    BOOL scrDark = [UIScreen mainScreen].traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    WPLog(@"Theme", @"[BANNER] %@ dark=%d bg=%@ titleColor=%@ labelColor=%@ icon=%@",
+          when, scrDark, MioDescribeColor(b.backgroundColor),
+          MioDescribeColor([b titleColorForState:UIControlStateNormal]),
+          MioDescribeColor(b.titleLabel.textColor),
+          b.imageView ? [b.imageView image] : nil);
+}
+
+static void mio_MFWebMMBtn_layoutSubviews(id self, SEL _cmd) {
+    g_orig_MFWebMMBtn_layoutSubviews(self, _cmd);
+    static NSInteger budget = 60; // 首次布局阶段够用，防爆量
+    if (budget-- <= 0) return;
+    MioLogBannerState(@"layout", (UIButton *)self);
+}
+
+static void mio_MFWebMMBtn_updateWithOnlineStatus(id self, SEL _cmd) {
+    g_orig_MFWebMMBtn_updateWithOnlineStatus(self, _cmd);
+    static NSInteger budget = 20;
+    if (budget-- <= 0) return;
+    MioLogBannerState(@"update", (UIButton *)self);
 }
 
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
@@ -217,6 +296,28 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
+        }
+
+        // 诊断：横幅本体（「已登录 Windows 电脑」条，纯日志）
+        Class bannerCls = objc_getClass("MFWebMMBtn");
+        if (bannerCls) {
+            SEL bi = NSSelectorFromString(@"initWithFrame:");
+            if (class_getInstanceMethod(bannerCls, bi)) {
+                MSHookMessageEx(bannerCls, bi, (IMP)mio_MFWebMMBtn_initWithFrame, (IMP *)&g_orig_MFWebMMBtn_initWithFrame);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MFWebMMBtn initWithFrame:]（诊断）");
+            }
+            SEL bl = NSSelectorFromString(@"layoutSubviews");
+            if (class_getInstanceMethod(bannerCls, bl)) {
+                MSHookMessageEx(bannerCls, bl, (IMP)mio_MFWebMMBtn_layoutSubviews, (IMP *)&g_orig_MFWebMMBtn_layoutSubviews);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MFWebMMBtn layoutSubviews]（诊断）");
+            }
+            SEL bu = NSSelectorFromString(@"updateWithOnlineStatus");
+            if (class_getInstanceMethod(bannerCls, bu)) {
+                MSHookMessageEx(bannerCls, bu, (IMP)mio_MFWebMMBtn_updateWithOnlineStatus, (IMP *)&g_orig_MFWebMMBtn_updateWithOnlineStatus);
+                WPLog(@"Theme", @"[HOOK] ✓ -[MFWebMMBtn updateWithOnlineStatus]（诊断）");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MFWebMMBtn 类不存在");
         }
 
         // 亮暗配对枢纽：配对侧换暗图（顺风车落点）
@@ -422,6 +523,12 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     return result;
 }
 
+// 诊断用：色名 → 主题表原始值（"#light,#dark"）
+- (nullable NSString *)miThemeColorPairForName:(NSString *)name {
+    if (name.length == 0 || !_themeColorDict) return nil;
+    return _themeColorDict[name];
+}
+
 // 查询主题色：主题定义了该名字 → 返回主题 UIColor；否则 nil 走原实现。
 // 亮/暗按系统外观拆分逗号对，hex 纯解析（#RRGGBB[AA]）——全路径零回调引擎。
 - (nullable UIColor *)miThemeColorForName:(NSString *)name {
@@ -434,6 +541,10 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     if (!_themeColorDict || ![_themeColorDictPath isEqualToString:xmlPath]) {
         _themeColorDict = [self miParseThemeColors:themeDir] ?: @{};
         _themeColorDictPath = xmlPath;
+        WPLog(@"Theme", @"[COLORTBL] 解析 %@ → %u 项", xmlPath, (unsigned)_themeColorDict.count);
+        for (NSString *k in _themeColorDict) {
+            WPLog(@"Theme", @"[COLORTBL] %@ = %@", k, _themeColorDict[k]);
+        }
     }
     NSString *pair = _themeColorDict[name];
     if (pair.length == 0) return nil;
