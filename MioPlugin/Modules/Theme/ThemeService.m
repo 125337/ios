@@ -34,18 +34,16 @@ static UIImage *(*g_orig_MMImageNamed)(id, SEL, NSString *);
 static UIImage *(*g_orig_SVGImageNamedFromConfig)(id, SEL, NSString *, id);
 static void (*g_orig_WCColorMgr_loadColorFromXML)(id, SEL);
 
-// 微信自己加载完颜色表的瞬间重放主题色（时机对齐：早于微信则被覆盖、晚于主界面创建则首屏陈旧；
-// 我们自己用 loadColorFromXMLByPath: 应用，不走此方法，无递归）
+// 微信自己加载完颜色表的瞬间**同步**重放主题色（dispatch_async 排队会晚于首屏取色——
+// async 重排队是"首屏先原生"的根因；我们自己的应用走 loadColorFromXMLByPath:，无递归）
 static void mio_WCColorMgr_loadColorFromXML(id self, SEL _cmd) {
     g_orig_WCColorMgr_loadColorFromXML(self, _cmd);
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
-        if ([[ThemeService shared] miApplyColorsForThemeDir:dir]) {
-            [[ThemeService shared] miNotifyThemeChanged];
-        }
-    });
+    NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
+    if ([[ThemeService shared] miApplyColorsForThemeDir:dir]) {
+        [[ThemeService shared] miNotifyThemeChanged];
+    }
 }
 
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
@@ -124,10 +122,31 @@ static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString
             } else {
                 WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr loadColorFromXML 不存在");
             }
+            // 抢先应用：插件安装瞬间（早于主界面渲染）就加载主题色表，
+            // 微信稍后自己的 loadColorFromXML 覆盖后由上面 hook 立即重放。
+            // 首屏首次取色即为主题色（此前依赖 loadColorFromXML 后重放，慢一拍）
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[ThemeService shared] miApplyColorsEarlyWithRetries:6];
+            });
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCColorMgr 类不存在");
         }
     });
+}
+
+// 启动抢跑：立即应用，WCColorMgr 未就绪则 0.5s 间隔重试（共 3s），不发通知（首屏未建，无需刷新）
+- (void)miApplyColorsEarlyWithRetries:(NSInteger)remaining {
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (cfg.enableTheme && cfg.activeThemeName.length > 0) {
+        NSString *dir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
+        if ([self miApplyColorsForThemeDir:dir]) return;
+    }
+    if (remaining > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [self miApplyColorsEarlyWithRetries:remaining - 1];
+        });
+    }
 }
 
 #pragma mark - 主题目录查找（hook 热路径）
