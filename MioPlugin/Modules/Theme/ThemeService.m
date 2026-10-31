@@ -387,6 +387,22 @@ static void mio_UITV_setBg(id self, SEL _cmd, UIColor *c) {
     g_orig_UITV_setBg(self, _cmd, c);
 }
 
+// tableView 的 backgroundView（会话页白板真凶：FLEX 视图树实锤 MainFrameTableView.backgroundView
+// = UIView{0,-97,393,852} 盖满内容区，cell 全透明也白）→ 壁纸激活且在四页链上时移除
+static void (*g_orig_UITV_setBgView)(id, SEL, UIView *);
+
+static void mio_UITV_setBgView(id self, SEL _cmd, UIView *v) {
+    if (v && MioWallpaperClearEligible(self)) {
+        static NSInteger budget = 20;
+        if (budget-- > 0) {
+            WPLog(@"Theme", @"[WALLPAPER] tableView.backgroundView 移除 %@ <%@ frame=%@>",
+                  NSStringFromClass([self class]), NSStringFromClass([v class]), NSStringFromCGRect(v.frame));
+        }
+        v = nil;
+    }
+    g_orig_UITV_setBgView(self, _cmd, v);
+}
+
 static void (*g_orig_UITCell_setBg)(id, SEL, UIColor *);
 
 static void mio_UITCell_setBg(id self, SEL _cmd, UIColor *c) {
@@ -568,6 +584,9 @@ static void mio_UITCell_setBgView(id self, SEL _cmd, UIView *v) {
             SEL sb = NSSelectorFromString(@"setBackgroundColor:");
             MSHookMessageEx(uitvCls, sb, (IMP)mio_UITV_setBg, (IMP *)&g_orig_UITV_setBg);
             WPLog(@"Theme", @"[HOOK] ✓ -[UITableView setBackgroundColor:]（壁纸透明化）");
+            SEL sbv = NSSelectorFromString(@"setBackgroundView:");
+            MSHookMessageEx(uitvCls, sbv, (IMP)mio_UITV_setBgView, (IMP *)&g_orig_UITV_setBgView);
+            WPLog(@"Theme", @"[HOOK] ✓ -[UITableView setBackgroundView:]（壁纸透明化）");
         }
         Class uitCellCls = objc_getClass("UITableViewCell");
         if (uitCellCls) {
