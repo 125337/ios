@@ -8,6 +8,7 @@
 #import "../../Core/ConfigManager.h"
 #import "../../Core/LogManager.h"
 #import <objc/message.h>
+#import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 #import <substrate.h>
 
@@ -26,6 +27,7 @@
 // 壁纸层（ChatBackgroundMgr hook 查询侧）
 - (nullable NSString *)miWallpaperPathOverride;
 - (nullable NSString *)miWallpaperPathForMode:(BOOL)dark;
+- (nullable NSString *)miHomeWallpaperPathForMode:(BOOL)dark;
 - (nullable UIImage *)miWallpaperImageForMode:(BOOL)dark;
 - (nullable UIColor *)miWallpaperPatternColorForName:(NSString *)name;
 - (BOOL)miWallpaperActive;
@@ -516,10 +518,12 @@ static id mio_MMUVC_viewForHeader(id self, SEL _cmd, UITableView *tv, NSInteger 
     return v;
 }
 
-// ── 顶栏/底栏透明化（壁纸激活）──
-// 底栏：MMTabBar 为微信主底栏专用类；微信在 frame 变化时会重设样式 → init + setFrame 双点
-// 顶栏：导航栏背景图置空 + gate（topViewController ∈ 四页白名单），从四页 push 出的
-// 二级页不在名单内，导航栏恢复正常底色。
+// ── 顶栏/底栏主题贴图（ThemePro 同款：贴主题包专属 top_bg/bottom_bg）──
+// iOS 15+ 外观体系：微信走 standardAppearance/scrollEdgeAppearance，legacy
+// setBackgroundImage:/barTintColor 被无视（此前 9 次透明化无效的根因）→ 直接改 appearance。
+// 包作者规范：无图不兜底——包内没有 top_bg/bottom_bg 就完全不动原生样式（透明回退已废除）。
+// 顶栏门禁：MioNavEligible（responder 链找 nav → topViewController ∈ 四页白名单），
+// push 出四页的二级页恢复原外观（原外观挂关联对象）。
 
 static UIImage *MioEmptyImage(void) {
     static UIImage *img = nil;
@@ -545,20 +549,30 @@ static BOOL MioNavEligible(UIView *bar) {
         || [top isEqualToString:@"MoreViewController"];
 }
 
-static void MioApplyTabBarTransparent(UITabBar *tb) {
+// 底栏：包内 bottom_bg 存在才贴（UITabBarAppearance 双位 + legacy 同步），无图保持原生
+static void MioApplyTabBarImage(UITabBar *tb) {
     if (!tb || ![[ThemeService shared] miWallpaperActive]) return;
-    tb.backgroundImage = MioEmptyImage();
+    UIImage *bottom = [[ThemeService shared] miThemeImageForName:@"bottom_bg"];
+    if (!bottom) return;
+    UITabBarAppearance *std = [tb.standardAppearance ?: [[UITabBarAppearance alloc] init] copy];
+    std.backgroundColor = nil;
+    std.backgroundImage = bottom;
+    std.shadowImage = MioEmptyImage();
+    std.shadowColor = nil;
+    tb.standardAppearance = std;
+    tb.scrollEdgeAppearance = std;
+    tb.backgroundImage = bottom; // legacy 同步（低版本/部分写入路径仍读）
     tb.shadowImage = MioEmptyImage();
     tb.barTintColor = nil;
     static NSInteger budget = 8;
-    if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 底栏透明化 %@", NSStringFromClass(tb.class));
+    if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 底栏贴图 bottom_bg %@", NSStringFromClass(tb.class));
 }
 
 static id (*g_orig_MMTabBar_initWithFrame)(id, SEL, CGRect);
 
 static id mio_MMTabBar_initWithFrame(id self, SEL _cmd, CGRect frame) {
     id v = g_orig_MMTabBar_initWithFrame(self, _cmd, frame);
-    if ([v isKindOfClass:[UITabBar class]]) MioApplyTabBarTransparent(v);
+    if ([v isKindOfClass:[UITabBar class]]) MioApplyTabBarImage(v);
     return v;
 }
 
@@ -566,25 +580,72 @@ static void (*g_orig_MMTabBar_setFrame)(id, SEL, CGRect);
 
 static void mio_MMTabBar_setFrame(id self, SEL _cmd, CGRect frame) {
     g_orig_MMTabBar_setFrame(self, _cmd, frame);
-    if ([self isKindOfClass:[UITabBar class]]) MioApplyTabBarTransparent(self);
+    if ([self isKindOfClass:[UITabBar class]]) MioApplyTabBarImage(self);
 }
 
-static void (*g_orig_UINavBar_setBgImage)(id, SEL, UIImage *, UIBarMetrics);
+// 顶栏：appearance 写入点 + setItems（push/pop）三点复查。微信配置期设 appearance 时
+// bar 尚未入层级（gate 拦不住货真价实的原外观 → 挂关联对象），入层级后 setItems 补贴。
+static void (*g_orig_UINavBar_setStdAppearance)(id, SEL, UINavigationBarAppearance *);
+static void (*g_orig_UINavBar_setEdgeAppearance)(id, SEL, UINavigationBarAppearance *);
+static void (*g_orig_UINavBar_setItems)(id, SEL, NSArray *, BOOL);
 
-static void mio_UINavBar_setBgImage(id self, SEL _cmd, UIImage *img, UIBarMetrics metrics) {
-    if (img && [self isKindOfClass:[UIView class]] && MioNavEligible((UIView *)self)) {
-        static NSInteger budget = 15;
-        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 顶栏透明化 %@", NSStringFromClass([self class]));
-        img = MioEmptyImage();
+static char kMioNavOrigStd, kMioNavOrigEdge;
+
+static void MioApplyNavBarImage(UINavigationBar *nav) {
+    if (!nav) return;
+    if (MioNavEligible(nav)) {
+        UIImage *top = [[ThemeService shared] miThemeImageForName:@"top_bg"];
+        if (!top) return; // 包内无 top_bg → 完全不动原生
+        UINavigationBarAppearance *origStd = objc_getAssociatedObject(nav, &kMioNavOrigStd) ?: nav.standardAppearance;
+        UINavigationBarAppearance *origEdge = objc_getAssociatedObject(nav, &kMioNavOrigEdge) ?: nav.scrollEdgeAppearance;
+        UINavigationBarAppearance *std = origStd ? [origStd copy] : nil;
+        UINavigationBarAppearance *edge = origEdge ? [origEdge copy] : nil;
+        void (^theme)(UINavigationBarAppearance *) = ^(UINavigationBarAppearance *ap) {
+            if (!ap) return;
+            ap.backgroundColor = nil;
+            ap.backgroundImage = top;
+            ap.backgroundEffect = nil;
+            ap.shadowImage = MioEmptyImage();
+            ap.shadowColor = nil;
+        };
+        theme(std);
+        theme(edge);
+        // g_orig 直调（不经 hook），保留 incoming 的 titleAttributes/button 样式
+        if (std) g_orig_UINavBar_setStdAppearance(nav, @selector(setStandardAppearance:), std);
+        if (edge) g_orig_UINavBar_setEdgeAppearance(nav, @selector(setScrollEdgeAppearance:), edge);
+        static NSInteger budget = 8;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 顶栏贴图 top_bg %@", NSStringFromClass(nav.class));
+    } else {
+        // 出了四页（push 二级页/聊天页）→ 恢复原外观
+        UINavigationBarAppearance *std = objc_getAssociatedObject(nav, &kMioNavOrigStd);
+        UINavigationBarAppearance *edge = objc_getAssociatedObject(nav, &kMioNavOrigEdge);
+        if (std) {
+            g_orig_UINavBar_setStdAppearance(nav, @selector(setStandardAppearance:), std);
+            objc_setAssociatedObject(nav, &kMioNavOrigStd, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (edge) {
+            g_orig_UINavBar_setEdgeAppearance(nav, @selector(setScrollEdgeAppearance:), edge);
+            objc_setAssociatedObject(nav, &kMioNavOrigEdge, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     }
-    g_orig_UINavBar_setBgImage(self, _cmd, img, metrics);
 }
 
-static void (*g_orig_UINavBar_setShadow)(id, SEL, UIImage *);
+// 微信重设 appearance → 新 incoming 挂为原外观后重贴（gate 不过则仅恢复，幂等）
+static void mio_UINavBar_setStdAppearance(id self, SEL _cmd, UINavigationBarAppearance *ap) {
+    objc_setAssociatedObject(self, &kMioNavOrigStd, ap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    g_orig_UINavBar_setStdAppearance(self, _cmd, ap);
+    if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
+}
 
-static void mio_UINavBar_setShadow(id self, SEL _cmd, UIImage *img) {
-    if (img && [self isKindOfClass:[UIView class]] && MioNavEligible((UIView *)self)) img = MioEmptyImage();
-    g_orig_UINavBar_setShadow(self, _cmd, img);
+static void mio_UINavBar_setEdgeAppearance(id self, SEL _cmd, UINavigationBarAppearance *ap) {
+    objc_setAssociatedObject(self, &kMioNavOrigEdge, ap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    g_orig_UINavBar_setEdgeAppearance(self, _cmd, ap);
+    if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
+}
+
+static void mio_UINavBar_setItems(id self, SEL _cmd, NSArray *items, BOOL animated) {
+    g_orig_UINavBar_setItems(self, _cmd, items, animated);
+    if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
 }
 
 static void (*g_orig_SearchBG_setBg)(id, SEL, UIImage *, long long, long long);
@@ -817,23 +878,29 @@ static void mio_SearchBG_setBg(id self, SEL _cmd, UIImage *img, long long pos, l
             if (class_getInstanceMethod(mmTabBarCls, sf)) {
                 MSHookMessageEx(mmTabBarCls, sf, (IMP)mio_MMTabBar_setFrame, (IMP *)&g_orig_MMTabBar_setFrame);
             }
-            WPLog(@"Theme", @"[HOOK] ✓ MMTabBar init+setFrame（底栏透明化）");
+            WPLog(@"Theme", @"[HOOK] ✓ MMTabBar init+setFrame（底栏贴图）");
         } else {
-            WPLog(@"Theme", @"[HOOK] ✗ MMTabBar 类不存在（底栏透明化跳过）");
+            WPLog(@"Theme", @"[HOOK] ✗ MMTabBar 类不存在（底栏贴图跳过）");
         }
+        // 顶栏贴图：appearance 写入点 + setItems（push/pop）复查（legacy setBackgroundImage:
+        // 在 iOS 15+ 被无视，log 7 实证从未触发 → 死 hook 已删）
         Class uinavCls = objc_getClass("UINavigationBar");
         if (uinavCls) {
-            SEL sbi = NSSelectorFromString(@"setBackgroundImage:forBarMetrics:");
-            if (class_getInstanceMethod(uinavCls, sbi)) {
-                MSHookMessageEx(uinavCls, sbi, (IMP)mio_UINavBar_setBgImage, (IMP *)&g_orig_UINavBar_setBgImage);
+            SEL ssa = NSSelectorFromString(@"setStandardAppearance:");
+            if (class_getInstanceMethod(uinavCls, ssa)) {
+                MSHookMessageEx(uinavCls, ssa, (IMP)mio_UINavBar_setStdAppearance, (IMP *)&g_orig_UINavBar_setStdAppearance);
             }
-            SEL ssi = NSSelectorFromString(@"setShadowImage:");
-            if (class_getInstanceMethod(uinavCls, ssi)) {
-                MSHookMessageEx(uinavCls, ssi, (IMP)mio_UINavBar_setShadow, (IMP *)&g_orig_UINavBar_setShadow);
+            SEL sea = NSSelectorFromString(@"setScrollEdgeAppearance:");
+            if (class_getInstanceMethod(uinavCls, sea)) {
+                MSHookMessageEx(uinavCls, sea, (IMP)mio_UINavBar_setEdgeAppearance, (IMP *)&g_orig_UINavBar_setEdgeAppearance);
             }
-            WPLog(@"Theme", @"[HOOK] ✓ UINavigationBar 背景/阴影（顶栏透明化）");
+            SEL sia = NSSelectorFromString(@"setItems:animated:");
+            if (class_getInstanceMethod(uinavCls, sia)) {
+                MSHookMessageEx(uinavCls, sia, (IMP)mio_UINavBar_setItems, (IMP *)&g_orig_UINavBar_setItems);
+            }
+            WPLog(@"Theme", @"[HOOK] ✓ UINavigationBar appearance+setItems（顶栏贴图）");
         } else {
-            WPLog(@"Theme", @"[HOOK] ✗ UINavigationBar 不可用（顶栏透明化跳过）");
+            WPLog(@"Theme", @"[HOOK] ✗ UINavigationBar 不可用（顶栏贴图跳过）");
         }
         Class searchBGCls = objc_getClass("UISearchBarBackground");
         SEL sbb = NSSelectorFromString(@"_setBackgroundImage:forBarPosition:barMetrics:");
@@ -1030,13 +1097,49 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     return final_;
 }
 
-// 壁纸图缓存（亮/暗各一份；miClearImageCache 失效）
+// 四页壁纸路径：包作者规范 home_bg 族（full_home_bg 优先 → home_bg），四页专属——
+// 曾错用聊天壁纸扫描链（full_chat_bg 命中 chat_bg 关键字）导致四页贴成聊天壁纸。
+// 暗色试 _Dark 变体（多数包没有，落空走亮图，与图标层同规则）；
+// 旧包无 home_bg 族 → 用户自设 wallpaper[_dark].png（Mio 目录）兜底；仍无则 nil。
+- (nullable NSString *)miHomeWallpaperPathForMode:(BOOL)dark {
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return nil;
+    NSString *themeDir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
+    BOOL threeX = [UIScreen mainScreen].scale >= 3;
+    NSArray<NSString *> *stems = dark
+        ? @[@"full_home_bg_Dark", @"home_bg_Dark", @"full_home_bg", @"home_bg"]
+        : @[@"full_home_bg", @"home_bg"];
+    NSMutableArray<NSString *> *cands = [NSMutableArray array];
+    for (NSString *stem in stems) {
+        if (threeX) [cands addObject:[stem stringByAppendingString:@"@3x.png"]];
+        [cands addObject:[stem stringByAppendingString:@"@2x.png"]];
+        [cands addObject:[stem stringByAppendingString:@".png"]];
+    }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *p = MioFirstExistingFile(fm, themeDir, cands);
+    if (!p.length) {
+        // 二级：用户自设图 Library/Preferences/Mio/wallpaper[_dark].png
+        NSString *mioDir = [[ThemeConfig mioThemesDir] stringByDeletingLastPathComponent];
+        if (dark) {
+            NSString *dk = [mioDir stringByAppendingPathComponent:@"wallpaper_dark.png"];
+            if ([fm fileExistsAtPath:dk]) p = dk;
+        }
+        if (!p.length) {
+            NSString *lt = [mioDir stringByAppendingPathComponent:@"wallpaper.png"];
+            if ([fm fileExistsAtPath:lt]) p = lt;
+        }
+    }
+    return p;
+}
+
+// 四页壁纸图缓存（亮/暗各一份；miClearImageCache 失效）。聊天页 serve 不经这里
+// （ChatBackgroundMgr hook 走 miWallpaperPathOverride 的聊天壁纸扫描链）。
 - (nullable UIImage *)miWallpaperImageForMode:(BOOL)dark {
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return nil;
     UIImage *cached = dark ? _wallpaperImgD : _wallpaperImgL;
     if (cached) return cached;
-    NSString *p = [self miWallpaperPathForMode:dark];
+    NSString *p = [self miHomeWallpaperPathForMode:dark];
     if (!p.length) return nil;
     UIImage *img = [self miLoadImageAtPath:p];
     if (img) {
@@ -1045,7 +1148,7 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     return img;
 }
 
-// 四页壁纸：BG_0 → 壁纸 pattern 图色（动态 provider 亮/暗自动换图）。
+// 四页壁纸：BG_0 → home 壁纸 pattern 图色（动态 provider 亮/暗自动换图）。
 // 暗壁纸缺失用亮图（与图标层同规则）。BG_0 查询高频 → 只构建一次，applyTheme/restore 失效。
 - (nullable UIColor *)miWallpaperPatternColorForName:(NSString *)name {
     if (_wallpaperPatternBuilt) return _wallpaperPatternColor;
@@ -1061,7 +1164,8 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     return _wallpaperPatternColor;
 }
 
-// 壁纸是否激活（透明化 hook 的总闸）：主题启用 + 壁纸图存在（亮图为准，暗缺失用亮）
+// 壁纸是否激活（四页清底/顶底栏贴图 hook 的总闸）：主题启用 + 四页壁纸（home_bg 族/
+// 用户自设）存在。聊天壁纸不参与判定——聊天页 serve 独立走 ChatBackgroundMgr 链路
 - (BOOL)miWallpaperActive {
     ThemeConfig *cfg = [ThemeConfig shared];
     if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return NO;
