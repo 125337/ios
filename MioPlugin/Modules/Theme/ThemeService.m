@@ -94,16 +94,52 @@ static id (*g_orig_WCColorMgr_getColorValueForName)(id, SEL, NSString *);
 // （亮/暗双份，colorWithDynamicProvider 按当前 trait 出色，系统切换自动重解析）。
 // getColor: 是 +[WCColor xxx] 全部动态类方法（resolveClassMethod:）的真实入口；
 // getColorValueForName: 是另一条对外查询 API。两个查询面都拦。
+// ── 诊断：取色全链路（每名一次，cap 120）──
+static void MioLogColorProbe(NSString *entry, NSString *name, BOOL hit) {
+    static NSMutableSet<NSString *> *seen = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    if (!name || seen.count > 120 || [seen containsObject:name]) return;
+    [seen addObject:name];
+    WPLog(@"Theme", @"[COLOR] %@ name=%@ 主题命中=%d", entry, name, hit);
+}
+
 static id mio_WCColorMgr_getColor(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
+    MioLogColorProbe(@"getColor", name, themed != nil);
     if (themed) return themed;
     return g_orig_WCColorMgr_getColor(self, _cmd, name);
 }
 
 static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name) {
     UIColor *themed = [[ThemeService shared] miThemeColorForName:name];
+    MioLogColorProbe(@"getColorValueForName", name, themed != nil);
     if (themed) return themed;
     return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
+}
+
+// ── 底栏图标改名映射（8.0.80 → 主题包老名）──
+// log 72 实证：8.0.80 底栏走 SVG.imageNamed:size:color:alpha:rotate:，请求新名
+// bubble_circle/person_list/discover/person × regular/filled；主题包均按老名
+// icons_outlined/filled_{chatbox,contacts,discover,me} 制作。新名→老名映射，
+// 旧版微信（8.0.54 实证同名族）只问老名，映射不触发，零副作用。
+// 注：icons_outlined_chatbox 两个包均无（未选中会话 tab，只能原生）。
+static NSString *MioLegacyImageNameForModernName(NSString *stem) {
+    static NSDictionary<NSString *, NSString *> *map = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        map = @{
+            @"bubble_circle_regular": @"icons_outlined_chatbox",
+            @"bubble_circle_filled":  @"icons_filled_chatbox",
+            @"person_list_regular":   @"icons_outlined_contacts",
+            @"person_list_filled":    @"icons_filled_contacts",
+            @"discover_regular":      @"icons_outlined_discover",
+            @"discover_filled":       @"icons_filled_discover",
+            @"person_regular":        @"icons_outlined_me",
+            @"person_filled":         @"icons_filled_me",
+        };
+    });
+    return map[stem];
 }
 
 // ── 诊断：取图全链路日志（每个入口每个名字只打一次，cap 400）──
@@ -244,10 +280,9 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
 }
 
 // ── 壁纸层（聊天背景）──
-// 拦 -[ChatBackgroundMgr getChatBackgroundImagePathForUser:]：主题有壁纸图（主题包内
-// 扫描或用户自设）→ 返回我们的路径，聊天页背景视图/缩略图全部自动跟上；否则放行原实现。
-// 返回类型头文件未标注（id），按原实现返回值的实际类型仿制（NSString → 原样返回我们的；
-// NSURL → 包一层 fileURL）——防类型不符闪退。始终先调原实现，保持微信内部状态一致。
+// 8.0.80 实证：getChatBackgroundImagePathForUser: 无人调用（log 72 零询问）。
+// 探针两个落点：imageInPath:（按路径加载图，视图机制内部必经）+
+// getChatBackgroundViewForUser:containerSize:（背景视图创建点），数据说话后定 serve 点。
 static NSString *(*g_orig_ChatBGMgr_getImagePath)(id, SEL, id);
 
 static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
@@ -262,6 +297,35 @@ static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
     if (!ours.length) return orig;
     if ([orig isKindOfClass:[NSURL class]]) return [NSURL fileURLWithPath:ours];
     return ours;
+}
+
+static id (*g_orig_ChatBGMgr_imageInPath)(id, SEL, id);
+
+static id mio_ChatBGMgr_imageInPath(id self, SEL _cmd, NSString *path) {
+    id r = g_orig_ChatBGMgr_imageInPath(self, _cmd, path);
+    static NSInteger budget = 20;
+    if (budget-- > 0) {
+        WPLog(@"Theme", @"[WALLPAPER] imageInPath path=%@ → <%@ %@>", path, [r class], r);
+    }
+    return r;
+}
+
+static id (*g_orig_ChatBGMgr_bgViewForUser)(id, SEL, id, CGSize);
+
+static id mio_ChatBGMgr_bgViewForUser(id self, SEL _cmd, id username, CGSize size) {
+    id v = g_orig_ChatBGMgr_bgViewForUser(self, _cmd, username, size);
+    static NSInteger budget = 10;
+    if (budget-- > 0) {
+        NSMutableString *sub = [NSMutableString string];
+        if ([v isKindOfClass:[UIView class]]) {
+            for (UIView *c in ((UIView *)v).subviews) {
+                [sub appendFormat:@" <%@ %@>", NSStringFromClass([c class]), c];
+            }
+        }
+        WPLog(@"Theme", @"[WALLPAPER] bgView user=%@ size=%@ view=<%@> 子视图:%@",
+              username, NSStringFromCGSize(size), v, sub);
+    }
+    return v;
 }
 
 @implementation ThemeService {
@@ -385,7 +449,7 @@ static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
             WPLog(@"Theme", @"[HOOK] ✗ DarkModeImageMgr 类不存在");
         }
 
-        // 壁纸层：聊天背景路径拦截
+        // 壁纸层：路径查询（8.0.80 零调用，保留观察）+ 加载图 + 视图创建点（探针定位 serve 落点）
         Class chatBGCls = objc_getClass("ChatBackgroundMgr");
         if (chatBGCls) {
             SEL wp = NSSelectorFromString(@"getChatBackgroundImagePathForUser:");
@@ -394,6 +458,20 @@ static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
                 WPLog(@"Theme", @"[HOOK] ✓ -[ChatBackgroundMgr getChatBackgroundImagePathForUser:]");
             } else {
                 WPLog(@"Theme", @"[HOOK] ✗ getChatBackgroundImagePathForUser: 不存在");
+            }
+            SEL iip = NSSelectorFromString(@"imageInPath:");
+            if (class_getInstanceMethod(chatBGCls, iip)) {
+                MSHookMessageEx(chatBGCls, iip, (IMP)mio_ChatBGMgr_imageInPath, (IMP *)&g_orig_ChatBGMgr_imageInPath);
+                WPLog(@"Theme", @"[HOOK] ✓ -[ChatBackgroundMgr imageInPath:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ imageInPath: 不存在");
+            }
+            SEL bgv = NSSelectorFromString(@"getChatBackgroundViewForUser:containerSize:");
+            if (class_getInstanceMethod(chatBGCls, bgv)) {
+                MSHookMessageEx(chatBGCls, bgv, (IMP)mio_ChatBGMgr_bgViewForUser, (IMP *)&g_orig_ChatBGMgr_bgViewForUser);
+                WPLog(@"Theme", @"[HOOK] ✓ -[ChatBackgroundMgr getChatBackgroundViewForUser:containerSize:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ getChatBackgroundViewForUser:containerSize: 不存在");
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ ChatBackgroundMgr 类不存在");
@@ -438,6 +516,14 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     if (ext.length) stem = [name stringByDeletingPathExtension];
 
     NSString *lightPath = MioFirstExistingFile(fm, dir, [self miLightCandidatesForStem:stem ext:ext threeX:threeX]);
+    // 8.0.80 底栏新名查不到 → 映射到包内老名再试（旧版微信只问老名，不触发）
+    if (!lightPath) {
+        NSString *legacy = MioLegacyImageNameForModernName(stem);
+        if (legacy) {
+            stem = legacy;
+            lightPath = MioFirstExistingFile(fm, dir, [self miLightCandidatesForStem:stem ext:ext threeX:threeX]);
+        }
+    }
     NSArray<NSString *> *darkNames = [self miDarkCandidateNamesForStem:stem];
     NSString *darkPath = darkNames.count ? MioFirstExistingFile(fm, dir, [self miDarkFileCandidatesForNames:darkNames threeX:threeX]) : nil;
 
@@ -465,6 +551,8 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     if (threeX) [cands addObject:[stem stringByAppendingString:@"@3x.png"]];
     [cands addObject:[stem stringByAppendingString:@"@2x.png"]];
     [cands addObject:[stem stringByAppendingString:@".png"]];
+    // 包作者笔误容错：stem3x.png（少个@，如小悠米包的 icons_outlined_discover3x.png）
+    [cands addObject:[stem stringByAppendingString:@"3x.png"]];
     if (ext.length && ![ext isEqualToString:@"png"]) [cands addObject:[stem stringByAppendingPathExtension:ext]];
     return cands;
 }
