@@ -629,11 +629,20 @@ static void mio_UITCell_layoutSubviews(id self, SEL _cmd) {
             if ([p isKindOfClass:[UITableView class]]) { tv = (UITableView *)p; break; }
         }
         if (!tv || !MioWpTableGate(tv)) return;
+        // cell 整棵子树压制（限深 6）：白底可能挂在 contentView 与内容视图之间的
+        // 包装层（dump 实锤 MainFrameItemView ← UIView ← ContentView 链），
+        // 且赋值方式/时序不定（重写 setter、配置期、布局期），布局期整树压死最稳。
+        static BOOL loggedSweep = NO;
         UIColor *c = cell.backgroundColor;
         if (c && !MioIsWallpaperPatternColor(c) && ![c isEqual:[UIColor clearColor]]) {
             g_orig_UITCell_setBg(cell, @selector(setBackgroundColor:), [UIColor clearColor]);
             static NSInteger budget = 30;
             if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] cell 布局期压制 %@", NSStringFromClass([cell class]));
+        }
+        for (UIView *sv in cell.contentView.subviews) MioWpClearOpaque(sv, 5);
+        if (!loggedSweep) {
+            loggedSweep = YES;
+            WPLog(@"Theme", @"[WALLPAPER] cell 子树压制已启用（覆盖 contentView 包装层）");
         }
     } @catch (NSException *e) { }
 }
@@ -686,8 +695,6 @@ static void mio_Fold_layout(id self, SEL _cmd) {
                            dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+0.6s"); });
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+2s"); });
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+5s"); });
         }
         MioWpClearOpaque(v, 3);
     }
@@ -754,14 +761,6 @@ static void (*g_orig_MSM_rebuild)(id, SEL);
 static void mio_MSM_rebuild(id self, SEL _cmd) {
     WPLog(@"Theme", @"[RELOAD] MainSessionMgr rebuildMainSessions ← 会话列表重建");
     g_orig_MSM_rebuild(self, _cmd);
-}
-
-static void (*g_orig_MSM_updateNotify)(id, SEL, id);
-
-static void mio_MSM_updateNotify(id self, SEL _cmd, id a) {
-    static NSInteger budget = 10;
-    if (budget-- > 0) WPLog(@"Theme", @"[RELOAD] MainSessionMgr updateMainSessionListNotify:%@", a);
-    g_orig_MSM_updateNotify(self, _cmd, a);
 }
 
 @implementation ThemeService {
@@ -1024,8 +1023,7 @@ static void mio_MSM_updateNotify(id self, SEL _cmd, id a) {
             }
             SEL un = NSSelectorFromString(@"updateMainSessionListNotify:");
             if (class_getInstanceMethod(msmCls, un)) {
-                MSHookMessageEx(msmCls, un, (IMP)mio_MSM_updateNotify, (IMP *)&g_orig_MSM_updateNotify);
-                WPLog(@"Theme", @"[HOOK] ✓ MainSessionMgr updateMainSessionListNotify:（诊断）");
+                WPLog(@"Theme", @"[HOOK] - updateMainSessionListNotify: 存在但不 hook（签名未知疑似非对象参数，%@ 打垃圾指针崩溃 5cba606 实测）");
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ MainSessionMgr 类不存在（诊断跳过）");
