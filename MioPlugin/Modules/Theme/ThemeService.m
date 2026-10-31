@@ -376,6 +376,20 @@ static BOOL MioIsWallpaperPatternColor(UIColor *c) {
     return c == [[ThemeService shared] miWallpaperPatternColorForName:@"BG_0"];
 }
 
+// 泛化判定：view 是否位于表格内容物里（cell / 表本身 / 置顶折叠区）。
+// FLEX 实锤剩余白底都挂在 cell 内部 ItemView（MainFrameItemView/ContactsItemView）及
+// 中间层白 UIView 上，不走 cell 的 setter → 需在 UIView 级拦。只认 8 层 superview 内
+// 的表格锚点，导航栏/聊天页/设置页等不在其内。
+static BOOL MioInsideTableContent(UIView *view) {
+    UIView *v = view;
+    for (int i = 0; v && i < 8; i++, v = v.superview) {
+        if ([v isKindOfClass:[UITableViewCell class]] || [v isKindOfClass:[UITableView class]]) return YES;
+        NSString *cls = NSStringFromClass([v class]);
+        if ([cls containsString:@"SectionFold"]) return YES; // 置顶会话折叠区（FLEX/ThemePro 实锤）
+    }
+    return NO;
+}
+
 static void (*g_orig_UITV_setBg)(id, SEL, UIColor *);
 
 static void mio_UITV_setBg(id self, SEL _cmd, UIColor *c) {
@@ -423,6 +437,22 @@ static void mio_UITCell_setBgView(id self, SEL _cmd, UIView *v) {
         v = nil;
     }
     g_orig_UITCell_setBgView(self, _cmd, v);
+}
+
+// 泛化兜底：表格内容物里任何 UIView 的底色（ItemView/中间层白板/置顶卡片）→ 透明。
+// 必须同时满足：壁纸激活 + 8 层内有表格锚点 + responder 链在四页上
+static void (*g_orig_UIV_setBg)(id, SEL, UIColor *);
+
+static void mio_UIV_setBg(id self, SEL _cmd, UIColor *c) {
+    if (c && !MioIsWallpaperPatternColor(c)
+        && [self isKindOfClass:[UIView class]]
+        && MioInsideTableContent((UIView *)self)
+        && MioWallpaperClearEligible((UIView *)self)) {
+        static NSInteger budget = 30;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] UIView 透明化 %@", NSStringFromClass([self class]));
+        c = [UIColor clearColor];
+    }
+    g_orig_UIV_setBg(self, _cmd, c);
 }
 
 @implementation ThemeService {
@@ -596,6 +626,13 @@ static void mio_UITCell_setBgView(id self, SEL _cmd, UIView *v) {
             SEL sbv = NSSelectorFromString(@"setBackgroundView:");
             MSHookMessageEx(uitCellCls, sbv, (IMP)mio_UITCell_setBgView, (IMP *)&g_orig_UITCell_setBgView);
             WPLog(@"Theme", @"[HOOK] ✓ -[UITableViewCell setBackgroundView:]（壁纸透明化）");
+        }
+        // 泛化兜底：表格内容物内任意 UIView 底色（ItemView/置顶卡片/中间层白板）
+        Class uivCls = objc_getClass("UIView");
+        if (uivCls) {
+            SEL sb = NSSelectorFromString(@"setBackgroundColor:");
+            MSHookMessageEx(uivCls, sb, (IMP)mio_UIV_setBg, (IMP *)&g_orig_UIV_setBg);
+            WPLog(@"Theme", @"[HOOK] ✓ -[UIView setBackgroundColor:]（壁纸透明化·泛化）");
         }
     });
 }
