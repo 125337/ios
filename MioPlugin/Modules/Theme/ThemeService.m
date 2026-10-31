@@ -453,6 +453,160 @@ static void mio_UIV_setBg(id self, SEL _cmd, UIColor *c) {
     g_orig_UIV_setBg(self, _cmd, c);
 }
 
+// ── 通道②③④根治（ThemePro 4.9.6 运行时实测清单同点位）──
+// ② UIAppearance 通道：_UIAppearance_setBackgroundColor: 批量应用不经过普通 setter，
+//    是"第一眼透明了然后白色回来"的主嫌疑（ThemePro 专门堵它，实锤存在）。
+// ③ 复用/布局重刷：微信在 cell 配置/复用/重排时重新刷白（常发生在 cell 进表之后），
+//    setter hook 的 gate 需要 responder 链、配置期 cell 不在表内会放行 → 布局期按表
+//    gate 缓存再压一次（ThemePro 用 prepareForReuse + layoutSubviews 同款）。
+// ④ layer 直赋容器：置顶折叠区/通讯录表/header 的白底绕过一切 ObjC setter
+//    （三轮 setter 日志零命中实锤）。不碰 CALayer 热路径，改对已知具体类的
+//    低频点（init/layout/setContentInset/viewForHeader）定点清扫。
+// 安全边界：全部软安装；表 gate 结论按实例缓存，换主题/壁纸时代数失效，cell
+// 每帧成本 = 3 层 superview 查找 + 1 次查表，不做 responder 链遍历。
+
+static NSInteger g_wpGateGen = 0; // 壁纸开关/换包代数（miClearImageCache 递增），gate 缓存随之失效
+
+static BOOL MioWpTableGate(UITableView *tv) {
+    if (!tv) return NO;
+    static NSMapTable *cache;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cache = [NSMapTable weakToStrongObjectsMapTable]; });
+    NSNumber *v = [cache objectForKey:tv];
+    if (v && (v.integerValue >> 1) == g_wpGateGen) return (v.integerValue & 1) == 1;
+    BOOL e = MioWallpaperClearEligible(tv);
+    [cache setObject:@((g_wpGateGen << 1) | (e ? 1 : 0)) forKey:tv];
+    return e;
+}
+
+// 定点清扫：容器自身+子树（限深）不透明底色 → 透明。这些白底多为 layer 直赋，但
+// UIView.backgroundColor 与 layer 同源，读写即达。只在定点布局/配置点调用，非全局 hook。
+static void MioWpClearOpaque(UIView *v, int depth) {
+    if (!v || depth <= 0) return;
+    UIColor *c = v.backgroundColor;
+    if (c && !MioIsWallpaperPatternColor(c) && ![c isEqual:[UIColor clearColor]]) {
+        v.backgroundColor = [UIColor clearColor];
+    }
+    for (UIView *s in v.subviews) MioWpClearOpaque(s, depth - 1);
+}
+
+// ② UIAppearance 通道
+static void (*g_orig_UITCell_appearanceSetBg)(id, SEL, UIColor *);
+
+static void mio_UITCell_appearanceSetBg(id self, SEL _cmd, UIColor *c) {
+    if (c && !MioIsWallpaperPatternColor(c)
+        && MioInsideTableContent((UIView *)self)
+        && MioWallpaperClearEligible((UIView *)self)) {
+        static NSInteger budget = 20;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] UIAppearance 通道透明化 %@", NSStringFromClass([self class]));
+        c = [UIColor clearColor];
+    }
+    g_orig_UITCell_appearanceSetBg(self, _cmd, c);
+}
+
+// ③ 布局期压制：每帧成本 = 3 层 superview 查找 + 1 次查表
+static void (*g_orig_UITCell_layoutSubviews)(id, SEL);
+
+static void mio_UITCell_layoutSubviews(id self, SEL _cmd) {
+    g_orig_UITCell_layoutSubviews(self, _cmd);
+    @try {
+        UITableViewCell *cell = self;
+        UITableView *tv = nil;
+        UIView *p = cell.superview;
+        for (int i = 0; p && i < 3; i++, p = p.superview) {
+            if ([p isKindOfClass:[UITableView class]]) { tv = (UITableView *)p; break; }
+        }
+        if (!tv || !MioWpTableGate(tv)) return;
+        UIColor *c = cell.backgroundColor;
+        if (c && !MioIsWallpaperPatternColor(c) && ![c isEqual:[UIColor clearColor]]) {
+            g_orig_UITCell_setBg(cell, @selector(setBackgroundColor:), [UIColor clearColor]);
+            static NSInteger budget = 30;
+            if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] cell 布局期压制 %@", NSStringFromClass([cell class]));
+        }
+    } @catch (NSException *e) { }
+}
+
+// ③ 复用压制：复用瞬间 cell 多半已脱离表（找不到表则天然跳过），
+// 配置期白底由随后的布局期压制兜底；保留与 ThemePro 同点位以覆盖例外时序
+static void (*g_orig_UITCell_prepareReuse)(id, SEL);
+
+static void mio_UITCell_prepareReuse(id self, SEL _cmd) {
+    g_orig_UITCell_prepareReuse(self, _cmd);
+    @try {
+        UITableViewCell *cell = self;
+        UITableView *tv = nil;
+        UIView *p = cell.superview;
+        for (int i = 0; p && i < 3; i++, p = p.superview) {
+            if ([p isKindOfClass:[UITableView class]]) { tv = (UITableView *)p; break; }
+        }
+        if (!tv || !MioWpTableGate(tv)) return;
+        UIColor *c = cell.backgroundColor;
+        if (c && !MioIsWallpaperPatternColor(c) && ![c isEqual:[UIColor clearColor]]) {
+            g_orig_UITCell_setBg(cell, @selector(setBackgroundColor:), [UIColor clearColor]);
+        }
+    } @catch (NSException *e) { }
+}
+
+// ④ 置顶会话折叠区：init 探针 + 每次重排定点清扫（类内 bounded，一屏仅数个实例）。
+// 数据刷新（新消息重排置顶卡片）会重刷 ItemView 白底，布局期清扫兜住回流。
+static id (*g_orig_Fold_initWithFrame)(id, SEL, CGRect);
+
+static id mio_Fold_initWithFrame(id self, SEL _cmd, CGRect frame) {
+    id v = g_orig_Fold_initWithFrame(self, _cmd, frame);
+    static NSInteger budget = 5;
+    if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] MainFrameSectionFoldView 创建");
+    return v;
+}
+
+static void (*g_orig_Fold_layout)(id, SEL);
+
+static void mio_Fold_layout(id self, SEL _cmd) {
+    g_orig_Fold_layout(self, _cmd);
+    UIView *v = self;
+    if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
+        MioWpClearOpaque(v, 3);
+    }
+}
+
+// ④ 通讯录页表本体：setContentInset: 是表的低频配置点（ThemePro 同点位），顺手清底
+static void (*g_orig_MMTV_setContentInset)(id, SEL, UIEdgeInsets);
+
+static void mio_MMTV_setContentInset(id self, SEL _cmd, UIEdgeInsets inset) {
+    g_orig_MMTV_setContentInset(self, _cmd, inset);
+    UITableView *tv = self;
+    if ([[ThemeService shared] miWallpaperActive] && MioWpTableGate(tv)) {
+        if (tv.backgroundView) {
+            g_orig_UITV_setBgView(self, @selector(setBackgroundView:), nil);
+        }
+        UIColor *c = tv.backgroundColor;
+        if (c && !MioIsWallpaperPatternColor(c) && ![c isEqual:[UIColor clearColor]]) {
+            g_orig_UITV_setBg(self, @selector(setBackgroundColor:), [UIColor clearColor]);
+        }
+        static NSInteger budget = 10;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] MMMainTableView 清底（通讯录表）");
+    }
+}
+
+// ④ 各页 header：基类统一拦一个点（四页全继承 MMUIViewController），返回前按控制器
+// 类名白名单清扫 header 子树。header 此刻尚未进表、responder 链不可用 → 直接按类名。
+static id (*g_orig_MMUVC_viewForHeader)(id, SEL, UITableView *, NSInteger);
+
+static id mio_MMUVC_viewForHeader(id self, SEL _cmd, UITableView *tv, NSInteger sec) {
+    id v = g_orig_MMUVC_viewForHeader(self, _cmd, tv, sec);
+    if ([v isKindOfClass:[UIView class]] && [[ThemeService shared] miWallpaperActive]) {
+        NSString *cls = NSStringFromClass([self class]);
+        if ([cls isEqualToString:@"NewMainFrameViewController"]
+            || [cls isEqualToString:@"ContactsViewController"]
+            || [cls isEqualToString:@"FindFriendEntryViewController"]
+            || [cls isEqualToString:@"MoreViewController"]) {
+            MioWpClearOpaque((UIView *)v, 4);
+            static NSInteger budget = 10;
+            if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] header 清扫 %@ → %@", cls, NSStringFromClass([v class]));
+        }
+    }
+    return v;
+}
+
 @implementation ThemeService {
     NSCache *_imageCache; // key = 主题名|L/D|请求名，value = UIImage 或 NSNull（未命中也缓存，挡高频磁盘读）
     NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
@@ -634,7 +788,62 @@ static void mio_UIV_setBg(id self, SEL _cmd, UIColor *c) {
         }
         // 注：CALayer 级兜底已摘除——CALayer setBackgroundColor: 是全系统最高频 setter，
         // 多线程热路径上跑视图链遍历+读盘解码导致启动期 EXC_GUARD 闪退（8a21151 实测）。
-        // layer 直赋场景（置顶卡片 ItemView/通讯录表）待换安全方案（如 MFItemView 定点 hook）再上。
+        // layer 直赋场景由下面的定点 hook 覆盖（ThemePro 4.9.6 运行时清单同点位）。
+
+        // ── 通道②③④根治（全部软安装）──
+        // ② UIAppearance 通道 + ③ 复用/布局重刷压制（UITableViewCell 类内，bounded）
+        if (uitCellCls) {
+            SEL ap = NSSelectorFromString(@"_UIAppearance_setBackgroundColor:");
+            if (class_getInstanceMethod(uitCellCls, ap)) {
+                MSHookMessageEx(uitCellCls, ap, (IMP)mio_UITCell_appearanceSetBg, (IMP *)&g_orig_UITCell_appearanceSetBg);
+                WPLog(@"Theme", @"[HOOK] ✓ -[UITableViewCell _UIAppearance_setBackgroundColor:]（通道②）");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ _UIAppearance_setBackgroundColor: 不存在（通道②跳过）");
+            }
+            SEL lay = NSSelectorFromString(@"layoutSubviews");
+            if (class_getInstanceMethod(uitCellCls, lay)) {
+                MSHookMessageEx(uitCellCls, lay, (IMP)mio_UITCell_layoutSubviews, (IMP *)&g_orig_UITCell_layoutSubviews);
+                WPLog(@"Theme", @"[HOOK] ✓ -[UITableViewCell layoutSubviews]（通道③布局期压制）");
+            }
+            SEL reuse = NSSelectorFromString(@"prepareForReuse");
+            if (class_getInstanceMethod(uitCellCls, reuse)) {
+                MSHookMessageEx(uitCellCls, reuse, (IMP)mio_UITCell_prepareReuse, (IMP *)&g_orig_UITCell_prepareReuse);
+                WPLog(@"Theme", @"[HOOK] ✓ -[UITableViewCell prepareForReuse]（通道③复用压制）");
+            }
+        }
+        // ④ 置顶会话折叠区（创建 + 重排定点清扫）
+        Class foldCls = objc_getClass("MainFrameSectionFoldView");
+        if (foldCls) {
+            SEL initF = NSSelectorFromString(@"initWithFrame:");
+            if (class_getInstanceMethod(foldCls, initF)) {
+                MSHookMessageEx(foldCls, initF, (IMP)mio_Fold_initWithFrame, (IMP *)&g_orig_Fold_initWithFrame);
+            }
+            SEL layF = NSSelectorFromString(@"layoutSubviews");
+            if (class_getInstanceMethod(foldCls, layF)) {
+                MSHookMessageEx(foldCls, layF, (IMP)mio_Fold_layout, (IMP *)&g_orig_Fold_layout);
+            }
+            WPLog(@"Theme", @"[HOOK] ✓ MainFrameSectionFoldView init+layout（通道④置顶卡片）");
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MainFrameSectionFoldView 类不存在（通道④置顶卡片跳过）");
+        }
+        // ④ 通讯录页表本体
+        Class mmTvCls = objc_getClass("MMMainTableView");
+        SEL ci = NSSelectorFromString(@"setContentInset:");
+        if (mmTvCls && class_getInstanceMethod(mmTvCls, ci)) {
+            MSHookMessageEx(mmTvCls, ci, (IMP)mio_MMTV_setContentInset, (IMP *)&g_orig_MMTV_setContentInset);
+            WPLog(@"Theme", @"[HOOK] ✓ -[MMMainTableView setContentInset:]（通道④通讯录表）");
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MMMainTableView setContentInset: 不可用（通道④通讯录表跳过）");
+        }
+        // ④ 各页 header（基类统一一个点）
+        Class mmUvcCls = objc_getClass("MMUIViewController");
+        SEL hd = NSSelectorFromString(@"tableView:viewForHeaderInSection:");
+        if (mmUvcCls && class_getInstanceMethod(mmUvcCls, hd)) {
+            MSHookMessageEx(mmUvcCls, hd, (IMP)mio_MMUVC_viewForHeader, (IMP *)&g_orig_MMUVC_viewForHeader);
+            WPLog(@"Theme", @"[HOOK] ✓ -[MMUIViewController tableView:viewForHeaderInSection:]（通道④header）");
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MMUIViewController tableView:viewForHeaderInSection: 不可用（通道④header跳过）");
+        }
     });
 }
 
@@ -781,6 +990,7 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     _wallpaperImgD = nil;
     _wallpaperPatternColor = nil;
     _wallpaperPatternBuilt = NO;
+    g_wpGateGen++; // 壁纸/主题切换 → 表级 gate 缓存全失效（下一轮布局重算）
     WPLog(@"Theme", @"[CACHE] 主题图缓存已清");
 }
 
