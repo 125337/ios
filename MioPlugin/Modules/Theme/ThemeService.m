@@ -366,7 +366,7 @@ static BOOL MioWallpaperClearEligible(UIView *view) {
         for (int i = 0; i < 6; i++) {
             if ([cls isEqualToString:tags[i]]) return YES;
         }
-        r = [(NSObject *)r nextResponder];
+        r = [(UIResponder *)r nextResponder];
     }
     return NO;
 }
