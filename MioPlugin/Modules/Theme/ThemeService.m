@@ -543,6 +543,51 @@ static void MioDumpFoldDiag(UIView *fold, const char *when) {
     MioDumpTree(fold, 1, out);
     WPLog(@"Theme", @"%@", out);
 }
+
+// 全链路排查①：setter 重写扫描。基类 hook（UIView/UITableView/UITableViewCell）拦不到
+// 子类重写的 setter（消息派发命中最近的重写层）——扫出子树所有类+父类链里"自己实现
+// setBackgroundColor:/setBackgroundView:/setBackgroundImage:"的层，即漏网赋值通道。
+static void MioScanSetterOverrides(UIView *root) {
+    NSMutableString *out = [NSMutableString stringWithFormat:
+        @"\n[SCAN] setter 重写扫描 root=<%@ %p> 父链:%@\n",
+        NSStringFromClass(root.class), (void *)root, MioChainDesc(root, 8)];
+    NSMutableSet *scanned = [NSMutableSet set];
+    __block void (^scanClass)(Class) = ^void(Class cls) {
+        while (cls && cls != [UIView class] && cls != [NSObject class]) {
+            if ([scanned containsObject:cls]) break;
+            [scanned addObject:cls];
+            const char *sels[] = {"setBackgroundColor:", "setBackgroundView:", "setBackgroundImage:"};
+            for (int i = 0; i < 3; i++) {
+                SEL s = NSSelectorFromString(@(sels[i]));
+                Method m = class_getInstanceMethod(cls, s);
+                if (!m) continue;
+                IMP imp = method_getImplementation(m);
+                Class owner = cls, c2 = class_getSuperclass(cls);
+                while (c2) { // 找 IMP 归属的最泛化层
+                    Method m2 = class_getInstanceMethod(c2, s);
+                    if (m2 && method_getImplementation(m2) == imp) { owner = c2; c2 = class_getSuperclass(c2); }
+                    else break;
+                }
+                if (owner != [UIView class] && owner != [UITableViewCell class] && owner != [UITableView class]) {
+                    [out appendFormat:@"[SCAN] <%@> 的 %s 由 <%@> 实现（基类 hook 拦不到）\n",
+                        NSStringFromClass(cls), sels[i], NSStringFromClass(owner)];
+                }
+            }
+            cls = class_getSuperclass(cls);
+        }
+    };
+    NSMutableArray<UIView *> *stack = [NSMutableArray array];
+    if (root) [stack addObject:root];
+    while (stack.count) {
+        UIView *v = stack.firstObject;
+        [stack removeObjectAtIndex:0];
+        if (!v) continue;
+        scanClass(v.class);
+        for (UIView *s in v.subviews) [stack addObject:s];
+    }
+    WPLog(@"Theme", @"%@", out);
+    scanClass = nil;
+}
 static void MioWpClearOpaque(UIView *v, int depth) {
     if (!v || depth <= 0) return;
     UIColor *c = v.backgroundColor;
@@ -631,15 +676,18 @@ static void mio_Fold_layout(id self, SEL _cmd) {
     g_orig_Fold_layout(self, _cmd);
     UIView *v = self;
     if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
-        static NSInteger dumpBudget = 3;
+        static NSInteger scanBudget = 1;
+        if (scanBudget-- > 0) MioScanSetterOverrides(v);
+        static NSInteger dumpBudget = 2;
         if (dumpBudget-- > 0) {
             MioDumpFoldDiag(v, "fold-layout");
-            if (dumpBudget == 2) { // 首次 dump 后延迟再抓一次，覆盖"布局后才赋白"的时序
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), ^{
-                    if (v.superview) MioDumpFoldDiag(v, "fold-layout+0.6s");
-                });
-            }
+            // 延迟序列：抓"启动刷新把白刷回来"的时刻与载体（全链路排查②）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+0.6s"); });
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+2s"); });
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+5s"); });
         }
         MioWpClearOpaque(v, 3);
     }
@@ -698,6 +746,22 @@ static id mio_MMUVC_viewForHeader(id self, SEL _cmd, UITableView *tv, NSInteger 
         }
     }
     return v;
+}
+
+// 全链路排查③：启动刷新入口（ThemePro 实锤的会话列表重建点），与 dump 时间轴对齐
+static void (*g_orig_MSM_rebuild)(id, SEL);
+
+static void mio_MSM_rebuild(id self, SEL _cmd) {
+    WPLog(@"Theme", @"[RELOAD] MainSessionMgr rebuildMainSessions ← 会话列表重建");
+    g_orig_MSM_rebuild(self, _cmd);
+}
+
+static void (*g_orig_MSM_updateNotify)(id, SEL, id);
+
+static void mio_MSM_updateNotify(id self, SEL _cmd, id a) {
+    static NSInteger budget = 10;
+    if (budget-- > 0) WPLog(@"Theme", @"[RELOAD] MainSessionMgr updateMainSessionListNotify:%@", a);
+    g_orig_MSM_updateNotify(self, _cmd, a);
 }
 
 @implementation ThemeService {
@@ -949,6 +1013,22 @@ static id mio_MMUVC_viewForHeader(id self, SEL _cmd, UITableView *tv, NSInteger 
             WPLog(@"Theme", @"[HOOK] ✓ -[MMUIViewController tableView:viewForHeaderInSection:]（通道④header）");
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ MMUIViewController tableView:viewForHeaderInSection: 不可用（通道④header跳过）");
+        }
+        // 全链路排查③：启动刷新入口（软装，诊断专用）
+        Class msmCls = objc_getClass("MainSessionMgr");
+        if (msmCls) {
+            SEL rb = NSSelectorFromString(@"rebuildMainSessions");
+            if (class_getInstanceMethod(msmCls, rb)) {
+                MSHookMessageEx(msmCls, rb, (IMP)mio_MSM_rebuild, (IMP *)&g_orig_MSM_rebuild);
+                WPLog(@"Theme", @"[HOOK] ✓ MainSessionMgr rebuildMainSessions（诊断）");
+            }
+            SEL un = NSSelectorFromString(@"updateMainSessionListNotify:");
+            if (class_getInstanceMethod(msmCls, un)) {
+                MSHookMessageEx(msmCls, un, (IMP)mio_MSM_updateNotify, (IMP *)&g_orig_MSM_updateNotify);
+                WPLog(@"Theme", @"[HOOK] ✓ MainSessionMgr updateMainSessionListNotify:（诊断）");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MainSessionMgr 类不存在（诊断跳过）");
         }
     });
 }
