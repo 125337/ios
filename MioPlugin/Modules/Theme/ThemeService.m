@@ -28,6 +28,7 @@
 - (nullable NSString *)miWallpaperPathForMode:(BOOL)dark;
 - (nullable UIImage *)miWallpaperImageForMode:(BOOL)dark;
 - (nullable UIColor *)miWallpaperPatternColorForName:(NSString *)name;
+- (BOOL)miWallpaperActive;
 @end
 
 // weui_color_new.xml 解析器：<color name="X">#light,#dark</color>（亮/暗逗号对，
@@ -344,6 +345,70 @@ static id mio_ChatBGMgr_bgViewForUser(id self, SEL _cmd, id username, CGSize siz
     return v;
 }
 
+// ── 壁纸透明化：主框架四页的 UITableView/UITableViewCell 白底 → 透明，露出 BG_0 壁纸 ──
+// log 74 实证：BG_0 pattern 已生效（顶部透出壁纸），被四页内容区自己的白底（表格/cell，
+// BG_1 族）盖住。仅当"壁纸激活 + 视图在四页/容器的 responder 链上"才强制透明；
+// 推出的二级页面（导航 push）不在链上，不受影响。pattern 色本身放行（是垫底的载体）。
+static BOOL MioWallpaperClearEligible(UIView *view) {
+    if (![[ThemeService shared] miWallpaperActive]) return NO;
+    NSString * const tags[] = {
+        @"NewMainFrameViewController",     // 会话
+        @"ContactsViewController",         // 通讯录
+        @"FindFriendEntryViewController",  // 发现
+        @"MoreViewController",             // 我的
+        @"MainTabBarViewController",       // 容器（8.0.80 新旧两名）
+        @"NewMainTabBarViewController",
+    };
+    id r = view;
+    int steps = 0;
+    while (r && steps++ < 40) {
+        NSString *cls = NSStringFromClass([r class]);
+        for (int i = 0; i < 6; i++) {
+            if ([cls isEqualToString:tags[i]]) return YES;
+        }
+        r = [(NSObject *)r nextResponder];
+    }
+    return NO;
+}
+
+static BOOL MioIsWallpaperPatternColor(UIColor *c) {
+    if (!c) return NO;
+    return c == [[ThemeService shared] miWallpaperPatternColorForName:@"BG_0"];
+}
+
+static void (*g_orig_UITV_setBg)(id, SEL, UIColor *);
+
+static void mio_UITV_setBg(id self, SEL _cmd, UIColor *c) {
+    if (c && !MioIsWallpaperPatternColor(c) && MioWallpaperClearEligible(self)) {
+        static NSInteger budget = 20;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] tableView 透明化 %@", NSStringFromClass([self class]));
+        c = [UIColor clearColor];
+    }
+    g_orig_UITV_setBg(self, _cmd, c);
+}
+
+static void (*g_orig_UITCell_setBg)(id, SEL, UIColor *);
+
+static void mio_UITCell_setBg(id self, SEL _cmd, UIColor *c) {
+    if (c && !MioIsWallpaperPatternColor(c) && MioWallpaperClearEligible(self)) {
+        static NSInteger budget = 40;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] cell 透明化 %@", NSStringFromClass([self class]));
+        c = [UIColor clearColor];
+    }
+    g_orig_UITCell_setBg(self, _cmd, c);
+}
+
+static void (*g_orig_UITCell_setBgView)(id, SEL, UIView *);
+
+static void mio_UITCell_setBgView(id self, SEL _cmd, UIView *v) {
+    if (v && MioWallpaperClearEligible(self)) {
+        static NSInteger budget = 20;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] cell.backgroundView 移除 %@", NSStringFromClass([self class]));
+        v = nil;
+    }
+    g_orig_UITCell_setBgView(self, _cmd, v);
+}
+
 @implementation ThemeService {
     NSCache *_imageCache; // key = 主题名|L/D|请求名，value = UIImage 或 NSNull（未命中也缓存，挡高频磁盘读）
     NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
@@ -495,6 +560,23 @@ static id mio_ChatBGMgr_bgViewForUser(id self, SEL _cmd, id username, CGSize siz
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ ChatBackgroundMgr 类不存在");
+        }
+
+        // 壁纸透明化：主框架四页表格/cell 白底 → 透明（壁纸激活时）
+        Class uitvCls = objc_getClass("UITableView");
+        if (uitvCls) {
+            SEL sb = NSSelectorFromString(@"setBackgroundColor:");
+            MSHookMessageEx(uitvCls, sb, (IMP)mio_UITV_setBg, (IMP *)&g_orig_UITV_setBg);
+            WPLog(@"Theme", @"[HOOK] ✓ -[UITableView setBackgroundColor:]（壁纸透明化）");
+        }
+        Class uitCellCls = objc_getClass("UITableViewCell");
+        if (uitCellCls) {
+            SEL sb = NSSelectorFromString(@"setBackgroundColor:");
+            MSHookMessageEx(uitCellCls, sb, (IMP)mio_UITCell_setBg, (IMP *)&g_orig_UITCell_setBg);
+            WPLog(@"Theme", @"[HOOK] ✓ -[UITableViewCell setBackgroundColor:]（壁纸透明化）");
+            SEL sbv = NSSelectorFromString(@"setBackgroundView:");
+            MSHookMessageEx(uitCellCls, sbv, (IMP)mio_UITCell_setBgView, (IMP *)&g_orig_UITCell_setBgView);
+            WPLog(@"Theme", @"[HOOK] ✓ -[UITableViewCell setBackgroundView:]（壁纸透明化）");
         }
     });
 }
@@ -711,6 +793,13 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     }];
     WPLog(@"Theme", @"[WALLPAPER] BG_0 → 壁纸 pattern 亮<%@> 暗<%@>", lightRef, darkImg);
     return _wallpaperPatternColor;
+}
+
+// 壁纸是否激活（透明化 hook 的总闸）：主题启用 + 壁纸图存在（亮图为准，暗缺失用亮）
+- (BOOL)miWallpaperActive {
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return NO;
+    return [self miWallpaperImageForMode:NO] != nil;
 }
 
 // 一级：主题包内扫描。文件名（不区分大小写）含 wallpaper/chat_bg/chatbg 的 png 即候选——
