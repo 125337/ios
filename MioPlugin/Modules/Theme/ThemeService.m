@@ -60,7 +60,10 @@
 // 图标层（按请求名查 themes/<当前主题>/，按当前屏幕亮暗取亮/暗文件，静态返回）：
 //   ① -[MMThemeManager imageNamed:]                 位图（D519 的 PNG 走这里）
 //   ② -[MMThemeManager imageNamed:warnIfNotFound:]  内部入口变体（微信代码可能直呼它绕过①）
-//   ③ +[WCSVGImage imageNamed:fromConfig:]          SVG 图标位（icons_filled_*/icons_outlined_*）
+// ③ +[WCSVGImage imageNamed:...]               SVG 图标位（icons_filled_*/icons_outlined_*）
+//   —— WCSVGImage 取图是一整族类方法（imageNamed:/color:/size:/fromConfig: 等 8 个变体），
+//   底栏带颜色/尺寸参数走的是 imageNamed:color: 等变体（log 70 实证 fromConfig 一个不够），
+//   家族全 hook，命中主题包文件则返回主题 PNG（tint 参数忽略），未命中走原实现。
 //   缓存键带亮暗位（微信原生切亮暗时会重新取图，键不含模式会把旧模式的图原样还回去）；
 //   暗色下无暗变体 → 用主题亮图（保持整屏同源配色）；文件按 @3x/@2x 后缀设 scale。
 // 颜色层：hook 取色查询两个入口（微信助手符号表实锤同款路线）：
@@ -103,37 +106,115 @@ static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name)
     return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
 }
 
-// ── 一次性诊断：底栏图标（icons_filled/outlined_{contacts,discover,me,chat}）走哪个入口 ──
-static void MioLogTabBarProbe(NSString *entry, NSString *name, BOOL hit) {
+// ── 诊断：取图全链路日志（每个入口每个名字只打一次，cap 400）──
+static void MioLogImgRequest(NSString *entry, NSString *name, BOOL hit) {
     static NSMutableSet<NSString *> *seen = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
-    if (!name || seen.count > 32 || [seen containsObject:name]) return;
-    if ([name rangeOfString:@"icons_(filled|outlined)_(contacts|discover|me|chat)"
-                    options:NSRegularExpressionSearch].location == NSNotFound) return;
+    if (!name || seen.count > 400 || [seen containsObject:name]) return;
     [seen addObject:name];
-    WPLog(@"Theme", @"[TABBAR] %@ name=%@ 主题命中=%d", entry, name, hit);
+    BOOL dark = [UIScreen mainScreen].traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    WPLog(@"Theme", @"[IMG] %@ name=%@ 命中=%d dark=%d", entry, name, hit, dark ? 1 : 0);
 }
 
+// MMThemeManager 两个位图入口
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
-    MioLogTabBarProbe(@"MMThemeManager.imageNamed", name, themed != nil);
+    MioLogImgRequest(@"MMThemeManager.imageNamed", name, themed != nil);
     if (themed) return themed;
     return g_orig_MMImageNamed(self, _cmd, name);
 }
 
 static UIImage *mio_MMThemeManager_imageNamed_warnIfNotFound(id self, SEL _cmd, NSString *name, BOOL warn) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
-    MioLogTabBarProbe(@"MMThemeManager.imageNamed:warnIfNotFound", name, themed != nil);
+    MioLogImgRequest(@"MMThemeManager.imageNamed:warnIfNotFound", name, themed != nil);
     if (themed) return themed;
     return g_orig_MMImageNamedWarn(self, _cmd, name, warn);
 }
 
+// ── WCSVGImage 取图家族（8 个类方法变体，全部 hook 元类）──
+// 命中主题包文件 → 返回主题 PNG（color/size/tint 参数忽略，包内图即最终形态）；未命中走原实现
+static id (*g_orig_SVG_imageNamed)(id, SEL, NSString *);
+static id (*g_orig_SVG_imageNamed_color)(id, SEL, NSString *, UIColor *);
+static id (*g_orig_SVG_imageNamed_color_alpha)(id, SEL, NSString *, UIColor *, double);
+static id (*g_orig_SVG_imageNamed_color_alpha_rotate)(id, SEL, NSString *, UIColor *, double, double);
+static id (*g_orig_SVG_imageNamed_size)(id, SEL, NSString *, CGSize);
+static id (*g_orig_SVG_imageNamed_size_color)(id, SEL, NSString *, CGSize, UIColor *);
+static id (*g_orig_SVG_imageNamed_size_color_alpha_rotate)(id, SEL, NSString *, CGSize, UIColor *, double, double);
+
+static id mio_SVG_imageNamed(id self, SEL _cmd, NSString *name) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed(self, _cmd, name);
+}
+
+static id mio_SVG_imageNamed_color(id self, SEL _cmd, NSString *name, UIColor *color) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed:color:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed_color(self, _cmd, name, color);
+}
+
+static id mio_SVG_imageNamed_color_alpha(id self, SEL _cmd, NSString *name, UIColor *color, double alpha) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed:color:alpha:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed_color_alpha(self, _cmd, name, color, alpha);
+}
+
+static id mio_SVG_imageNamed_color_alpha_rotate(id self, SEL _cmd, NSString *name, UIColor *color, double alpha, double rotate) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed:color:alpha:rotate:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed_color_alpha_rotate(self, _cmd, name, color, alpha, rotate);
+}
+
+static id mio_SVG_imageNamed_size(id self, SEL _cmd, NSString *name, CGSize size) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed:size:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed_size(self, _cmd, name, size);
+}
+
+static id mio_SVG_imageNamed_size_color(id self, SEL _cmd, NSString *name, CGSize size, UIColor *color) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed:size:color:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed_size_color(self, _cmd, name, size, color);
+}
+
+static id mio_SVG_imageNamed_size_color_alpha_rotate(id self, SEL _cmd, NSString *name, CGSize size, UIColor *color, double alpha, double rotate) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"SVG.imageNamed:size:color:alpha:rotate:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_SVG_imageNamed_size_color_alpha_rotate(self, _cmd, name, size, color, alpha, rotate);
+}
+
 static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString *name, id config) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
-    MioLogTabBarProbe(@"WCSVGImage.imageNamed:fromConfig", name, themed != nil);
+    MioLogImgRequest(@"SVG.imageNamed:fromConfig:", name, themed != nil);
     if (themed) return themed;
     return g_orig_SVGImageNamedFromConfig(self, _cmd, name, config);
+}
+
+// ── UIImage 原生取图（底栏可能不走微信任何管理器，直呼 UIKit）──
+// 同样接主题 serve：命中主题包文件返回主题 PNG，否则原实现
+static UIImage *(*g_orig_UIImage_imageNamed)(id, SEL, NSString *);
+static UIImage *(*g_orig_UIImage_imageNamed_bundle_traits)(id, SEL, NSString *, NSBundle *, UITraitCollection *);
+
+static UIImage *mio_UIImage_imageNamed(id self, SEL _cmd, NSString *name) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"UIImage.imageNamed", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_UIImage_imageNamed(self, _cmd, name);
+}
+
+static UIImage *mio_UIImage_imageNamed_bundle_traits(id self, SEL _cmd, NSString *name, NSBundle *bundle, UITraitCollection *traits) {
+    UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogImgRequest(@"UIImage.imageNamed:inBundle:compatibleWithTraitCollection:", name, themed != nil);
+    if (themed) return themed;
+    return g_orig_UIImage_imageNamed_bundle_traits(self, _cmd, name, bundle, traits);
 }
 
 // ── 亮暗配对枢纽（DarkModeImageMgr）──
@@ -172,6 +253,12 @@ static NSString *(*g_orig_ChatBGMgr_getImagePath)(id, SEL, id);
 static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
     id orig = g_orig_ChatBGMgr_getImagePath(self, _cmd, username);
     NSString *ours = [[ThemeService shared] miWallpaperPathOverride];
+    static NSInteger budget = 20; // 诊断：前 20 次询问全打（user/原值/我方决定）
+    if (budget-- > 0) {
+        WPLog(@"Theme", @"[WALLPAPER] 询问 user=%@ orig=<%@ %@> ours=%@",
+              username, [orig class], orig,
+              ours.length ? [ours lastPathComponent] : @"nil");
+    }
     if (!ours.length) return orig;
     if ([orig isKindOfClass:[NSURL class]]) return [NSURL fileURLWithPath:ours];
     return ours;
@@ -224,17 +311,44 @@ static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
 
         Class svgCls = objc_getClass("WCSVGImage");
         if (svgCls) {
-            SEL s2 = NSSelectorFromString(@"imageNamed:fromConfig:");
-            if (class_getClassMethod(svgCls, s2)) {
-                // 类方法 → hook 元类
-                MSHookMessageEx(object_getClass(svgCls), s2,
-                                (IMP)mio_WCSVGImage_imageNamed_fromConfig, (IMP *)&g_orig_SVGImageNamedFromConfig);
-                WPLog(@"Theme", @"[HOOK] ✓ +[WCSVGImage imageNamed:fromConfig:]");
-            } else {
-                WPLog(@"Theme", @"[HOOK] ✗ WCSVGImage imageNamed:fromConfig: 不存在");
+            // 家族全 hook：底栏带颜色/尺寸参数走 imageNamed:color: 等变体（log 70 实证 fromConfig 一个不够）
+            Class metaCls = object_getClass(svgCls);
+            struct { const char *sel; IMP imp; void **orig; const char *tag; } svgHooks[] = {
+                {"imageNamed:",                          (IMP)mio_SVG_imageNamed,                       (void **)&g_orig_SVG_imageNamed,                    "imageNamed:"},
+                {"imageNamed:color:",                    (IMP)mio_SVG_imageNamed_color,                 (void **)&g_orig_SVG_imageNamed_color,              "imageNamed:color:"},
+                {"imageNamed:color:alpha:",              (IMP)mio_SVG_imageNamed_color_alpha,           (void **)&g_orig_SVG_imageNamed_color_alpha,        "imageNamed:color:alpha:"},
+                {"imageNamed:color:alpha:rotate:",       (IMP)mio_SVG_imageNamed_color_alpha_rotate,    (void **)&g_orig_SVG_imageNamed_color_alpha_rotate, "imageNamed:color:alpha:rotate:"},
+                {"imageNamed:size:",                     (IMP)mio_SVG_imageNamed_size,                  (void **)&g_orig_SVG_imageNamed_size,               "imageNamed:size:"},
+                {"imageNamed:size:color:",               (IMP)mio_SVG_imageNamed_size_color,            (void **)&g_orig_SVG_imageNamed_size_color,         "imageNamed:size:color:"},
+                {"imageNamed:size:color:alpha:rotate:",  (IMP)mio_SVG_imageNamed_size_color_alpha_rotate, (void **)&g_orig_SVG_imageNamed_size_color_alpha_rotate, "imageNamed:size:color:alpha:rotate:"},
+                {"imageNamed:fromConfig:",               (IMP)mio_WCSVGImage_imageNamed_fromConfig,     (void **)&g_orig_SVGImageNamedFromConfig,           "imageNamed:fromConfig:"},
+            };
+            for (unsigned i = 0; i < sizeof(svgHooks) / sizeof(svgHooks[0]); i++) {
+                SEL s = NSSelectorFromString(@(svgHooks[i].sel));
+                if (class_getClassMethod(svgCls, s)) {
+                    MSHookMessageEx(metaCls, s, svgHooks[i].imp, svgHooks[i].orig);
+                    WPLog(@"Theme", @"[HOOK] ✓ +[WCSVGImage %@]", @(svgHooks[i].tag));
+                } else {
+                    WPLog(@"Theme", @"[HOOK] ✗ WCSVGImage %@ 不存在", @(svgHooks[i].tag));
+                }
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ WCSVGImage 类不存在");
+        }
+
+        // UIImage 原生取图（底栏可能直呼 UIKit）——同样接主题 serve
+        Class uiImgCls = objc_getClass("UIImage");
+        if (uiImgCls) {
+            SEL ui1 = NSSelectorFromString(@"imageNamed:");
+            if (class_getClassMethod(uiImgCls, ui1)) {
+                MSHookMessageEx(object_getClass(uiImgCls), ui1, (IMP)mio_UIImage_imageNamed, (IMP *)&g_orig_UIImage_imageNamed);
+                WPLog(@"Theme", @"[HOOK] ✓ +[UIImage imageNamed:]");
+            }
+            SEL ui2 = NSSelectorFromString(@"imageNamed:inBundle:compatibleWithTraitCollection:");
+            if (class_getClassMethod(uiImgCls, ui2)) {
+                MSHookMessageEx(object_getClass(uiImgCls), ui2, (IMP)mio_UIImage_imageNamed_bundle_traits, (IMP *)&g_orig_UIImage_imageNamed_bundle_traits);
+                WPLog(@"Theme", @"[HOOK] ✓ +[UIImage imageNamed:inBundle:compatibleWithTraitCollection:]");
+            }
         }
 
         Class colorMgrCls = objc_getClass("WCColorMgr");
@@ -429,16 +543,27 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     BOOL dark = [UIScreen mainScreen].traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     NSString *themeDir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
     NSString *p = [self miWallpaperPathForThemeDir:themeDir dark:dark];
-    if (p.length) return p;
     // 二级：用户自设图 Library/Preferences/Mio/wallpaper[_dark].png（无 UI，Filza 放文件即可）
+    NSString *level2 = nil;
     NSString *mioDir = [[ThemeConfig mioThemesDir] stringByDeletingLastPathComponent];
     if (dark) {
         NSString *dk = [mioDir stringByAppendingPathComponent:@"wallpaper_dark.png"];
-        if ([[NSFileManager defaultManager] fileExistsAtPath:dk]) return dk;
+        if ([[NSFileManager defaultManager] fileExistsAtPath:dk]) level2 = dk;
     }
-    NSString *lt = [mioDir stringByAppendingPathComponent:@"wallpaper.png"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:lt]) return lt;
-    return nil;
+    if (!level2.length) {
+        NSString *lt = [mioDir stringByAppendingPathComponent:@"wallpaper.png"];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:lt]) level2 = lt;
+    }
+    NSString *final_ = p.length ? p : level2;
+    static NSInteger budget = 20; // 诊断：决策全打（一级/二级/落空）
+    if (budget-- > 0) {
+        WPLog(@"Theme", @"[WALLPAPER] 决策 dark=%d 一级(包内)=%@ 二级(自设)=%@ → %@",
+              dark,
+              p.length ? [p lastPathComponent] : @"无",
+              level2.length ? [level2 lastPathComponent] : @"无",
+              final_.length ? [final_ lastPathComponent] : @"放行原实现");
+    }
+    return final_;
 }
 
 // 一级：主题包内扫描。文件名（不区分大小写）含 wallpaper/chat_bg/chatbg 的 png 即候选——
@@ -462,6 +587,8 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
             }
             cands = [m copy];
             _wallpaperScanCache[dir] = cands;
+            WPLog(@"Theme", @"[WALLPAPER] 扫描 %@ → %lu 候选%@", dir.lastPathComponent, (unsigned long)cands.count,
+                  cands.count ? [NSString stringWithFormat:@": %@", [cands componentsJoinedByString:@", "]] : @"");
         }
         if (!cands.count) return nil;
         if (dark) {
