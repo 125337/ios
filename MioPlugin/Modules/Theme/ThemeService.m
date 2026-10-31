@@ -439,8 +439,6 @@ static void mio_UITCell_setBgView(id self, SEL _cmd, UIView *v) {
     g_orig_UITCell_setBgView(self, _cmd, v);
 }
 
-// 泛化兜底：表格内容物里任何 UIView 的底色（ItemView/中间层白板/置顶卡片）→ 透明。
-// 必须同时满足：壁纸激活 + 8 层内有表格锚点 + responder 链在四页上
 static void (*g_orig_UIV_setBg)(id, SEL, UIColor *);
 
 static void mio_UIV_setBg(id self, SEL _cmd, UIColor *c) {
@@ -453,44 +451,6 @@ static void mio_UIV_setBg(id self, SEL _cmd, UIColor *c) {
         c = [UIColor clearColor];
     }
     g_orig_UIV_setBg(self, _cmd, c);
-}
-
-// 最底层兜底：layer 直赋（view.layer.backgroundColor = ...）绕过一切 ObjC setter——
-// 置顶卡片 ItemView / 通讯录 MMMainTableView 三轮日志零 setter 命中的推断落点。
-// layer.delegate = 宿主 view，用同一组 gate；UIKit setter 内部也走这里，两路合一。
-static BOOL MioIsWhitish(UIColor *c) {
-    CGFloat r, g, b, a;
-    if (![c getRed:&r green:&g blue:&b alpha:&a]) return NO;
-    return a > 0.5 && r > 0.88 && g > 0.88 && b > 0.88;
-}
-
-static void (*g_orig_CAL_setBg)(id, SEL, UIColor *);
-
-static void mio_CAL_setBg(id self, SEL _cmd, UIColor *c) {
-    id del = [(CALayer *)self delegate];
-    if (c && [del isKindOfClass:[UIView class]] && !MioIsWallpaperPatternColor(c)) {
-        UIView *host = (UIView *)del;
-        NSString *hostCls = NSStringFromClass([host class]);
-        BOOL inTable = MioInsideTableContent(host);
-        if (inTable && MioWallpaperClearEligible(host)) {
-            static NSInteger budget = 40;
-            if (budget-- > 0) {
-                WPLog(@"Theme", @"[WALLPAPER] layer 透明化 host=%@ frame=%@ c=%@",
-                      hostCls, NSStringFromCGRect(host.frame), c);
-            }
-            c = [UIColor clearColor];
-        } else {
-            // 诊断：白底/表格系视图但 gate 没放行 → 打出卡在哪个条件上（一次性排查用）
-            static NSInteger dbgBudget = 30;
-            if (dbgBudget-- > 0
-                && (MioIsWhitish(c) || [hostCls containsString:@"ItemView"]
-                    || [hostCls containsString:@"Fold"] || [hostCls containsString:@"TableView"])) {
-                WPLog(@"Theme", @"[WALLPAPER] layer 观察(未处理) host=%@ inTable=%d fourPage=%@ c=%@",
-                      hostCls, inTable, MioWallpaperClearEligible(host) ? @"Y" : @"N", c);
-            }
-        }
-    }
-    g_orig_CAL_setBg(self, _cmd, c);
 }
 
 @implementation ThemeService {
@@ -672,13 +632,9 @@ static void mio_CAL_setBg(id self, SEL _cmd, UIColor *c) {
             MSHookMessageEx(uivCls, sb, (IMP)mio_UIV_setBg, (IMP *)&g_orig_UIV_setBg);
             WPLog(@"Theme", @"[HOOK] ✓ -[UIView setBackgroundColor:]（壁纸透明化·泛化）");
         }
-        // 最底层：layer 直赋兜底（绕过一切 ObjC setter 的白底都在这）
-        Class calCls = objc_getClass("CALayer");
-        if (calCls) {
-            SEL sb = NSSelectorFromString(@"setBackgroundColor:");
-            MSHookMessageEx(calCls, sb, (IMP)mio_CAL_setBg, (IMP *)&g_orig_CAL_setBg);
-            WPLog(@"Theme", @"[HOOK] ✓ -[CALayer setBackgroundColor:]（壁纸透明化·layer）");
-        }
+        // 注：CALayer 级兜底已摘除——CALayer setBackgroundColor: 是全系统最高频 setter，
+        // 多线程热路径上跑视图链遍历+读盘解码导致启动期 EXC_GUARD 闪退（8a21151 实测）。
+        // layer 直赋场景（置顶卡片 ItemView/通讯录表）待换安全方案（如 MFItemView 定点 hook）再上。
     });
 }
 
