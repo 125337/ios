@@ -568,6 +568,20 @@ static void mio_Fold_layout(id self, SEL _cmd) {
     }
 }
 
+// ④ 置顶卡片本体：白底赋值晚于 fold 容器首次 layout（首次进页不透、滑出复用后才透
+// 的根因），在卡片自身 layout 之后清——赋值点必在卡片布局周期内或之前，时间上不可能再早。
+static void (*g_orig_MFItem_layout)(id, SEL);
+
+static void mio_MFItem_layout(id self, SEL _cmd) {
+    g_orig_MFItem_layout(self, _cmd);
+    UIView *v = self;
+    if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
+        MioWpClearOpaque(v, 3);
+        static NSInteger budget = 15;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 置顶卡片清扫 %@", NSStringFromClass(v.class));
+    }
+}
+
 // ④ 通讯录页表本体：setContentInset: 是表的低频配置点（ThemePro 同点位），顺手清底
 static void (*g_orig_MMTV_setContentInset)(id, SEL, UIEdgeInsets);
 
@@ -825,6 +839,19 @@ static id mio_MMUVC_viewForHeader(id self, SEL _cmd, UITableView *tv, NSInteger 
             WPLog(@"Theme", @"[HOOK] ✓ MainFrameSectionFoldView init+layout（通道④置顶卡片）");
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ MainFrameSectionFoldView 类不存在（通道④置顶卡片跳过）");
+        }
+        // ④ 置顶卡片本体（白底赋值晚于 fold 容器 layout，须在卡片自身布局后清）
+        Class mfItemCls = objc_getClass("MainFrameItemView");
+        if (mfItemCls) {
+            SEL layI = NSSelectorFromString(@"layoutSubviews");
+            if (class_getInstanceMethod(mfItemCls, layI)) {
+                MSHookMessageEx(mfItemCls, layI, (IMP)mio_MFItem_layout, (IMP *)&g_orig_MFItem_layout);
+                WPLog(@"Theme", @"[HOOK] ✓ MainFrameItemView layoutSubviews（通道④置顶卡片本体）");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ MainFrameItemView layoutSubviews 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ MainFrameItemView 类不存在");
         }
         // ④ 通讯录页表本体
         Class mmTvCls = objc_getClass("MMMainTableView");
