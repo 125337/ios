@@ -491,22 +491,35 @@ static NSString *MioColorDesc(UIColor *c) {
     return [c description];
 }
 
-static void MioDumpTree(UIView *v, int depth, NSMutableString *out) {
-    if (!v || depth > 8) return;
+static void MioDumpTree(UIView *v, int depth, NSMutableString *out, int *lines) {
+    if (!v || depth > 8 || *lines > 120) return;
+    (*lines)++;
     NSString *img = @"-";
     if ([v isKindOfClass:[UIImageView class]]) {
         UIImage *im = [(UIImageView *)v image];
         img = im ? [NSString stringWithFormat:@"<UIImage %p %@>", (void *)im, NSStringFromCGSize(im.size)] : @"nil";
     }
-    UIView *bv = nil;
-    if ([v isKindOfClass:[UITableViewCell class]]) bv = [(UITableViewCell *)v backgroundView];
-    [out appendFormat:@"%@<%@ %p> frame=%@ bg=%@ bgView=%@ img=%@\n",
+    NSString *cls = NSStringFromClass(v.class);
+    NSString *bgvDesc = @"-";
+    if ([v isKindOfClass:[UITableViewCell class]]) {
+        UITableViewCell *cell = (UITableViewCell *)v;
+        UIView *bgv = cell.backgroundView;
+        bgvDesc = bgv ? [NSString stringWithFormat:@"%@(%@)", NSStringFromClass(bgv.class), MioColorDesc(bgv.backgroundColor)] : @"nil";
+        if (cell.selectedBackgroundView) {
+            bgvDesc = [NSString stringWithFormat:@"%@ sel=%@", bgvDesc, MioColorDesc(cell.selectedBackgroundView.backgroundColor)];
+        }
+    }
+    NSString *extra = @"";
+    if ([cls containsString:@"VisualEffect"]) {
+        extra = [NSString stringWithFormat:@" effect=%@", [(UIVisualEffectView *)v effect]];
+    }
+    [out appendFormat:@"%@<%@ %p> frame=%@ bg=%@ bgView=%@ img=%@%@\n",
         [@"" stringByPaddingToLength:(NSUInteger)depth * 2 withString:@" " startingAtIndex:0],
-        NSStringFromClass(v.class), (void *)v, NSStringFromCGRect(v.frame),
+        cls, (void *)v, NSStringFromCGRect(v.frame),
         MioColorDesc(v.backgroundColor),
-        bv ? NSStringFromClass(bv.class) : @"-",
-        img];
-    for (UIView *s in v.subviews) MioDumpTree(s, depth + 1, out);
+        bgvDesc,
+        img, extra];
+    for (UIView *s in v.subviews) MioDumpTree(s, depth + 1, out, lines);
 }
 
 static NSString *MioChainDesc(UIView *v, int up) {
@@ -540,7 +553,29 @@ static void MioDumpFoldDiag(UIView *fold, const char *when) {
             fold.superview ? NSStringFromClass(fold.superview.class) : @"nil"];
     }
     [out appendString:@"[DUMP] 子树:\n"];
-    MioDumpTree(fold, 1, out);
+    int lines = 0;
+    MioDumpTree(fold, 1, out, &lines);
+    WPLog(@"Theme", @"%@", out);
+}
+
+// 整表 dump：根=所属 UITableView（覆盖 Fake cell、包装层、cell.backgroundView、effect view）
+static void MioDumpTableDiag(UIView *any, const char *when) {
+    UIView *p = any;
+    for (int i = 0; p && i < 6; i++, p = p.superview) {
+        if ([p isKindOfClass:[UITableView class]] && p != any) break;
+    }
+    if (!p) return;
+    UITableView *tv = (UITableView *)p;
+    NSMutableString *out = [NSMutableString stringWithFormat:
+        @"\n[TABLE-DUMP][%s] 表=<%@ %p> tableBg=%@ tableBgView=%@ tableHeaderView=%@\n",
+        when, NSStringFromClass(tv.class), (void *)tv,
+        MioColorDesc(tv.backgroundColor),
+        tv.backgroundView ? NSStringFromClass(tv.backgroundView.class) : @"-",
+        tv.tableHeaderView ? NSStringFromClass(tv.tableHeaderView.class) : @"-"];
+    [out appendFormat:@"[TABLE-DUMP] 父链:%@\n", MioChainDesc(tv, 4)];
+    [out appendString:@"[TABLE-DUMP] 子树(深度5/上限120行):\n"];
+    int lines = 0;
+    MioDumpTree(tv, 1, out, &lines);
     WPLog(@"Theme", @"%@", out);
 }
 
@@ -639,6 +674,12 @@ static void mio_UITCell_layoutSubviews(id self, SEL _cmd) {
             static NSInteger budget = 30;
             if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] cell 布局期压制 %@", NSStringFromClass([cell class]));
         }
+        // 配置期 cell 不在表内 → backgroundView setter 的 gate 放行白图，布局期补杀
+        if (cell.backgroundView) {
+            g_orig_UITCell_setBgView(cell, @selector(setBackgroundView:), nil);
+            static NSInteger bgBudget = 15;
+            if (bgBudget-- > 0) WPLog(@"Theme", @"[WALLPAPER] cell.backgroundView 布局期移除 %@", NSStringFromClass([cell class]));
+        }
         for (UIView *sv in cell.contentView.subviews) MioWpClearOpaque(sv, 5);
         if (!loggedSweep) {
             loggedSweep = YES;
@@ -687,14 +728,13 @@ static void mio_Fold_layout(id self, SEL _cmd) {
     if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
         static NSInteger scanBudget = 1;
         if (scanBudget-- > 0) MioScanSetterOverrides(v);
-        static NSInteger dumpBudget = 2;
+        static NSInteger dumpBudget = 1;
         if (dumpBudget-- > 0) {
             MioDumpFoldDiag(v, "fold-layout");
-            // 延迟序列：抓"启动刷新把白刷回来"的时刻与载体（全链路排查②）
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+0.6s"); });
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpFoldDiag(v, "fold+2s"); });
+            MioDumpTableDiag(v, "table-now");
+            // 3.5s：覆盖启动 rebuild（rebuildMainSessions 实测在启动后 4-8s）之后的最终状态
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{ if (v.superview) MioDumpTableDiag(v, "table+3.5s"); });
         }
         MioWpClearOpaque(v, 3);
     }
@@ -708,11 +748,23 @@ static void mio_MFItem_layout(id self, SEL _cmd) {
     g_orig_MFItem_layout(self, _cmd);
     UIView *v = self;
     if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
-        static NSInteger dumpBudget = 2;
-        if (dumpBudget-- > 0) MioDumpFoldDiag(v, "item-layout");
         MioWpClearOpaque(v, 3);
         static NSInteger budget = 15;
         if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 置顶卡片清扫 %@", NSStringFromClass(v.class));
+    }
+}
+
+// ④ 置顶区真身（FLEX 实锤）：置顶卡片 = FakeMainFrameCell → FakeMainFramemItemView，
+// 不经过 MainFrameItemView，需同款定点清扫
+static void (*g_orig_FakeItem_layout)(id, SEL);
+
+static void mio_FakeItem_layout(id self, SEL _cmd) {
+    g_orig_FakeItem_layout(self, _cmd);
+    UIView *v = self;
+    if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
+        MioWpClearOpaque(v, 3);
+        static NSInteger budget = 15;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 置顶卡片清扫(Fake) %@", NSStringFromClass(v.class));
     }
 }
 
@@ -994,6 +1046,20 @@ static void mio_MSM_rebuild(id self, SEL _cmd) {
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ MainFrameItemView 类不存在");
+        }
+        // ④ 置顶区真身（FLEX 实锤 FakeMainFramemItemView，软装容错类名拼写）
+        Class fakeItemCls = objc_getClass("FakeMainFramemItemView");
+        if (!fakeItemCls) fakeItemCls = objc_getClass("FakeMainFrameItemView");
+        if (fakeItemCls) {
+            SEL flay = @selector(layoutSubviews);
+            if (class_getInstanceMethod(fakeItemCls, flay)) {
+                MSHookMessageEx(fakeItemCls, flay, (IMP)mio_FakeItem_layout, (IMP *)&g_orig_FakeItem_layout);
+                WPLog(@"Theme", @"[HOOK] ✓ %@ layoutSubviews（通道④置顶区真身）", NSStringFromClass(fakeItemCls));
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ %@ layoutSubviews 不存在", NSStringFromClass(fakeItemCls));
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ FakeMainFramemItemView 类不存在");
         }
         // ④ 通讯录页表本体
         Class mmTvCls = objc_getClass("MMMainTableView");
