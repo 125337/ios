@@ -768,6 +768,19 @@ static void mio_FakeItem_layout(id self, SEL _cmd) {
     }
 }
 
+// ④ NewMainFrameCell 重写了 setBackgroundColor:/layoutSubviews，UITableViewCell 级 hook
+// 拦不到（消息派发命中最近重写层）→ 类级直 hook 兜底，非白透明色一律放行
+static void (*g_orig_NMFCell_setBg)(id, SEL, UIColor *);
+
+static void mio_NMFCell_setBg(id self, SEL _cmd, UIColor *c) {
+    if (c && !MioIsWallpaperPatternColor(c) && [[ThemeService shared] miWallpaperActive]) {
+        c = [UIColor clearColor];
+        static NSInteger budget = 20;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] NewMainFrameCell 类级 setter 透明化");
+    }
+    g_orig_NMFCell_setBg(self, _cmd, c);
+}
+
 // ④ 通讯录页表本体：setContentInset: 是表的低频配置点（ThemePro 同点位），顺手清底
 static void (*g_orig_MMTV_setContentInset)(id, SEL, UIEdgeInsets);
 
@@ -1060,6 +1073,19 @@ static void mio_MSM_rebuild(id self, SEL _cmd) {
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ FakeMainFramemItemView 类不存在");
+        }
+        // ④ NewMainFrameCell 类级 setter 兜底（该类重写了 setter，基类 hook 拦不到）
+        Class nmfCellCls = objc_getClass("NewMainFrameCell");
+        if (nmfCellCls) {
+            SEL nsb = @selector(setBackgroundColor:);
+            if (class_getInstanceMethod(nmfCellCls, nsb)) {
+                MSHookMessageEx(nmfCellCls, nsb, (IMP)mio_NMFCell_setBg, (IMP *)&g_orig_NMFCell_setBg);
+                WPLog(@"Theme", @"[HOOK] ✓ NewMainFrameCell setBackgroundColor:（类级兜底）");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ NewMainFrameCell setBackgroundColor: 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ NewMainFrameCell 类不存在");
         }
         // ④ 通讯录页表本体
         Class mmTvCls = objc_getClass("MMMainTableView");
@@ -1425,6 +1451,14 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     if ([name isEqualToString:@"BG_0"]) {
         UIColor *wp = [self miWallpaperPatternColorForName:name];
         if (wp) return wp;
+    }
+    // 壁纸层根治（log 5 实锤链）：cell 白底 = 微信 getColor(BG_1) 从色表拿的动态亮暗色，
+    // 配置期 cell 不在表内 gate 放行、NewMainFrameCell 又重写 setter/layout 致基类 hook
+    // 全部拦不到 → 在源头把 BG_1 发成透明，所有页面/所有 cell 类/所有时序一次解决。
+    if ([name isEqualToString:@"BG_1"] && [self miWallpaperActive]) {
+        static NSInteger budget = 10;
+        if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] BG_1 → clear（壁纸模式 cell 底色源头透明化）");
+        return [UIColor clearColor];
     }
 
     NSString *themeDir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
