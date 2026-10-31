@@ -481,10 +481,77 @@ static BOOL MioWpTableGate(UITableView *tv) {
 
 // 定点清扫：容器自身+子树（限深）不透明底色 → 透明。这些白底多为 layer 直赋，但
 // UIView.backgroundColor 与 layer 同源，读写即达。只在定点布局/配置点调用，非全局 hook。
+static void MioWpClearOpaque(UIView *v, int depth);
+
+// ── 诊断 dump（预算限流）：子树全量 + 父链上溯 + 表信息，定位置顶卡片白底真实载体 ──
+static NSString *MioColorDesc(UIColor *c) {
+    if (!c) return @"nil";
+    if (MioIsWallpaperPatternColor(c)) return @"<壁纸pattern>";
+    if ([c isEqual:[UIColor clearColor]]) return @"<clear>";
+    return [c description];
+}
+
+static void MioDumpTree(UIView *v, int depth, NSMutableString *out) {
+    if (!v || depth > 8) return;
+    NSString *img = @"-";
+    if ([v isKindOfClass:[UIImageView class]]) {
+        UIImage *im = [(UIImageView *)v image];
+        img = im ? [NSString stringWithFormat:@"<UIImage %p %@>", (void *)im, NSStringFromCGSize(im.size)] : @"nil";
+    }
+    UIView *bv = nil;
+    if ([v isKindOfClass:[UITableViewCell class]]) bv = [(UITableViewCell *)v backgroundView];
+    [out appendFormat:@"%@<%@ %p> frame=%@ bg=%@ bgView=%@ img=%@\n",
+        [@"" stringByPaddingToLength:(NSUInteger)depth * 2 withString:@" " startingAtIndex:0],
+        NSStringFromClass(v.class), (void *)v, NSStringFromCGRect(v.frame),
+        MioColorDesc(v.backgroundColor),
+        bv ? NSStringFromClass(bv.class) : @"-",
+        img];
+    for (UIView *s in v.subviews) MioDumpTree(s, depth + 1, out);
+}
+
+static NSString *MioChainDesc(UIView *v, int up) {
+    NSMutableString *s = [NSMutableString string];
+    UIView *p = v;
+    int i = 0;
+    while (p && i++ < up) {
+        [s appendFormat:@" ←%@ %p", NSStringFromClass(p.class), (void *)p];
+        p = p.superview;
+    }
+    return s;
+}
+
+static void MioDumpFoldDiag(UIView *fold, const char *when) {
+    NSMutableString *out = [NSMutableString stringWithFormat:
+        @"\n[DUMP][%s] fold=<%@ %p> 父链:%s\n", when, NSStringFromClass(fold.class), (void *)fold, ""];
+    [out appendFormat:@"[DUMP] 父链上溯:%@\n", MioChainDesc(fold, 8)];
+    UITableView *tv = nil;
+    UIView *p = fold.superview;
+    for (int i = 0; p && i < 6; i++, p = p.superview) {
+        if ([p isKindOfClass:[UITableView class]]) { tv = (UITableView *)p; break; }
+    }
+    if (tv) {
+        [out appendFormat:@"[DUMP] 表=<%@ %p> tableBg=%@ tableBgView=%@ tableHeaderView=%@\n",
+            NSStringFromClass(tv.class), (void *)tv,
+            MioColorDesc(tv.backgroundColor),
+            tv.backgroundView ? NSStringFromClass(tv.backgroundView.class) : @"-",
+            tv.tableHeaderView ? NSStringFromClass(tv.tableHeaderView.class) : @"-"];
+    } else {
+        [out appendFormat:@"[DUMP] 表：6 层内未找到 UITableView，superview=%@",
+            fold.superview ? NSStringFromClass(fold.superview.class) : @"nil"];
+    }
+    [out appendString:@"[DUMP] 子树:\n"];
+    MioDumpTree(fold, 1, out);
+    WPLog(@"Theme", @"%@", out);
+}
 static void MioWpClearOpaque(UIView *v, int depth) {
     if (!v || depth <= 0) return;
     UIColor *c = v.backgroundColor;
     if (c && !MioIsWallpaperPatternColor(c) && ![c isEqual:[UIColor clearColor]]) {
+        static NSInteger clearBudget = 40;
+        if (clearBudget-- > 0) {
+            WPLog(@"Theme", @"[WALLPAPER] 清扫命中 <%@ %p> bg=%@ frame=%@",
+                  NSStringFromClass(v.class), (void *)v, MioColorDesc(c), NSStringFromCGRect(v.frame));
+        }
         v.backgroundColor = [UIColor clearColor];
     }
     for (UIView *s in v.subviews) MioWpClearOpaque(s, depth - 1);
@@ -564,6 +631,16 @@ static void mio_Fold_layout(id self, SEL _cmd) {
     g_orig_Fold_layout(self, _cmd);
     UIView *v = self;
     if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
+        static NSInteger dumpBudget = 3;
+        if (dumpBudget-- > 0) {
+            MioDumpFoldDiag(v, "fold-layout");
+            if (dumpBudget == 2) { // 首次 dump 后延迟再抓一次，覆盖"布局后才赋白"的时序
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    if (v.superview) MioDumpFoldDiag(v, "fold-layout+0.6s");
+                });
+            }
+        }
         MioWpClearOpaque(v, 3);
     }
 }
@@ -576,6 +653,8 @@ static void mio_MFItem_layout(id self, SEL _cmd) {
     g_orig_MFItem_layout(self, _cmd);
     UIView *v = self;
     if ([[ThemeService shared] miWallpaperActive] && MioWallpaperClearEligible(v)) {
+        static NSInteger dumpBudget = 2;
+        if (dumpBudget-- > 0) MioDumpFoldDiag(v, "item-layout");
         MioWpClearOpaque(v, 3);
         static NSInteger budget = 15;
         if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 置顶卡片清扫 %@", NSStringFromClass(v.class));
