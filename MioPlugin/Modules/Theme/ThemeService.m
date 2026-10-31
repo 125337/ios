@@ -549,21 +549,47 @@ static BOOL MioNavEligible(UIView *bar) {
         || [top isEqualToString:@"MoreViewController"];
 }
 
-// 底栏：包内 bottom_bg 存在才贴（UITabBarAppearance 双位 + legacy 同步），无图保持原生
+// 底栏：包内 bottom_bg 存在才贴。不新建/赋回 appearance 对象——log 8 实锤：整份赋回
+// 会把 UIKit 默认"图标+标题"堆叠布局顶上去（图标变小、标题冒出来，微信的 item 定制
+// 不在 standardAppearance 对象里）。改为：背景字段就地清透明（同一个对象赋回，item
+// 配置一个字节不动）+ bottom_bg 垫底 UIImageView（ThemePro 同款，布局保持微信原样）。
 static void MioApplyTabBarImage(UITabBar *tb) {
     if (!tb || ![[ThemeService shared] miWallpaperActive]) return;
     UIImage *bottom = [[ThemeService shared] miThemeImageForName:@"bottom_bg"];
     if (!bottom) return;
-    UITabBarAppearance *std = [tb.standardAppearance ?: [[UITabBarAppearance alloc] init] copy];
-    std.backgroundColor = nil;
-    std.backgroundImage = bottom;
-    std.shadowImage = MioEmptyImage();
-    std.shadowColor = nil;
-    tb.standardAppearance = std;
-    tb.scrollEdgeAppearance = std;
-    tb.backgroundImage = bottom; // legacy 同步（低版本/部分写入路径仍读）
+    // 1) 就地清背景（item 布局配置原封不动）
+    void (^clearBg)(UITabBarAppearance *) = ^(UITabBarAppearance *ap) {
+        if (!ap) return;
+        ap.backgroundColor = nil;
+        ap.backgroundImage = nil;
+        ap.backgroundEffect = nil;
+        ap.shadowImage = nil;
+        ap.shadowColor = nil;
+    };
+    UITabBarAppearance *std = tb.standardAppearance;
+    clearBg(std);
+    tb.standardAppearance = std; // 同一对象赋回，只触发背景重渲染
+    UIBarAppearance *edge = tb.scrollEdgeAppearance;
+    if (edge) {
+        clearBg((UITabBarAppearance *)edge);
+        tb.scrollEdgeAppearance = edge;
+    }
+    // 2) legacy 三件套（上一版实锤零布局副作用）
+    tb.backgroundImage = MioEmptyImage();
     tb.shadowImage = MioEmptyImage();
     tb.barTintColor = nil;
+    // 3) bottom_bg 垫底（不参与点击，跟随栏尺寸拉伸）
+    static char kMioTabBgKey;
+    UIImageView *bg = objc_getAssociatedObject(tb, &kMioTabBgKey);
+    if (!bg) {
+        bg = [[UIImageView alloc] initWithFrame:tb.bounds];
+        bg.userInteractionEnabled = NO;
+        bg.contentMode = UIViewContentModeScaleToFill;
+        bg.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        objc_setAssociatedObject(tb, &kMioTabBgKey, bg, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [tb insertSubview:bg atIndex:0];
+    }
+    if (bg.image != bottom) bg.image = bottom;
     static NSInteger budget = 8;
     if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 底栏贴图 bottom_bg %@", NSStringFromClass(tb.class));
 }
@@ -589,13 +615,14 @@ static void (*g_orig_UINavBar_setStdAppearance)(id, SEL, UINavigationBarAppearan
 static void (*g_orig_UINavBar_setEdgeAppearance)(id, SEL, UINavigationBarAppearance *);
 static void (*g_orig_UINavBar_setItems)(id, SEL, NSArray *, BOOL);
 
-static char kMioNavOrigStd, kMioNavOrigEdge;
+static char kMioNavOrigStd, kMioNavOrigEdge, kMioNavThemed;
 
 static void MioApplyNavBarImage(UINavigationBar *nav) {
     if (!nav) return;
     if (MioNavEligible(nav)) {
         UIImage *top = [[ThemeService shared] miThemeImageForName:@"top_bg"];
         if (!top) return; // 包内无 top_bg → 完全不动原生
+        if ([(id)objc_getAssociatedObject(nav, &kMioNavThemed) boolValue]) return; // 已贴（layoutSubviews 高频复查点防重贴）
         UINavigationBarAppearance *origStd = objc_getAssociatedObject(nav, &kMioNavOrigStd) ?: nav.standardAppearance;
         UINavigationBarAppearance *origEdge = objc_getAssociatedObject(nav, &kMioNavOrigEdge) ?: nav.scrollEdgeAppearance;
         UINavigationBarAppearance *std = origStd ? [origStd copy] : nil;
@@ -613,6 +640,7 @@ static void MioApplyNavBarImage(UINavigationBar *nav) {
         // g_orig 直调（不经 hook），保留 incoming 的 titleAttributes/button 样式
         if (std) g_orig_UINavBar_setStdAppearance(nav, @selector(setStandardAppearance:), std);
         if (edge) g_orig_UINavBar_setEdgeAppearance(nav, @selector(setScrollEdgeAppearance:), edge);
+        objc_setAssociatedObject(nav, &kMioNavThemed, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         static NSInteger budget = 8;
         if (budget-- > 0) WPLog(@"Theme", @"[WALLPAPER] 顶栏贴图 top_bg %@", NSStringFromClass(nav.class));
     } else {
@@ -627,24 +655,36 @@ static void MioApplyNavBarImage(UINavigationBar *nav) {
             g_orig_UINavBar_setEdgeAppearance(nav, @selector(setScrollEdgeAppearance:), edge);
             objc_setAssociatedObject(nav, &kMioNavOrigEdge, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
+        objc_setAssociatedObject(nav, &kMioNavThemed, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 }
 
 // 微信重设 appearance → 新 incoming 挂为原外观后重贴（gate 不过则仅恢复，幂等）
 static void mio_UINavBar_setStdAppearance(id self, SEL _cmd, UINavigationBarAppearance *ap) {
     objc_setAssociatedObject(self, &kMioNavOrigStd, ap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kMioNavThemed, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     g_orig_UINavBar_setStdAppearance(self, _cmd, ap);
     if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
 }
 
 static void mio_UINavBar_setEdgeAppearance(id self, SEL _cmd, UINavigationBarAppearance *ap) {
     objc_setAssociatedObject(self, &kMioNavOrigEdge, ap, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kMioNavThemed, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     g_orig_UINavBar_setEdgeAppearance(self, _cmd, ap);
     if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
 }
 
 static void mio_UINavBar_setItems(id self, SEL _cmd, NSArray *items, BOOL animated) {
     g_orig_UINavBar_setItems(self, _cmd, items, animated);
+    if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
+}
+
+// 布局复查：配置期 gate 拦不到（bar 未入层级）、微信不走 setItems（log 8 全程 0 条顶栏贴图）
+// → layoutSubviews 时 bar 已在层级内，gate 必走通；themed 标记防重贴死循环
+static void (*g_orig_UINavBar_layoutSubviews)(id, SEL);
+
+static void mio_UINavBar_layoutSubviews(id self, SEL _cmd) {
+    g_orig_UINavBar_layoutSubviews(self, _cmd);
     if ([self isKindOfClass:[UINavigationBar class]]) MioApplyNavBarImage(self);
 }
 
@@ -898,7 +938,11 @@ static void mio_SearchBG_setBg(id self, SEL _cmd, UIImage *img, long long pos, l
             if (class_getInstanceMethod(uinavCls, sia)) {
                 MSHookMessageEx(uinavCls, sia, (IMP)mio_UINavBar_setItems, (IMP *)&g_orig_UINavBar_setItems);
             }
-            WPLog(@"Theme", @"[HOOK] ✓ UINavigationBar appearance+setItems（顶栏贴图）");
+            SEL lsv = NSSelectorFromString(@"layoutSubviews");
+            if (class_getInstanceMethod(uinavCls, lsv)) {
+                MSHookMessageEx(uinavCls, lsv, (IMP)mio_UINavBar_layoutSubviews, (IMP *)&g_orig_UINavBar_layoutSubviews);
+            }
+            WPLog(@"Theme", @"[HOOK] ✓ UINavigationBar appearance+setItems+layout（顶栏贴图）");
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ UINavigationBar 不可用（顶栏贴图跳过）");
         }
