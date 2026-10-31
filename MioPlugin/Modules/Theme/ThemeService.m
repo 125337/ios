@@ -23,6 +23,8 @@
 - (NSArray<NSString *> *)miDarkFileCandidatesForNames:(NSArray<NSString *> *)names threeX:(BOOL)threeX;
 - (nullable UIImage *)miLoadImageAtPath:(nullable NSString *)path;
 - (void)miRegisterServedImage:(nullable UIImage *)img lightPath:(nullable NSString *)lightPath darkPath:(nullable NSString *)darkPath;
+// 壁纸层（ChatBackgroundMgr hook 查询侧）
+- (nullable NSString *)miWallpaperPathOverride;
 @end
 
 // weui_color_new.xml 解析器：<color name="X">#light,#dark</color>（亮/暗逗号对，
@@ -72,6 +74,10 @@
 //   亮图是我们发出的主题图时，暗边直接换成主题包 _Dark 文件，微信自己的亮暗机器
 //   切换时经 darkModeImageForImage: 取暗边即得主题暗图（零检测、零重建）。
 // 应用主题 = 改配置 + 发切换通知；hook 常驻直读配置，冷启动无需重放。
+// 壁纸层：hook 聊天背景路径查询（⑦），三级来源——主题包内壁纸图（文件名含
+// wallpaper/chat_bg/chatbg 即候选，不强制主题包规范）→ 用户自设图
+// （Library/Preferences/Mio/wallpaper[_dark].png）→ 无则放行原实现；
+// 无暗版用亮图，与图标层同规则。
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 原实现
@@ -97,20 +103,35 @@ static id mio_WCColorMgr_getColorValueForName(id self, SEL _cmd, NSString *name)
     return g_orig_WCColorMgr_getColorValueForName(self, _cmd, name);
 }
 
+// ── 一次性诊断：底栏图标（icons_filled/outlined_{contacts,discover,me,chat}）走哪个入口 ──
+static void MioLogTabBarProbe(NSString *entry, NSString *name, BOOL hit) {
+    static NSMutableSet<NSString *> *seen = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ seen = [NSMutableSet set]; });
+    if (!name || seen.count > 32 || [seen containsObject:name]) return;
+    if ([name rangeOfString:@"icons_(filled|outlined)_(contacts|discover|me|chat)"
+                    options:NSRegularExpressionSearch].location == NSNotFound) return;
+    [seen addObject:name];
+    WPLog(@"Theme", @"[TABBAR] %@ name=%@ 主题命中=%d", entry, name, hit);
+}
+
 static UIImage *mio_MMThemeManager_imageNamed(id self, SEL _cmd, NSString *name) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogTabBarProbe(@"MMThemeManager.imageNamed", name, themed != nil);
     if (themed) return themed;
     return g_orig_MMImageNamed(self, _cmd, name);
 }
 
 static UIImage *mio_MMThemeManager_imageNamed_warnIfNotFound(id self, SEL _cmd, NSString *name, BOOL warn) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogTabBarProbe(@"MMThemeManager.imageNamed:warnIfNotFound", name, themed != nil);
     if (themed) return themed;
     return g_orig_MMImageNamedWarn(self, _cmd, name, warn);
 }
 
 static UIImage *mio_WCSVGImage_imageNamed_fromConfig(id self, SEL _cmd, NSString *name, id config) {
     UIImage *themed = [[ThemeService shared] miThemeImageForName:name];
+    MioLogTabBarProbe(@"WCSVGImage.imageNamed:fromConfig", name, themed != nil);
     if (themed) return themed;
     return g_orig_SVGImageNamedFromConfig(self, _cmd, name, config);
 }
@@ -141,10 +162,26 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
     return g_orig_DM_registerPair(self, _cmd, light, darkFinal);
 }
 
+// ── 壁纸层（聊天背景）──
+// 拦 -[ChatBackgroundMgr getChatBackgroundImagePathForUser:]：主题有壁纸图（主题包内
+// 扫描或用户自设）→ 返回我们的路径，聊天页背景视图/缩略图全部自动跟上；否则放行原实现。
+// 返回类型头文件未标注（id），按原实现返回值的实际类型仿制（NSString → 原样返回我们的；
+// NSURL → 包一层 fileURL）——防类型不符闪退。始终先调原实现，保持微信内部状态一致。
+static NSString *(*g_orig_ChatBGMgr_getImagePath)(id, SEL, id);
+
+static id mio_ChatBGMgr_getImagePath(id self, SEL _cmd, id username) {
+    id orig = g_orig_ChatBGMgr_getImagePath(self, _cmd, username);
+    NSString *ours = [[ThemeService shared] miWallpaperPathOverride];
+    if (!ours.length) return orig;
+    if ([orig isKindOfClass:[NSURL class]]) return [NSURL fileURLWithPath:ours];
+    return ours;
+}
+
 @implementation ThemeService {
     NSCache *_imageCache; // key = 主题名|L/D|请求名，value = UIImage 或 NSNull（未命中也缓存，挡高频磁盘读）
     NSDictionary<NSString *, NSString *> *_themeColorDict; // 主题色表 name → "#light,#dark"（取色时点拦截旁路查询）
     NSString *_themeColorDictPath;                          // 色表来源路径（变更时重载）
+    NSMutableDictionary<NSString *, NSArray<NSString *> *> *_wallpaperScanCache; // 主题目录 → 壁纸候选文件名（applyTheme 清）
 }
 
 + (instancetype)shared {
@@ -154,6 +191,7 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
         instance = [[ThemeService alloc] init];
         instance->_imageCache = [NSCache new];
         instance->_imageCache.countLimit = 2048;
+        instance->_wallpaperScanCache = [NSMutableDictionary dictionary];
         g_servedImagePaths = [NSMapTable weakToStrongObjectsMapTable];
     });
     return instance;
@@ -231,6 +269,20 @@ static id mio_DM_registerPair(id self, SEL _cmd, UIImage *light, UIImage *dark) 
             }
         } else {
             WPLog(@"Theme", @"[HOOK] ✗ DarkModeImageMgr 类不存在");
+        }
+
+        // 壁纸层：聊天背景路径拦截
+        Class chatBGCls = objc_getClass("ChatBackgroundMgr");
+        if (chatBGCls) {
+            SEL wp = NSSelectorFromString(@"getChatBackgroundImagePathForUser:");
+            if (class_getInstanceMethod(chatBGCls, wp)) {
+                MSHookMessageEx(chatBGCls, wp, (IMP)mio_ChatBGMgr_getImagePath, (IMP *)&g_orig_ChatBGMgr_getImagePath);
+                WPLog(@"Theme", @"[HOOK] ✓ -[ChatBackgroundMgr getChatBackgroundImagePathForUser:]");
+            } else {
+                WPLog(@"Theme", @"[HOOK] ✗ getChatBackgroundImagePathForUser: 不存在");
+            }
+        } else {
+            WPLog(@"Theme", @"[HOOK] ✗ ChatBackgroundMgr 类不存在");
         }
     });
 }
@@ -361,7 +413,67 @@ static NSString *MioFirstExistingFile(NSFileManager *fm, NSString *dir, NSArray<
     @synchronized(g_servedImagePaths) {
         [g_servedImagePaths removeAllObjects];
     }
+    @synchronized(_wallpaperScanCache) {
+        [_wallpaperScanCache removeAllObjects];
+    }
     WPLog(@"Theme", @"[CACHE] 主题图缓存已清");
+}
+
+#pragma mark - 壁纸层（聊天背景路径三级来源）
+
+// hook 查询侧：主题启用且找到壁纸图 → 返回路径；否则 nil（hook 放行原实现）。
+// 亮暗按屏幕级 trait 判定（与取图同一口径），无暗版自动用亮版。
+- (nullable NSString *)miWallpaperPathOverride {
+    ThemeConfig *cfg = [ThemeConfig shared];
+    if (!cfg.enableTheme || cfg.activeThemeName.length == 0) return nil;
+    BOOL dark = [UIScreen mainScreen].traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    NSString *themeDir = [[ThemeConfig mioThemesDir] stringByAppendingPathComponent:cfg.activeThemeName];
+    NSString *p = [self miWallpaperPathForThemeDir:themeDir dark:dark];
+    if (p.length) return p;
+    // 二级：用户自设图 Library/Preferences/Mio/wallpaper[_dark].png（无 UI，Filza 放文件即可）
+    NSString *mioDir = [[ThemeConfig mioThemesDir] stringByDeletingLastPathComponent];
+    if (dark) {
+        NSString *dk = [mioDir stringByAppendingPathComponent:@"wallpaper_dark.png"];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:dk]) return dk;
+    }
+    NSString *lt = [mioDir stringByAppendingPathComponent:@"wallpaper.png"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:lt]) return lt;
+    return nil;
+}
+
+// 一级：主题包内扫描。文件名（不区分大小写）含 wallpaper/chat_bg/chatbg 的 png 即候选——
+// 主题包来自各家、命名不统一，不强制规范；精确 wallpaper.png 优先。
+// 暗色：候选里带 dark 的优先，没有则回落亮图（与图标层同规则）。
+// 扫描结果按主题目录缓存（applyTheme/restore 时清），避免每次聊天页建背景都遍历目录。
+- (nullable NSString *)miWallpaperPathForThemeDir:(NSString *)dir dark:(BOOL)dark {
+    if (dir.length == 0) return nil;
+    @synchronized(_wallpaperScanCache) {
+        NSArray<NSString *> *cands = _wallpaperScanCache[dir];
+        if (!cands) {
+            NSArray *items = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil];
+            NSMutableArray<NSString *> *m = [NSMutableArray array];
+            for (NSString *f in items) {
+                if ([f hasPrefix:@"."]) continue;
+                NSString *lower = f.lowercaseString;
+                if (![lower.pathExtension isEqualToString:@"png"]) continue;
+                if ([lower containsString:@"wallpaper"] || [lower containsString:@"chat_bg"] || [lower containsString:@"chatbg"]) {
+                    [m addObject:f];
+                }
+            }
+            cands = [m copy];
+            _wallpaperScanCache[dir] = cands;
+        }
+        if (!cands.count) return nil;
+        if (dark) {
+            for (NSString *f in cands) {
+                if ([f.lowercaseString containsString:@"dark"]) return [dir stringByAppendingPathComponent:f];
+            }
+        }
+        for (NSString *f in cands) {
+            if ([f.lowercaseString isEqualToString:@"wallpaper.png"]) return [dir stringByAppendingPathComponent:f];
+        }
+        return [dir stringByAppendingPathComponent:cands[0]];
+    }
 }
 
 #pragma mark - 颜色层（weui_color_new.xml → WCColorMgr 引擎自带加载器）

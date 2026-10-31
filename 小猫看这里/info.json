@@ -1,0 +1,16 @@
+{
+     "themeId":"小猫看这里",
+     "name":"小悠米",
+	 "author":"小悠米",
+     "iconName":"icon",
+     "Badge_Text_Color":"#4d4d4d",
+     "Badge_Text_Color_Dark":"#ffffff",
+     "Voice_Text_Color":"#4d4d4d",
+     "Voice_Text_Color_Dark":"#ffffff",
+     "HB_Text_Color":"#4d4d4d",
+     "HB_Text_Color_Dark":"#7395bf",
+     "Time_Text_Color":"#4d4d4d",
+     "Time_Text_Color_Dark":"#7395bf",
+     "Conv_Time_Text_Color":"#4d4d4d",
+     "Conv_Time_Text_Color_Dark":"#7395bf",
+ }
